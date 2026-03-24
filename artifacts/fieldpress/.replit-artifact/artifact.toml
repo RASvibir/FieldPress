@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "FieldPress"
+version = "1.0.0"
+id = "artifacts/fieldpress"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 18102
+
+[services.development]
+run = "pnpm --filter @workspace/fieldpress run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fieldpress", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/fieldpress", "run", "serve" ]
+
+[services.env]
+PORT = "18102"
+BASE_PATH = "/"
