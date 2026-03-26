@@ -32,6 +32,72 @@ import {
 import { useStories } from '@/state/store';
 import { StoryItem } from '@/types';
 
+const GLITCH_CHARS = '█▓▒░▄▀▐▌┤┐└┴┬├─┼╞╟╚╔╩╦╠═╬▲►▼◄■○●◘◙';
+
+function useGlitchText(length: number, active: boolean) {
+  const [noise, setNoise] = useState('');
+  useEffect(() => {
+    if (!active) { setNoise(''); return; }
+    const id = setInterval(() => {
+      let s = '';
+      for (let i = 0; i < length; i++) {
+        s += GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
+      }
+      setNoise(s);
+    }, 80);
+    return () => clearInterval(id);
+  }, [active, length]);
+  return noise;
+}
+
+function GlitchRecordingBanner() {
+  const noise1 = useGlitchText(14, true);
+  const noise2 = useGlitchText(14, true);
+  const flickerAnim = useRef(new Animated.Value(1)).current;
+  const [labelGlitch, setLabelGlitch] = useState(false);
+
+  useEffect(() => {
+    const flicker = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flickerAnim, { toValue: 0.15, duration: 50, useNativeDriver: true }),
+        Animated.timing(flickerAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+        Animated.delay(Math.random() * 600 + 200),
+        Animated.timing(flickerAnim, { toValue: 0.3, duration: 30, useNativeDriver: true }),
+        Animated.timing(flickerAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
+        Animated.delay(Math.random() * 1000 + 400),
+      ]),
+    );
+    flicker.start();
+    return () => flicker.stop();
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setLabelGlitch(true);
+      setTimeout(() => setLabelGlitch(false), 120);
+    }, 1500 + Math.random() * 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <Animated.View style={[glitchStyles.container, { opacity: flickerAnim }]}>
+      <View style={glitchStyles.scanline} />
+      <View style={glitchStyles.scanline2} />
+      <Text style={glitchStyles.noise}>{noise1}</Text>
+      <View style={glitchStyles.centerRow}>
+        <View style={glitchStyles.recDot} />
+        <Text style={[glitchStyles.recLabel, labelGlitch && glitchStyles.recLabelGlitch]}>
+          {labelGlitch ? '▓▒R░E▒C▓' : '● REC'}
+        </Text>
+        <Text style={glitchStyles.recTime}>
+          {new Date().toLocaleTimeString('en-US', { hour12: false })}
+        </Text>
+      </View>
+      <Text style={glitchStyles.noise}>{noise2}</Text>
+    </Animated.View>
+  );
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -262,13 +328,8 @@ export default function StoryDetailScreen() {
         </Pressable>
       </LinearGradient>
 
-      {/* Recording indicator banner — terminal green pulse */}
-      {isRecording && (
-        <Animated.View style={[styles.recordingBanner, { transform: [{ scale: recordPulse }] }]}>
-          <View style={styles.recordDot} />
-          <Text style={styles.recordingText}>● REC ACTIVE...</Text>
-        </Animated.View>
-      )}
+      {/* Glitchy static recording indicator */}
+      {isRecording && <GlitchRecordingBanner />}
 
       {/* Items List */}
       <FlatList
@@ -374,8 +435,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 22,
     color: Colors.text,
     letterSpacing: 0.8,
   },
@@ -391,34 +452,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,255,255,0.25)',
   },
   aiBtnText: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'VT323_400Regular',
     fontSize: 12,
     color: Colors.cyan,
-    letterSpacing: 2,
-  },
-  recordingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0,255,0,0.10)',
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Colors.accentDim,
-  },
-  recordDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.accent,
-  },
-  recordingText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    color: Colors.accent,
     letterSpacing: 2,
   },
   listContent: {
@@ -428,7 +464,7 @@ const styles = StyleSheet.create({
   textCard: {
     flexDirection: 'row',
     backgroundColor: Colors.card,
-    borderRadius: 6,
+    borderRadius: 2,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.cardBorder,
@@ -446,15 +482,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   noteText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 19,
     color: Colors.text,
     lineHeight: 22,
     letterSpacing: 0.3,
   },
   itemTime: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
     color: Colors.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -463,22 +499,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.audioBlueBg,
-    borderRadius: 6,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,255,255,0.18)',
+    borderColor: Colors.cardBorder,
     marginBottom: 10,
     gap: 10,
   },
   audioCardPlaying: {
-    borderColor: 'rgba(0,255,255,0.5)',
+    borderColor: Colors.text,
     backgroundColor: Colors.audioBlueActive,
   },
   audioIconContainer: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,255,255,0.12)',
+    borderRadius: 2,
+    backgroundColor: Colors.audioBlueBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -490,11 +523,9 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   audioLabel: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    color: Colors.audioBlue,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
+    color: Colors.text,
   },
   playBtn: {
     width: 40,
@@ -509,8 +540,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyItemsText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -525,11 +556,11 @@ const styles = StyleSheet.create({
   },
   composerInput: {
     backgroundColor: Colors.card,
-    borderRadius: 6,
+    borderRadius: 2,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 19,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
@@ -545,7 +576,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: 4,
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -556,7 +587,7 @@ const styles = StyleSheet.create({
   recordBtn: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: 4,
     backgroundColor: Colors.audioBlue,
     alignItems: 'center',
     justifyContent: 'center',
@@ -565,8 +596,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.danger,
   },
   errorText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
     color: Colors.textSecondary,
     letterSpacing: 0.5,
   },
@@ -575,9 +606,75 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backLinkText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 19,
     color: Colors.accent,
+    letterSpacing: 2,
+  },
+});
+
+const glitchStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  scanline: {
+    position: 'absolute',
+    top: '30%',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(255, 49, 49, 0.15)',
+  },
+  scanline2: {
+    position: 'absolute',
+    top: '70%',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(57, 255, 20, 0.1)',
+  },
+  noise: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
+    color: Colors.textMuted,
+    letterSpacing: 2,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  centerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  recDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.accent,
+  },
+  recLabel: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 22,
+    color: Colors.accent,
+    letterSpacing: 4,
+  },
+  recLabelGlitch: {
+    color: Colors.textSecondary,
+  },
+  recTime: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
+    color: Colors.text,
     letterSpacing: 2,
   },
 });

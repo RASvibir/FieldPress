@@ -56,6 +56,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@expo-google-fonts/vt323": "^0.4.1",
     "expo-av": "^16.0.8",
     "expo-clipboard": "^55.0.9"
   }

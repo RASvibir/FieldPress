@@ -1,41 +1,41 @@
 // FieldPress color palette — Cyber-Punk Retro-DOS / CRT terminal theme
-// Phosphor green on CRT black, amber and cyan accents, hot-pink destructive
+// Neon green (#39FF14), yellow (#FFFF00), and red (#FF3131) fonts on pure black
 const Colors = {
-  accent: '#00FF00',            // Phosphor terminal green — primary accent, CTAs
-  accentMuted: 'rgba(0,255,0,0.10)',
-  accentDim: 'rgba(0,255,0,0.22)',
+  accent: '#FF3131',
+  accentMuted: 'rgba(255, 49, 49, 0.18)',
+  accentDim: 'rgba(255, 49, 49, 0.30)',
 
-  background: '#001100',        // CRT black-green — primary background
-  surface: '#001A00',           // Slightly lifted surface
-  card: '#002200',              // Card / elevated element
-  cardBorder: 'rgba(0,255,0,0.14)',
+  background: '#000000',
+  surface: '#0A0A0A',
+  card: '#111111',
+  cardBorder: 'rgba(57, 255, 20, 0.25)',
 
-  text: '#00FF00',              // Terminal phosphor green — primary text
-  textSecondary: '#FFC000',     // Amber — secondary / metadata
-  textMuted: '#336633',         // Dim green — timestamps, placeholders
+  text: '#39FF14',
+  textSecondary: '#FFFF00',
+  textMuted: '#338A0E',
 
-  audioBlue: '#00FFFF',         // Cyan for audio items
-  audioBlueBg: 'rgba(0,255,255,0.08)',
-  audioBlueActive: 'rgba(0,255,255,0.18)',
+  audioBlue: '#39FF14',
+  audioBlueBg: 'rgba(57, 255, 20, 0.08)',
+  audioBlueActive: 'rgba(57, 255, 20, 0.18)',
 
-  textNote: '#CCFFCC',
-  textNoteBg: 'rgba(0,255,0,0.06)',
+  textNote: '#39FF14',
+  textNoteBg: 'rgba(57, 255, 20, 0.06)',
 
-  success: '#00FF00',
-  successBg: 'rgba(0,255,0,0.10)',
+  success: '#39FF14',
+  successBg: 'rgba(57, 255, 20, 0.12)',
 
-  danger: '#FF003C',            // Glitch red — destructive accents
-  white: '#FFFFFF',
+  danger: '#FF3131',
+  white: '#39FF14',
   black: '#000000',
 
-  overlay: 'rgba(0,8,0,0.82)',
+  overlay: 'rgba(0, 0, 0, 0.85)',
 
-  // Extra cyberpunk tokens
-  hotPink: '#FF00AA',           // Hot-pink glitch accent
-  cyan: '#00FFFF',              // Cyan secondary accent
-  amber: '#FFC000',             // Amber text accent
-  glitchRed: '#FF003C',         // Glitch-red for danger
-  scanLine: 'rgba(0,255,0,0.04)', // Scan-line tint
+  // Extra cyberpunk tokens (mapped to neon palette)
+  hotPink: '#FF3131',           // Mapped to neon red
+  cyan: '#39FF14',              // Mapped to neon green
+  amber: '#FFFF00',             // Mapped to neon yellow
+  glitchRed: '#FF3131',         // Mapped to neon red
+  scanLine: 'rgba(57, 255, 20, 0.04)', // Scan-line neon green tint
 };
 
 export default Colors;

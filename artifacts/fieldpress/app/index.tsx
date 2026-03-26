@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -114,12 +115,19 @@ export default function StoryListScreen() {
         end={{ x: 0, y: 1 }}
         style={styles.header}
       >
-        <View>
-          <View style={styles.wordmark}>
-            <Text style={styles.wordmarkField}>FIELD</Text>
-            <Text style={styles.wordmarkPress}>PRESS</Text>
+        <View style={styles.headerLeft}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+          <View>
+            <View style={styles.wordmark}>
+              <Text style={styles.wordmarkField}>FIELD</Text>
+              <Text style={styles.wordmarkPress}>PRESS</Text>
+            </View>
+            <Text style={styles.tagline}>// POCKET NEWSROOM</Text>
           </View>
-          <Text style={styles.tagline}>// POCKET NEWSROOM</Text>
         </View>
         <View style={styles.liveTag}>
           <View style={styles.liveDot} />
@@ -247,27 +255,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.cardBorder,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 2,
+  },
   wordmark: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 0,
   },
   wordmarkField: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 28,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 34,
     color: Colors.text,
     letterSpacing: 4,
   },
   wordmarkPress: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 28,
-    color: Colors.cyan,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 34,
+    color: Colors.accent,
     letterSpacing: 4,
   },
   tagline: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
+    color: Colors.textSecondary,
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -278,7 +296,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accentMuted,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 4,
+    borderRadius: 2,
     borderWidth: 1,
     borderColor: Colors.accentDim,
   },
@@ -289,8 +307,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
   liveText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
     color: Colors.accent,
     letterSpacing: 2,
   },
@@ -302,15 +320,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sectionTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
     color: Colors.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   sectionCount: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
     color: Colors.textMuted,
     letterSpacing: 1,
   },
@@ -321,7 +339,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 6,
+    borderRadius: 2,
     marginBottom: 10,
     overflow: 'hidden',
     borderWidth: 1,
@@ -341,11 +359,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 22,
     color: Colors.text,
-    lineHeight: 21,
-    letterSpacing: 0.5,
+    lineHeight: 28,
   },
   cardMeta: {
     flexDirection: 'row',
@@ -353,14 +370,14 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   cardDate: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
     color: Colors.textMuted,
     letterSpacing: 0.5,
   },
   itemBadge: {
     backgroundColor: Colors.accentMuted,
-    borderRadius: 4,
+    borderRadius: 2,
     paddingHorizontal: 7,
     paddingVertical: 2,
     marginLeft: 4,
@@ -368,8 +385,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.accentDim,
   },
   itemBadgeText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
     color: Colors.accent,
     letterSpacing: 1,
   },
@@ -381,7 +398,7 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: 4,
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -390,26 +407,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 24,
     color: Colors.text,
     letterSpacing: 3,
   },
   emptySubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 18,
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 40,
-    lineHeight: 20,
-    letterSpacing: 0.3,
+    lineHeight: 24,
   },
   fabWrapper: {
     position: 'absolute',
     right: 22,
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: 4,
     shadowColor: Colors.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.85,
@@ -419,7 +435,7 @@ const styles = StyleSheet.create({
   fab: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -429,8 +445,8 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     paddingHorizontal: 20,
     paddingTop: 16,
     borderTopWidth: 1,
@@ -442,8 +458,8 @@ const styles = StyleSheet.create({
   },
   modalHandle: {
     width: 36,
-    height: 3,
-    borderRadius: 2,
+    height: 4,
+    borderRadius: 0,
     backgroundColor: Colors.textMuted,
     alignSelf: 'center',
     marginBottom: 20,
@@ -455,25 +471,25 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   modalTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 20,
     color: Colors.text,
     letterSpacing: 3,
   },
   modalSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 14,
     color: Colors.textSecondary,
     marginBottom: 18,
     letterSpacing: 0.5,
   },
   modalInput: {
     backgroundColor: Colors.card,
-    borderRadius: 6,
+    borderRadius: 2,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 16,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 17,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
@@ -487,22 +503,22 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 6,
+    borderRadius: 2,
     alignItems: 'center',
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
   },
   cancelBtnText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 15,
     color: Colors.textSecondary,
     letterSpacing: 2,
   },
   createBtn: {
     flex: 2,
     paddingVertical: 14,
-    borderRadius: 6,
+    borderRadius: 2,
     alignItems: 'center',
     backgroundColor: Colors.accent,
     flexDirection: 'row',
@@ -513,8 +529,8 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   createBtnText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontFamily: 'VT323_400Regular',
+    fontSize: 15,
     color: Colors.background,
     letterSpacing: 2,
   },

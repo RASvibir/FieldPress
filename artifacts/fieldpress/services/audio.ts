@@ -1,7 +1,3 @@
-// FieldPress audio helpers — recording + playback via expo-av
-// v2 hook: Add cloud upload here (e.g., S3 presigned URL) after stopRecording()
-//          and store the remote URL instead of local URI in the StoryItem content.
-
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
 
@@ -20,6 +16,8 @@ export async function startRecording(): Promise<void> {
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: true,
     playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
+    shouldDuckAndroid: true,
   });
   const recording = new Audio.Recording();
   await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
@@ -36,8 +34,25 @@ export async function stopRecording(): Promise<string> {
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: false,
     playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
+    shouldDuckAndroid: true,
   });
   if (!uri) throw new Error('Recording produced no URI');
+
+  // TODO: Cloud upload — uncomment and implement when ready.
+  // Upload the local file to cloud storage and return the remote URL instead.
+  //
+  // const remoteUrl = await uploadToCloud(uri);
+  //   e.g. POST a presigned S3 URL:
+  //     const { url, fields } = await getPresignedUrl();
+  //     await uploadWithFields(uri, url, fields);
+  //     const remoteUrl = `${url}/${fields.key}`;
+  //   or via Supabase Storage:
+  //     const { data } = await supabase.storage.from('recordings').upload(path, blob);
+  //     const remoteUrl = supabase.storage.from('recordings').getPublicUrl(data.path).data.publicUrl;
+  //
+  // return remoteUrl; // caller (addAudioItem) stores this instead of the local URI
+
   return uri;
 }
 
