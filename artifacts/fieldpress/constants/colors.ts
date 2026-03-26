@@ -1,34 +1,41 @@
-// FieldPress color palette — editorial dark theme
-// Inspired by wire-service newsrooms: deep ink backgrounds, crimson accent
+// FieldPress color palette — Cyber-Punk Retro-DOS / CRT terminal theme
+// Phosphor green on CRT black, amber and cyan accents, hot-pink destructive
 const Colors = {
-  accent: '#E63946',           // Journalism red — breaking news, CTAs
-  accentMuted: 'rgba(230, 57, 70, 0.14)',
-  accentDim: 'rgba(230, 57, 70, 0.22)',
+  accent: '#00FF00',            // Phosphor terminal green — primary accent, CTAs
+  accentMuted: 'rgba(0,255,0,0.10)',
+  accentDim: 'rgba(0,255,0,0.22)',
 
-  background: '#0D0F14',       // Deep ink — primary background
-  surface: '#141720',          // Slightly lifted surface
-  card: '#1B1F2E',             // Card / elevated element
-  cardBorder: 'rgba(255,255,255,0.07)',
+  background: '#001100',        // CRT black-green — primary background
+  surface: '#001A00',           // Slightly lifted surface
+  card: '#002200',              // Card / elevated element
+  cardBorder: 'rgba(0,255,0,0.14)',
 
-  text: '#F0EEE9',             // Warm off-white — primary text
-  textSecondary: '#8891A8',    // Muted blue-gray — secondary / metadata
-  textMuted: '#52586A',        // Very muted — timestamps, placeholders
+  text: '#00FF00',              // Terminal phosphor green — primary text
+  textSecondary: '#FFC000',     // Amber — secondary / metadata
+  textMuted: '#336633',         // Dim green — timestamps, placeholders
 
-  audioBlue: '#3B82F6',        // Blue for audio items
-  audioBlueBg: 'rgba(59,130,246,0.10)',
-  audioBlueActive: 'rgba(59,130,246,0.20)',
+  audioBlue: '#00FFFF',         // Cyan for audio items
+  audioBlueBg: 'rgba(0,255,255,0.08)',
+  audioBlueActive: 'rgba(0,255,255,0.18)',
 
-  textNote: '#E8E4DC',
-  textNoteBg: 'rgba(240,238,233,0.06)',
+  textNote: '#CCFFCC',
+  textNoteBg: 'rgba(0,255,0,0.06)',
 
-  success: '#10B981',
-  successBg: 'rgba(16,185,129,0.12)',
+  success: '#00FF00',
+  successBg: 'rgba(0,255,0,0.10)',
 
-  danger: '#E63946',
+  danger: '#FF003C',            // Glitch red — destructive accents
   white: '#FFFFFF',
   black: '#000000',
 
-  overlay: 'rgba(0,0,0,0.65)',
+  overlay: 'rgba(0,8,0,0.82)',
+
+  // Extra cyberpunk tokens
+  hotPink: '#FF00AA',           // Hot-pink glitch accent
+  cyan: '#00FFFF',              // Cyan secondary accent
+  amber: '#FFC000',             // Amber text accent
+  glitchRed: '#FF003C',         // Glitch-red for danger
+  scanLine: 'rgba(0,255,0,0.04)', // Scan-line tint
 };
 
 export default Colors;

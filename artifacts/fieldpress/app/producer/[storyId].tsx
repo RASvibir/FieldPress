@@ -4,6 +4,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -39,7 +40,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
     >
       <Feather name={copied ? 'check' : 'copy'} size={14} color={copied ? Colors.success : Colors.textSecondary} />
       <Text style={[styles.copyBtnText, copied && { color: Colors.success }]}>
-        {copied ? 'Copied!' : label}
+        {copied ? 'COPIED!' : label.toUpperCase()}
       </Text>
     </Pressable>
   );
@@ -68,15 +69,15 @@ function LoadingState() {
   return (
     <View style={styles.loadingContainer}>
       <View style={styles.loadingIcon}>
-        <Feather name="cpu" size={32} color={Colors.accent} />
+        <Feather name="cpu" size={32} color={Colors.cyan} />
       </View>
-      <Text style={styles.loadingTitle}>Generating draft</Text>
+      <Text style={styles.loadingTitle}>GENERATING DRAFT</Text>
       <View style={styles.dots}>
         {[dot1, dot2, dot3].map((dot, i) => (
           <Animated.View key={i} style={[styles.dot, { opacity: dot }]} />
         ))}
       </View>
-      <Text style={styles.loadingSubtitle}>Analysing your field notes...</Text>
+      <Text style={styles.loadingSubtitle}>{'> Analysing field notes...'}</Text>
     </View>
   );
 }
@@ -120,8 +121,13 @@ export default function AiProducerScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with scan-line gradient */}
+      <LinearGradient
+        colors={['#003300', Colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.header}
+      >
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.6 }]}
@@ -129,11 +135,11 @@ export default function AiProducerScreen() {
           <Feather name="arrow-left" size={22} color={Colors.text} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Feather name="cpu" size={16} color={Colors.accent} />
-          <Text style={styles.headerTitle}>AI Producer</Text>
+          <Feather name="cpu" size={16} color={Colors.cyan} />
+          <Text style={styles.headerTitle}>AI PRODUCER</Text>
         </View>
         <View style={styles.headerBtn} />
-      </View>
+      </LinearGradient>
 
       {story && (
         <View style={styles.storyChip}>
@@ -142,7 +148,7 @@ export default function AiProducerScreen() {
             {story.title}
           </Text>
           <View style={styles.noteCountBadge}>
-            <Text style={styles.noteCountText}>{textItems.length} note{textItems.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.noteCountText}>{textItems.length} NOTE{textItems.length !== 1 ? 'S' : ''}</Text>
           </View>
         </View>
       )}
@@ -154,7 +160,7 @@ export default function AiProducerScreen() {
           <Feather name="alert-circle" size={28} color={Colors.textMuted} />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={() => router.back()} style={styles.backLink}>
-            <Text style={styles.backLinkText}>Go back</Text>
+            <Text style={styles.backLinkText}>{'< GO BACK'}</Text>
           </Pressable>
         </View>
       ) : draft ? (
@@ -179,8 +185,8 @@ export default function AiProducerScreen() {
           {/* Story Outline */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionBadge, styles.sectionBadgeBlue]}>
-                <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextBlue]}>OUTLINE</Text>
+              <View style={[styles.sectionBadge, styles.sectionBadgeCyan]}>
+                <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextCyan]}>OUTLINE</Text>
               </View>
             </View>
             <View style={styles.outlineCard}>
@@ -196,8 +202,8 @@ export default function AiProducerScreen() {
           {/* Social Caption */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionBadge, styles.sectionBadgeGreen]}>
-                <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextGreen]}>CAPTION</Text>
+              <View style={[styles.sectionBadge, styles.sectionBadgeAmber]}>
+                <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextAmber]}>CAPTION</Text>
               </View>
               <CopyButton label="Copy caption" text={draft.caption} />
             </View>
@@ -247,8 +253,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 17,
+    fontSize: 15,
     color: Colors.text,
+    letterSpacing: 3,
   },
   storyChip: {
     flexDirection: 'row',
@@ -258,7 +265,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 4,
     backgroundColor: Colors.card,
-    borderRadius: 8,
+    borderRadius: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
@@ -267,19 +274,23 @@ const styles = StyleSheet.create({
   storyChipText: {
     flex: 1,
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textSecondary,
+    letterSpacing: 0.5,
   },
   noteCountBadge: {
     backgroundColor: Colors.surface,
-    borderRadius: 6,
+    borderRadius: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
   },
   noteCountText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
     color: Colors.textMuted,
+    letterSpacing: 1.5,
   },
   loadingContainer: {
     flex: 1,
@@ -291,17 +302,18 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: 'rgba(0,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.accentDim,
+    borderColor: 'rgba(0,255,255,0.25)',
     marginBottom: 4,
   },
   loadingTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
+    fontSize: 18,
     color: Colors.text,
+    letterSpacing: 4,
   },
   dots: {
     flexDirection: 'row',
@@ -312,12 +324,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.cyan,
   },
   loadingSubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
+    letterSpacing: 0.5,
   },
   errorContainer: {
     flex: 1,
@@ -327,19 +340,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 32,
+    letterSpacing: 0.5,
   },
   backLink: {
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   backLinkText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
     color: Colors.accent,
+    letterSpacing: 2,
   },
   scrollContent: {
     padding: 16,
@@ -356,52 +371,57 @@ const styles = StyleSheet.create({
   },
   sectionBadge: {
     backgroundColor: Colors.accentMuted,
-    borderRadius: 5,
+    borderRadius: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: Colors.accentDim,
   },
-  sectionBadgeBlue: {
+  sectionBadgeCyan: {
     backgroundColor: Colors.audioBlueBg,
-    borderColor: 'rgba(59,130,246,0.25)',
+    borderColor: 'rgba(0,255,255,0.25)',
   },
-  sectionBadgeGreen: {
-    backgroundColor: Colors.successBg,
-    borderColor: 'rgba(16,185,129,0.25)',
+  sectionBadgeAmber: {
+    backgroundColor: 'rgba(255,192,0,0.10)',
+    borderColor: 'rgba(255,192,0,0.25)',
   },
   sectionBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.accent,
-    letterSpacing: 1.2,
+    letterSpacing: 2,
   },
-  sectionBadgeTextBlue: {
-    color: Colors.audioBlue,
+  sectionBadgeTextCyan: {
+    color: Colors.cyan,
   },
-  sectionBadgeTextGreen: {
-    color: Colors.success,
+  sectionBadgeTextAmber: {
+    color: Colors.amber,
   },
   summaryCard: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.accent,
   },
   summaryText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.text,
     lineHeight: 24,
+    letterSpacing: 0.3,
   },
   outlineCard: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     gap: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.cyan,
   },
   outlineItem: {
     flexDirection: 'row',
@@ -409,35 +429,37 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.audioBlue,
+    width: 5,
+    height: 5,
+    borderRadius: 1,
+    backgroundColor: Colors.cyan,
     marginTop: 8,
     flexShrink: 0,
   },
   bulletText: {
     flex: 1,
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.text,
     lineHeight: 22,
+    letterSpacing: 0.3,
   },
   captionCard: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.success,
+    borderLeftColor: Colors.amber,
   },
   captionText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: Colors.text,
+    fontSize: 13,
+    color: Colors.textSecondary,
     lineHeight: 22,
     fontStyle: 'italic',
+    letterSpacing: 0.3,
   },
   copyBtn: {
     flexDirection: 'row',
@@ -447,9 +469,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   copyBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
     color: Colors.textSecondary,
+    letterSpacing: 1.5,
   },
   disclaimer: {
     flexDirection: 'row',
@@ -459,8 +482,9 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textMuted,
     fontStyle: 'italic',
+    letterSpacing: 0.3,
   },
 });

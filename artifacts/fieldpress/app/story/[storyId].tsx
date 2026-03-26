@@ -3,6 +3,7 @@
 // Workflow: collect raw material here → AI Producer turns it into a publishable draft.
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -80,10 +81,10 @@ function AudioClipItem({
       <Animated.View
         style={[styles.audioIconContainer, isPlaying && styles.audioIconActive, { opacity: isPlaying ? pulseAnim : 1 }]}
       >
-        <Feather name="mic" size={16} color={isPlaying ? Colors.white : Colors.audioBlue} />
+        <Feather name="mic" size={16} color={isPlaying ? Colors.background : Colors.audioBlue} />
       </Animated.View>
       <View style={styles.audioInfo}>
-        <Text style={styles.audioLabel}>Field Recording #{index + 1}</Text>
+        <Text style={styles.audioLabel}>FIELD REC #{index + 1}</Text>
         <Text style={styles.itemTime}>{formatTime(item.createdAt)}</Text>
       </View>
       <Pressable
@@ -93,7 +94,7 @@ function AudioClipItem({
         <Ionicons
           name={isPlaying ? 'stop-circle' : 'play-circle'}
           size={30}
-          color={isPlaying ? Colors.accent : Colors.audioBlue}
+          color={isPlaying ? Colors.danger : Colors.audioBlue}
         />
       </Pressable>
     </View>
@@ -163,7 +164,7 @@ export default function StoryDetailScreen() {
     }
     if (isRecording) {
       try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const uri = await stopRecording();
         addAudioItem(storyId ?? '', uri);
         setIsRecording(false);
@@ -186,7 +187,7 @@ export default function StoryDetailScreen() {
         return;
       }
       try {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         await startRecording();
         setIsRecording(true);
       } catch (err) {
@@ -211,7 +212,7 @@ export default function StoryDetailScreen() {
   }, [playingId]);
 
   const handleAiProducer = () => {
-    Haptics.selectionAsync();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/producer/[storyId]', params: { storyId: storyId ?? '' } });
   };
 
@@ -221,7 +222,7 @@ export default function StoryDetailScreen() {
         <Feather name="alert-circle" size={32} color={Colors.textMuted} />
         <Text style={styles.errorText}>Story not found.</Text>
         <Pressable onPress={() => router.back()} style={styles.backLink}>
-          <Text style={styles.backLinkText}>Go back</Text>
+          <Text style={styles.backLinkText}>{'< GO BACK'}</Text>
         </Pressable>
       </View>
     );
@@ -236,8 +237,13 @@ export default function StoryDetailScreen() {
       style={[styles.container, { paddingBottom: webBottomPad }]}
       keyboardVerticalOffset={0}
     >
-      {/* Custom Header */}
-      <View style={[styles.header, { paddingTop: insets.top + webTopPad + 8 }]}>
+      {/* Custom Header with scan-line gradient */}
+      <LinearGradient
+        colors={['#003300', Colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + webTopPad + 8 }]}
+      >
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.6 }]}
@@ -251,16 +257,16 @@ export default function StoryDetailScreen() {
           onPress={handleAiProducer}
           style={({ pressed }) => [styles.aiBtn, pressed && { opacity: 0.75 }]}
         >
-          <Feather name="cpu" size={14} color={Colors.accent} />
+          <Feather name="cpu" size={14} color={Colors.cyan} />
           <Text style={styles.aiBtnText}>AI</Text>
         </Pressable>
-      </View>
+      </LinearGradient>
 
-      {/* Recording indicator banner */}
+      {/* Recording indicator banner — terminal green pulse */}
       {isRecording && (
         <Animated.View style={[styles.recordingBanner, { transform: [{ scale: recordPulse }] }]}>
           <View style={styles.recordDot} />
-          <Text style={styles.recordingText}>Recording...</Text>
+          <Text style={styles.recordingText}>● REC ACTIVE...</Text>
         </Animated.View>
       )}
 
@@ -300,7 +306,7 @@ export default function StoryDetailScreen() {
       <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
         <TextInput
           style={styles.composerInput}
-          placeholder="Add a field note..."
+          placeholder="> add a field note..."
           placeholderTextColor={Colors.textMuted}
           value={noteText}
           onChangeText={setNoteText}
@@ -319,7 +325,7 @@ export default function StoryDetailScreen() {
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Feather name="send" size={18} color={noteText.trim() ? Colors.white : Colors.textMuted} />
+            <Feather name="send" size={18} color={noteText.trim() ? Colors.background : Colors.textMuted} />
           </Pressable>
           <Pressable
             onPress={handleRecordToggle}
@@ -332,7 +338,7 @@ export default function StoryDetailScreen() {
             <Ionicons
               name={isRecording ? 'stop' : 'mic'}
               size={20}
-              color={Colors.white}
+              color={Colors.background}
             />
           </Pressable>
         </View>
@@ -369,36 +375,37 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 17,
+    fontSize: 15,
     color: Colors.text,
+    letterSpacing: 0.8,
   },
   aiBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: 'rgba(0,255,255,0.10)',
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.accentDim,
+    borderColor: 'rgba(0,255,255,0.25)',
   },
   aiBtnText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 12,
-    color: Colors.accent,
-    letterSpacing: 0.5,
+    color: Colors.cyan,
+    letterSpacing: 2,
   },
   recordingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.accentMuted,
+    backgroundColor: 'rgba(0,255,0,0.10)',
     marginHorizontal: 16,
     marginTop: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: Colors.accentDim,
   },
@@ -409,9 +416,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
   recordingText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
     color: Colors.accent,
+    letterSpacing: 2,
   },
   listContent: {
     padding: 16,
@@ -420,7 +428,7 @@ const styles = StyleSheet.create({
   textCard: {
     flexDirection: 'row',
     backgroundColor: Colors.card,
-    borderRadius: 10,
+    borderRadius: 6,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.cardBorder,
@@ -428,9 +436,9 @@ const styles = StyleSheet.create({
   },
   textCardDot: {
     width: 3,
-    backgroundColor: Colors.textSecondary,
+    backgroundColor: Colors.accent,
     alignSelf: 'stretch',
-    opacity: 0.4,
+    opacity: 0.5,
   },
   textCardContent: {
     flex: 1,
@@ -439,35 +447,38 @@ const styles = StyleSheet.create({
   },
   noteText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.text,
     lineHeight: 22,
+    letterSpacing: 0.3,
   },
   itemTime: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textMuted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   audioCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.audioBlueBg,
-    borderRadius: 10,
+    borderRadius: 6,
     padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.18)',
+    borderColor: 'rgba(0,255,255,0.18)',
     marginBottom: 10,
     gap: 10,
   },
   audioCardPlaying: {
-    borderColor: 'rgba(59,130,246,0.4)',
+    borderColor: 'rgba(0,255,255,0.5)',
     backgroundColor: Colors.audioBlueActive,
   },
   audioIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    backgroundColor: 'rgba(0,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -479,9 +490,11 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   audioLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: Colors.text,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: Colors.audioBlue,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   playBtn: {
     width: 40,
@@ -497,10 +510,11 @@ const styles = StyleSheet.create({
   },
   emptyItemsText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    letterSpacing: 0.3,
   },
   composer: {
     borderTopWidth: 1,
@@ -511,16 +525,17 @@ const styles = StyleSheet.create({
   },
   composerInput: {
     backgroundColor: Colors.card,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     minHeight: 44,
     maxHeight: 120,
+    letterSpacing: 0.5,
   },
   composerActions: {
     flexDirection: 'row',
@@ -547,20 +562,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   recordBtnActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.danger,
   },
   errorText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.textSecondary,
+    letterSpacing: 0.5,
   },
   backLink: {
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   backLinkText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
     color: Colors.accent,
+    letterSpacing: 2,
   },
 });

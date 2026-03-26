@@ -1,7 +1,9 @@
 // FieldPress — Story List Screen
 // The newsroom home: all active stories. Tap to open, "+" to file a new story.
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -68,9 +70,9 @@ function EmptyState() {
       <View style={styles.emptyIcon}>
         <Feather name="file-text" size={36} color={Colors.textMuted} />
       </View>
-      <Text style={styles.emptyTitle}>No stories yet</Text>
+      <Text style={styles.emptyTitle}>NO STORIES YET</Text>
       <Text style={styles.emptySubtitle}>
-        Tap the red button to file your first story from the field.
+        Tap the green button to file your first story from the field.
       </Text>
     </View>
   );
@@ -94,7 +96,7 @@ export default function StoryListScreen() {
   const handleCreate = () => {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const story = createStory(trimmed);
     setModalVisible(false);
     router.push({ pathname: '/story/[storyId]', params: { storyId: story.id } });
@@ -105,23 +107,28 @@ export default function StoryListScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with scan-line gradient */}
+      <LinearGradient
+        colors={['#003300', Colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.header}
+      >
         <View>
           <View style={styles.wordmark}>
             <Text style={styles.wordmarkField}>FIELD</Text>
             <Text style={styles.wordmarkPress}>PRESS</Text>
           </View>
-          <Text style={styles.tagline}>Pocket Newsroom</Text>
+          <Text style={styles.tagline}>// POCKET NEWSROOM</Text>
         </View>
         <View style={styles.liveTag}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>WIRE</Text>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Active Stories</Text>
+        <Text style={styles.sectionTitle}>ACTIVE STORIES</Text>
         <Text style={styles.sectionCount}>{stories.length}</Text>
       </View>
 
@@ -143,18 +150,25 @@ export default function StoryListScreen() {
         scrollEnabled
       />
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button with neon glow gradient */}
       <Pressable
         onPress={openModal}
         style={[
-          styles.fab,
+          styles.fabWrapper,
           { bottom: insets.bottom + webBottomPad + 24 },
         ]}
       >
-        <Ionicons name="add" size={28} color={Colors.white} />
+        <LinearGradient
+          colors={[Colors.accent, '#009900']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fab}
+        >
+          <Ionicons name="add" size={28} color={Colors.background} />
+        </LinearGradient>
       </Pressable>
 
-      {/* New Story Modal */}
+      {/* New Story Modal with BlurView backdrop */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -165,6 +179,7 @@ export default function StoryListScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
+          <BlurView intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setModalVisible(false)}
@@ -173,10 +188,10 @@ export default function StoryListScreen() {
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Feather name="edit-3" size={20} color={Colors.accent} />
-              <Text style={styles.modalTitle}>New Story</Text>
+              <Text style={styles.modalTitle}>NEW STORY</Text>
             </View>
             <Text style={styles.modalSubtitle}>
-              Give your story a headline to start reporting.
+              {'> '}Enter headline to begin filing your story.
             </Text>
             <TextInput
               ref={inputRef}
@@ -196,7 +211,7 @@ export default function StoryListScreen() {
                 style={styles.cancelBtn}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>CANCEL</Text>
               </Pressable>
               <Pressable
                 style={[
@@ -206,8 +221,8 @@ export default function StoryListScreen() {
                 onPress={handleCreate}
                 disabled={!newTitle.trim()}
               >
-                <Feather name="send" size={15} color={Colors.white} />
-                <Text style={styles.createBtnText}>Create Story</Text>
+                <Feather name="send" size={15} color={Colors.background} />
+                <Text style={styles.createBtnText}>CREATE STORY</Text>
               </Pressable>
             </View>
           </View>
@@ -241,19 +256,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
     color: Colors.text,
-    letterSpacing: 2,
+    letterSpacing: 4,
   },
   wordmarkPress: {
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
-    color: Colors.accent,
-    letterSpacing: 2,
+    color: Colors.cyan,
+    letterSpacing: 4,
   },
   tagline: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: Colors.textSecondary,
-    letterSpacing: 1,
+    fontSize: 11,
+    color: Colors.textMuted,
+    letterSpacing: 2,
     marginTop: 2,
   },
   liveTag: {
@@ -263,7 +278,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accentMuted,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: Colors.accentDim,
   },
@@ -277,7 +292,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 11,
     color: Colors.accent,
-    letterSpacing: 1.5,
+    letterSpacing: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -287,16 +302,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sectionTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
     color: Colors.textSecondary,
-    letterSpacing: 0.8,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   sectionCount: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
     color: Colors.textMuted,
+    letterSpacing: 1,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -305,17 +321,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: 6,
     marginBottom: 10,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.cardBorder,
   },
   cardPressed: {
-    opacity: 0.75,
+    opacity: 0.7,
   },
   cardAccent: {
-    width: 4,
+    width: 3,
     alignSelf: 'stretch',
     backgroundColor: Colors.accent,
   },
@@ -326,9 +342,10 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text,
-    lineHeight: 22,
+    lineHeight: 21,
+    letterSpacing: 0.5,
   },
   cardMeta: {
     flexDirection: 'row',
@@ -337,20 +354,24 @@ const styles = StyleSheet.create({
   },
   cardDate: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textMuted,
+    letterSpacing: 0.5,
   },
   itemBadge: {
     backgroundColor: Colors.accentMuted,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingHorizontal: 7,
     paddingVertical: 2,
     marginLeft: 4,
+    borderWidth: 1,
+    borderColor: Colors.accentDim,
   },
   itemBadgeText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
     color: Colors.accent,
+    letterSpacing: 1,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -369,50 +390,59 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
     color: Colors.text,
+    letterSpacing: 3,
   },
   emptySubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 20,
+    letterSpacing: 0.3,
   },
-  fab: {
+  fabWrapper: {
     position: 'absolute',
     right: 22,
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  fab: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 8,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: Colors.overlay,
   },
   modalSheet: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     paddingHorizontal: 20,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: Colors.cardBorder,
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.cardBorder,
+    borderRightWidth: 1,
+    borderRightColor: Colors.cardBorder,
   },
   modalHandle: {
     width: 36,
-    height: 4,
+    height: 3,
     borderRadius: 2,
     backgroundColor: Colors.textMuted,
     alignSelf: 'center',
@@ -426,26 +456,29 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontSize: 18,
     color: Colors.text,
+    letterSpacing: 3,
   },
   modalSubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     marginBottom: 18,
+    letterSpacing: 0.5,
   },
   modalInput: {
     backgroundColor: Colors.card,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontFamily: 'Inter_500Medium',
-    fontSize: 17,
+    fontSize: 16,
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
     marginBottom: 16,
+    letterSpacing: 1,
   },
   modalActions: {
     flexDirection: 'row',
@@ -454,21 +487,22 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 6,
     alignItems: 'center',
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
   },
   cancelBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
     color: Colors.textSecondary,
+    letterSpacing: 2,
   },
   createBtn: {
     flex: 2,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 6,
     alignItems: 'center',
     backgroundColor: Colors.accent,
     flexDirection: 'row',
@@ -476,11 +510,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   createBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.3,
   },
   createBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    color: Colors.white,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: Colors.background,
+    letterSpacing: 2,
   },
 });
