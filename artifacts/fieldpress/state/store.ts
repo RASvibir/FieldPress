@@ -1,11 +1,19 @@
-// FieldPress state store — React Context, local only (no backend)
-// To add real persistence: swap useState for AsyncStorage-backed state here
-import React, { createContext, useContext, useMemo, useState } from 'react';
+// FieldPress state store — React Context + AsyncStorage persistence
+// All data is local; no backend. Stories and items survive app restarts via AsyncStorage.
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+
 import { Story, StoryItem } from '@/types';
+import {
+  loadStories,
+  loadStoryItems,
+  saveStories,
+  saveStoryItems,
+} from '@/utils/storage';
 
 interface StoriesContextValue {
   stories: Story[];
   storyItems: StoryItem[];
+  hydrated: boolean;
   createStory: (title: string) => Story;
   getStoryById: (id: string) => Story | undefined;
   getItemsForStory: (storyId: string) => StoryItem[];
@@ -22,6 +30,28 @@ function generateId(): string {
 export function StoriesProvider({ children }: { children: React.ReactNode }) {
   const [stories, setStories] = useState<Story[]>([]);
   const [storyItems, setStoryItems] = useState<StoryItem[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Load persisted data once on mount
+  useEffect(() => {
+    Promise.all([loadStories(), loadStoryItems()]).then(([savedStories, savedItems]) => {
+      setStories(savedStories);
+      setStoryItems(savedItems);
+      setHydrated(true);
+    });
+  }, []);
+
+  // Persist stories whenever they change (skip pre-hydration to avoid overwriting)
+  useEffect(() => {
+    if (!hydrated) return;
+    saveStories(stories);
+  }, [stories, hydrated]);
+
+  // Persist storyItems whenever they change (skip pre-hydration)
+  useEffect(() => {
+    if (!hydrated) return;
+    saveStoryItems(storyItems);
+  }, [storyItems, hydrated]);
 
   const createStory = (title: string): Story => {
     const story: Story = {
@@ -67,13 +97,14 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
     () => ({
       stories,
       storyItems,
+      hydrated,
       createStory,
       getStoryById,
       getItemsForStory,
       addTextItem,
       addAudioItem,
     }),
-    [stories, storyItems],
+    [stories, storyItems, hydrated],
   );
 
   return React.createElement(StoriesContext.Provider, { value }, children);
