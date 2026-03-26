@@ -1,7 +1,5 @@
 // FieldPress AI Mock — returns a structured draft from story + text notes
 // v1: No network call, purely local. generateAiDraft simulates a 2s "AI" delay.
-// v2 hook: Replace the setTimeout body with a real API call (OpenAI, Anthropic, etc.)
-//          and return the parsed AiDraft from the response.
 
 import { AiDraft, Story, StoryItem } from '@/types';
 
@@ -20,6 +18,52 @@ export function generateAiDraft(story: Story, textItems: StoryItem[]): Promise<A
     const snippets = textItems.map((i) => i.content.slice(0, 60));
     const firstSnippet = snippets[0] ?? 'no field notes yet';
     const titleWords = story.title.split(' ').slice(0, 4).join(' ');
+
+    // ---------------------------------------------------------------------------
+    // TODO (v2): Replace the setTimeout block below with a real AI API call.
+    //
+    // Inputs available at this point:
+    //   story.title     — string, the story headline
+    //   story.id        — string, unique story identifier
+    //   textItems       — StoryItem[], each has { content: string, ... }
+    //   noteCount       — number of text notes
+    //   snippets        — string[], first 60 chars of each note
+    //
+    // Example call (OpenAI / Anthropic / Gemini all follow a similar pattern):
+    //
+    //   const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    //     method: 'POST',
+    //     headers: {
+    //       'Content-Type': 'application/json',
+    //       Authorization: `Bearer ${OPENAI_API_KEY}`,
+    //     },
+    //     body: JSON.stringify({
+    //       model: 'gpt-4o',
+    //       messages: [
+    //         {
+    //           role: 'system',
+    //           content:
+    //             'You are a professional news producer. Given a story title and field notes, ' +
+    //             'return a JSON object with keys: summary (string), outline (string[]), caption (string).',
+    //         },
+    //         {
+    //           role: 'user',
+    //           content: `Story: "${story.title}"\n\nNotes:\n${snippets.join('\n')}`,
+    //         },
+    //       ],
+    //       response_format: { type: 'json_object' },
+    //     }),
+    //   });
+    //   const { summary, outline, caption }: AiDraft = await response.json();
+    //   resolve({ summary, outline, caption });
+    //
+    // Expected AiDraft shape:
+    //   {
+    //     summary: string,           // 2–4 sentence narrative summary
+    //     outline: string[],         // ordered list of story section headings
+    //     caption: string,           // short social-media caption with hashtags
+    //   }
+    // ---------------------------------------------------------------------------
 
     setTimeout(() => {
       resolve({
