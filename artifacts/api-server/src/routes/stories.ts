@@ -5,8 +5,6 @@ import { eq, desc, sql } from "drizzle-orm";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
-  GetStoryParams,
-  DeleteStoryParams,
   ImportStoryBody,
 } from "@workspace/api-zod";
 
@@ -27,7 +25,6 @@ router.get("/stories", async (req: Request, res: Response) => {
   const parsed = ListStoriesQueryParams.safeParse(req.query);
   const statusFilter = parsed.success && parsed.data.status ? parsed.data.status : undefined;
 
-  let query = db.select().from(storiesTable).orderBy(desc(storiesTable.updatedAt));
   const stories = statusFilter
     ? await db.select().from(storiesTable).where(eq(storiesTable.status, statusFilter)).orderBy(desc(storiesTable.updatedAt))
     : await db.select().from(storiesTable).orderBy(desc(storiesTable.updatedAt));
@@ -64,7 +61,7 @@ router.post("/stories", async (req: Request, res: Response) => {
 });
 
 router.get("/stories/:storyId", async (req: Request, res: Response) => {
-  const { storyId } = req.params;
+  const storyId = req.params.storyId as string;
   const result = await getStoryWithItems(storyId);
   if (!result) {
     res.status(404).json({ error: "Not found" });
@@ -74,7 +71,7 @@ router.get("/stories/:storyId", async (req: Request, res: Response) => {
 });
 
 router.delete("/stories/:storyId", async (req: Request, res: Response) => {
-  const { storyId } = req.params;
+  const storyId = req.params.storyId as string;
   await db.delete(storiesTable).where(eq(storiesTable.id, storyId));
   res.status(204).end();
 });

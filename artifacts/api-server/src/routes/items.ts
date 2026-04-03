@@ -11,7 +11,7 @@ function generateId(): string {
 }
 
 router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
-  const { storyId } = req.params;
+  const storyId = req.params.storyId as string;
   const parsed = AddStoryItemBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -42,7 +42,8 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
 });
 
 router.delete("/stories/:storyId/items/:itemId", async (req: Request, res: Response) => {
-  const { storyId, itemId } = req.params;
+  const storyId = req.params.storyId as string;
+  const itemId = req.params.itemId as string;
   await db.delete(storyItemsTable).where(
     and(eq(storyItemsTable.id, itemId), eq(storyItemsTable.storyId, storyId))
   );

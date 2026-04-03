@@ -11,7 +11,7 @@ function generateId(): string {
 }
 
 router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
-  const { storyId } = req.params;
+  const storyId = req.params.storyId as string;
   const drafts = await db.select().from(draftsTable)
     .where(eq(draftsTable.storyId, storyId))
     .orderBy(desc(draftsTable.updatedAt));
@@ -19,7 +19,7 @@ router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 });
 
 router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
-  const { storyId } = req.params;
+  const storyId = req.params.storyId as string;
   const parsed = CreateDraftBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -51,7 +51,8 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 });
 
 router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
-  const { storyId, draftId } = req.params;
+  const storyId = req.params.storyId as string;
+  const draftId = req.params.draftId as string;
   const draft = await db.select().from(draftsTable)
     .where(and(eq(draftsTable.id, draftId), eq(draftsTable.storyId, storyId)))
     .limit(1);
@@ -63,7 +64,8 @@ router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 });
 
 router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
-  const { storyId, draftId } = req.params;
+  const storyId = req.params.storyId as string;
+  const draftId = req.params.draftId as string;
   const parsed = UpdateDraftBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -88,7 +90,8 @@ router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 });
 
 router.delete("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
-  const { storyId, draftId } = req.params;
+  const storyId = req.params.storyId as string;
+  const draftId = req.params.draftId as string;
   await db.delete(draftsTable)
     .where(and(eq(draftsTable.id, draftId), eq(draftsTable.storyId, storyId)));
   res.status(204).end();
