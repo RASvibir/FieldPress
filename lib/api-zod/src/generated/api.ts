@@ -14,3 +14,217 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary List all stories
+ */
+export const ListStoriesQueryParams = zod.object({
+  status: zod.enum(["active", "archived"]).optional(),
+});
+
+export const ListStoriesResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  status: zod.enum(["active", "archived"]),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      storyId: zod.string(),
+      type: zod.enum(["note", "audio", "photo"]),
+      content: zod.string(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+export const ListStoriesResponse = zod.array(ListStoriesResponseItem);
+
+/**
+ * @summary Create a story
+ */
+export const createStoryBodyStatusDefault = `active`;
+
+export const CreateStoryBody = zod.object({
+  id: zod.string().optional(),
+  title: zod.string(),
+  status: zod
+    .enum(["active", "archived"])
+    .default(createStoryBodyStatusDefault),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Get a story with items
+ */
+export const GetStoryParams = zod.object({
+  storyId: zod.coerce.string(),
+});
+
+export const GetStoryResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  status: zod.enum(["active", "archived"]),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      storyId: zod.string(),
+      type: zod.enum(["note", "audio", "photo"]),
+      content: zod.string(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Delete a story
+ */
+export const DeleteStoryParams = zod.object({
+  storyId: zod.coerce.string(),
+});
+
+/**
+ * @summary Import a story from mobile export
+ */
+export const ImportStoryBody = zod.object({
+  title: zod.string(),
+  items: zod.array(
+    zod.object({
+      type: zod.enum(["note", "audio", "photo"]),
+      content: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add an item to a story
+ */
+export const AddStoryItemParams = zod.object({
+  storyId: zod.coerce.string(),
+});
+
+export const AddStoryItemBody = zod.object({
+  id: zod.string().optional(),
+  type: zod.enum(["note", "audio", "photo"]),
+  content: zod.string(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a story item
+ */
+export const DeleteStoryItemParams = zod.object({
+  storyId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+/**
+ * @summary List drafts for a story
+ */
+export const ListDraftsParams = zod.object({
+  storyId: zod.coerce.string(),
+});
+
+export const ListDraftsResponseItem = zod.object({
+  id: zod.string(),
+  storyId: zod.string(),
+  mode: zod.enum(["article", "social", "podcast"]),
+  title: zod.string(),
+  content: zod.string(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListDraftsResponse = zod.array(ListDraftsResponseItem);
+
+/**
+ * @summary Create a draft
+ */
+export const CreateDraftParams = zod.object({
+  storyId: zod.coerce.string(),
+});
+
+export const CreateDraftBody = zod.object({
+  mode: zod.enum(["article", "social", "podcast"]),
+  title: zod.string().optional(),
+  content: zod.string().optional(),
+});
+
+/**
+ * @summary Get a draft
+ */
+export const GetDraftParams = zod.object({
+  storyId: zod.coerce.string(),
+  draftId: zod.coerce.string(),
+});
+
+export const GetDraftResponse = zod.object({
+  id: zod.string(),
+  storyId: zod.string(),
+  mode: zod.enum(["article", "social", "podcast"]),
+  title: zod.string(),
+  content: zod.string(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Update a draft
+ */
+export const UpdateDraftParams = zod.object({
+  storyId: zod.coerce.string(),
+  draftId: zod.coerce.string(),
+});
+
+export const UpdateDraftBody = zod.object({
+  title: zod.string().optional(),
+  content: zod.string().optional(),
+});
+
+export const UpdateDraftResponse = zod.object({
+  id: zod.string(),
+  storyId: zod.string(),
+  mode: zod.enum(["article", "social", "podcast"]),
+  title: zod.string(),
+  content: zod.string(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a draft
+ */
+export const DeleteDraftParams = zod.object({
+  storyId: zod.coerce.string(),
+  draftId: zod.coerce.string(),
+});
+
+/**
+ * @summary Dashboard summary
+ */
+export const GetDashboardResponse = zod.object({
+  totalStories: zod.number(),
+  activeStories: zod.number(),
+  archivedStories: zod.number(),
+  totalItems: zod.number(),
+  totalDrafts: zod.number(),
+  recentStories: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.enum(["active", "archived"]),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+      items: zod.array(
+        zod.object({
+          id: zod.string(),
+          storyId: zod.string(),
+          type: zod.enum(["note", "audio", "photo"]),
+          content: zod.string(),
+          createdAt: zod.date(),
+        }),
+      ),
+    }),
+  ),
+});

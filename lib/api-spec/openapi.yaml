@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: stories
+    description: Story operations
+  - name: items
+    description: Story item operations
+  - name: drafts
+    description: Draft operations
 paths:
   /healthz:
     get:
@@ -24,6 +29,272 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /stories:
+    get:
+      operationId: listStories
+      tags: [stories]
+      summary: List all stories
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, archived]
+      responses:
+        "200":
+          description: List of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoryWithItems"
+    post:
+      operationId: createStory
+      tags: [stories]
+      summary: Create a story
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoryBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryWithItems"
+
+  /stories/{storyId}:
+    get:
+      operationId: getStory
+      tags: [stories]
+      summary: Get a story with items
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Story with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryWithItems"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteStory
+      tags: [stories]
+      summary: Delete a story
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /stories/import:
+    post:
+      operationId: importStory
+      tags: [stories]
+      summary: Import a story from mobile export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportStoryBody"
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryWithItems"
+
+  /stories/{storyId}/items:
+    post:
+      operationId: addStoryItem
+      tags: [items]
+      summary: Add an item to a story
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryItem"
+
+  /stories/{storyId}/items/{itemId}:
+    delete:
+      operationId: deleteStoryItem
+      tags: [items]
+      summary: Delete a story item
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /stories/{storyId}/drafts:
+    get:
+      operationId: listDrafts
+      tags: [drafts]
+      summary: List drafts for a story
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Draft"
+    post:
+      operationId: createDraft
+      tags: [drafts]
+      summary: Create a draft
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDraftBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+
+  /stories/{storyId}/drafts/{draftId}:
+    get:
+      operationId: getDraft
+      tags: [drafts]
+      summary: Get a draft
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+        "404":
+          description: Not found
+    put:
+      operationId: updateDraft
+      tags: [drafts]
+      summary: Update a draft
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDraftBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+    delete:
+      operationId: deleteDraft
+      tags: [drafts]
+      summary: Delete a draft
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [stories]
+      summary: Dashboard summary
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardData"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +305,149 @@ components:
       required:
         - status
 
+    StoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        storyId:
+          type: string
+        type:
+          type: string
+          enum: [note, audio, photo]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, storyId, type, content, createdAt]
+
+    StoryWithItems:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryItem"
+      required: [id, title, status, createdAt, updatedAt, items]
+
+    Draft:
+      type: object
+      properties:
+        id:
+          type: string
+        storyId:
+          type: string
+        mode:
+          type: string
+          enum: [article, social, podcast]
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, storyId, mode, title, content, createdAt, updatedAt]
+
+    CreateStoryBody:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+          default: active
+        createdAt:
+          type: string
+      required: [title]
+
+    ImportStoryBody:
+      type: object
+      properties:
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [note, audio, photo]
+              content:
+                type: string
+            required: [type, content]
+      required: [title, items]
+
+    CreateItemBody:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [note, audio, photo]
+        content:
+          type: string
+        createdAt:
+          type: string
+      required: [type, content]
+
+    CreateDraftBody:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [article, social, podcast]
+        title:
+          type: string
+        content:
+          type: string
+      required: [mode]
+
+    UpdateDraftBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+
+    DashboardData:
+      type: object
+      properties:
+        totalStories:
+          type: integer
+        activeStories:
+          type: integer
+        archivedStories:
+          type: integer
+        totalItems:
+          type: integer
+        totalDrafts:
+          type: integer
+        recentStories:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryWithItems"
+      required: [totalStories, activeStories, archivedStories, totalItems, totalDrafts, recentStories]

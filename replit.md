@@ -21,7 +21,9 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   ├── fieldpress/         # Expo mobile app
+│   └── fieldpress-desktop/ # React+Vite desktop editor
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -56,7 +58,12 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes: `src/routes/index.ts` mounts sub-routers
+  - `health.ts` — `GET /api/healthz`
+  - `stories.ts` — `GET/POST /api/stories`, `GET/DELETE /api/stories/:storyId`, `POST /api/stories/import`
+  - `items.ts` — `POST /api/stories/:storyId/items`, `DELETE /api/stories/:storyId/items/:itemId`
+  - `drafts.ts` — CRUD for `/api/stories/:storyId/drafts` and `/api/stories/:storyId/drafts/:draftId`
+  - `dashboard.ts` — `GET /api/dashboard` (aggregated stats)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
@@ -68,7 +75,7 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 
 - `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
 - `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
+- `src/schema/stories.ts` — `storiesTable`, `storyItemsTable`, `draftsTable` with insert schemas
 - `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
 - Exports: `.` (pool, db, schema), `./schema` (schema only)
 
@@ -85,11 +92,11 @@ Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`, `CreateStoryBody`, `ListStoriesQueryParams`). Used by `api-server` for request validation.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useListStories`, `useGetStory`, `useCreateStory`, `useImportStory`, `useGetDashboard`, `useCreateDraft`, `useUpdateDraft`).
 
 ### `artifacts/fieldpress` (`@workspace/fieldpress`)
 
@@ -111,6 +118,25 @@ Expo SDK 54 + React Native mobile app — FieldPress: Pocket Newsroom & Podcast 
 - **Theme:** CRT terminal / cyberpunk — VT323 font, neon green (#39FF14), yellow (#FFFF00), red (#FF3131) on black
 - **Key packages:** expo-av (deprecated, migrate to expo-audio for SDK 55), expo-location, expo-image-picker (installed/unused), expo-haptics, expo-linear-gradient, expo-blur, expo-clipboard
 - **Do NOT use:** uuid (use Date.now().toString(36) + Math.random()), emojis (use @expo/vector-icons)
+
+### `artifacts/fieldpress-desktop` (`@workspace/fieldpress-desktop`)
+
+React+Vite desktop editing platform for journalists. CRT/cyberpunk theme matching the mobile app.
+
+- **Preview path:** `/fieldpress-desktop/`
+- **Pages (wouter routing):**
+  - `/` — Dashboard: stats overview, active story cards, NEW STORY + IMPORT buttons
+  - `/story/:storyId` — Story detail: source material (notes/audio/photos) + production outputs (drafts)
+  - `/story/:storyId/editor/:draftId` — Full editor with left source panel, title, content textarea, auto-save
+- **Three output modes:**
+  - Article: publication-ready journalism (headline/byline/dateline/lede/body/kicker template)
+  - Social: threads/captions/TikTok scripts (thread format and caption format templates)
+  - Podcast: scripts/show notes/timestamps (cold open/intro/segments/outro/show notes template)
+- **Import:** Paste-based import dialog parses mobile dispatch text (first line = title, rest = notes)
+- **Cloud sync:** All data persisted in PostgreSQL via API server
+- **Auto-save:** Editor auto-saves drafts 1.5s after last keystroke
+- **Theme:** CRT scanlines, neon green glow, VT323 font, black background — matches mobile app identity
+- **Depends on:** `@workspace/api-client-react` for API hooks
 
 ### `scripts` (`@workspace/scripts`)
 

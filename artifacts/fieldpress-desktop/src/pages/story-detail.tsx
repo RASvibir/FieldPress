@@ -1,0 +1,213 @@
+import { useGetStory, useListDrafts, useCreateDraft, useDeleteStory } from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  FileText, Mic, Camera, ArrowLeft, Plus,
+  Newspaper, MessageSquare, Podcast, Trash2
+} from "lucide-react";
+import { useLocation, useParams } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+
+const MODE_CONFIG = {
+  article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
+  social: { label: "SOCIAL", icon: MessageSquare, color: "text-neon-yellow" },
+  podcast: { label: "PODCAST", icon: Podcast, color: "text-neon-red" },
+} as const;
+
+export default function StoryDetailPage() {
+  const params = useParams<{ storyId: string }>();
+  const storyId = params.storyId!;
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+
+  const { data: story, isLoading } = useGetStory(storyId);
+  const { data: drafts } = useListDrafts(storyId);
+  const createDraftMutation = useCreateDraft();
+  const deleteMutation = useDeleteStory();
+
+  function handleNewDraft(mode: "article" | "social" | "podcast") {
+    createDraftMutation.mutate(
+      { storyId, data: { mode, title: "", content: "" } },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+          navigate(`/story/${storyId}/editor/${data.id}`);
+        },
+      }
+    );
+  }
+
+  function handleDelete() {
+    if (!confirm("DELETE THIS STORY AND ALL DRAFTS? This cannot be undone.")) return;
+    deleteMutation.mutate(
+      { storyId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+          navigate("/");
+        },
+      }
+    );
+  }
+
+  const itemIcon = (type: string) => {
+    switch (type) {
+      case "audio": return <Mic className="w-4 h-4 text-neon-red" />;
+      case "photo": return <Camera className="w-4 h-4 text-neon-yellow" />;
+      default: return <FileText className="w-4 h-4 text-neon" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-neon text-glow-pulse text-xl">LOADING STORY...</div>
+      </div>
+    );
+  }
+
+  if (!story) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-neon-red text-xl mb-4">STORY NOT FOUND</div>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            BACK TO DASHBOARD
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              BACK
+            </Button>
+            <div>
+              <h1 className="text-3xl text-neon text-glow tracking-wider">{story.title}</h1>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                <Badge variant="outline" className="border-neon/30 text-neon text-xs">
+                  {story.status.toUpperCase()}
+                </Badge>
+                <span>{story.items.length} items</span>
+                <span>Created {new Date(story.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+          <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
+            <Trash2 className="w-4 h-4 mr-1" />
+            DELETE
+          </Button>
+        </div>
+
+        <Separator className="bg-neon/10" />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <h2 className="text-lg text-neon tracking-wider mb-3">SOURCE MATERIAL</h2>
+            {story.items.length === 0 ? (
+              <Card className="border-neon/10">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  NO ITEMS. IMPORT FROM MOBILE TO ADD NOTES, AUDIO, AND PHOTOS.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                {story.items.map((item) => (
+                  <Card key={item.id} className="border-neon/10 bg-card">
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">{itemIcon(item.type)}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="secondary" className="text-[10px] uppercase">{item.type}</Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(item.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-lg text-neon tracking-wider mb-3">PRODUCTION OUTPUTS</h2>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {(["article", "social", "podcast"] as const).map((mode) => {
+                const config = MODE_CONFIG[mode];
+                const Icon = config.icon;
+                return (
+                  <Button
+                    key={mode}
+                    variant="outline"
+                    className={`border-neon/20 hover:border-neon/40 ${config.color}`}
+                    onClick={() => handleNewDraft(mode)}
+                    disabled={createDraftMutation.isPending}
+                  >
+                    <Icon className="w-4 h-4 mr-1" />
+                    <Plus className="w-3 h-3 mr-1" />
+                    {config.label}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {!drafts?.length ? (
+              <Card className="border-neon/10">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  NO DRAFTS YET. CREATE AN ARTICLE, SOCIAL POST, OR PODCAST SCRIPT.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {drafts.map((draft) => {
+                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG];
+                  const Icon = config.icon;
+                  return (
+                    <Card
+                      key={draft.id}
+                      className="border-neon/10 bg-card cursor-pointer hover:border-neon/30 transition-colors"
+                      onClick={() => navigate(`/story/${storyId}/editor/${draft.id}`)}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-3">
+                          <Icon className={`w-5 h-5 ${config.color}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-[10px]">{config.label}</Badge>
+                              <span className="text-sm truncate">
+                                {draft.title || "Untitled Draft"}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              Updated {new Date(draft.updatedAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

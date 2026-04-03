@@ -8,3 +8,145 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type StoryItemType = (typeof StoryItemType)[keyof typeof StoryItemType];
+
+export const StoryItemType = {
+  note: "note",
+  audio: "audio",
+  photo: "photo",
+} as const;
+
+export interface StoryItem {
+  id: string;
+  storyId: string;
+  type: StoryItemType;
+  content: string;
+  createdAt: string;
+}
+
+export type StoryWithItemsStatus =
+  (typeof StoryWithItemsStatus)[keyof typeof StoryWithItemsStatus];
+
+export const StoryWithItemsStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface StoryWithItems {
+  id: string;
+  title: string;
+  status: StoryWithItemsStatus;
+  createdAt: string;
+  updatedAt: string;
+  items: StoryItem[];
+}
+
+export type DraftMode = (typeof DraftMode)[keyof typeof DraftMode];
+
+export const DraftMode = {
+  article: "article",
+  social: "social",
+  podcast: "podcast",
+} as const;
+
+export interface Draft {
+  id: string;
+  storyId: string;
+  mode: DraftMode;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateStoryBodyStatus =
+  (typeof CreateStoryBodyStatus)[keyof typeof CreateStoryBodyStatus];
+
+export const CreateStoryBodyStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface CreateStoryBody {
+  id?: string;
+  title: string;
+  status?: CreateStoryBodyStatus;
+  createdAt?: string;
+}
+
+export type ImportStoryBodyItemsItemType =
+  (typeof ImportStoryBodyItemsItemType)[keyof typeof ImportStoryBodyItemsItemType];
+
+export const ImportStoryBodyItemsItemType = {
+  note: "note",
+  audio: "audio",
+  photo: "photo",
+} as const;
+
+export type ImportStoryBodyItemsItem = {
+  type: ImportStoryBodyItemsItemType;
+  content: string;
+};
+
+export interface ImportStoryBody {
+  title: string;
+  items: ImportStoryBodyItemsItem[];
+}
+
+export type CreateItemBodyType =
+  (typeof CreateItemBodyType)[keyof typeof CreateItemBodyType];
+
+export const CreateItemBodyType = {
+  note: "note",
+  audio: "audio",
+  photo: "photo",
+} as const;
+
+export interface CreateItemBody {
+  id?: string;
+  type: CreateItemBodyType;
+  content: string;
+  createdAt?: string;
+}
+
+export type CreateDraftBodyMode =
+  (typeof CreateDraftBodyMode)[keyof typeof CreateDraftBodyMode];
+
+export const CreateDraftBodyMode = {
+  article: "article",
+  social: "social",
+  podcast: "podcast",
+} as const;
+
+export interface CreateDraftBody {
+  mode: CreateDraftBodyMode;
+  title?: string;
+  content?: string;
+}
+
+export interface UpdateDraftBody {
+  title?: string;
+  content?: string;
+}
+
+export interface DashboardData {
+  totalStories: number;
+  activeStories: number;
+  archivedStories: number;
+  totalItems: number;
+  totalDrafts: number;
+  recentStories: StoryWithItems[];
+}
+
+export type ListStoriesParams = {
+  status?: ListStoriesStatus;
+};
+
+export type ListStoriesStatus =
+  (typeof ListStoriesStatus)[keyof typeof ListStoriesStatus];
+
+export const ListStoriesStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
