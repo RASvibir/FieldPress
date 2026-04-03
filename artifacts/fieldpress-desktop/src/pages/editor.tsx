@@ -54,6 +54,10 @@ export default function EditorPage() {
   const [saved, setSaved] = useState(true);
   const [copied, setCopied] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestTitle = useRef(title);
+  const latestContent = useRef(content);
+  latestTitle.current = title;
+  latestContent.current = content;
 
   useEffect(() => {
     if (draft) {
@@ -82,10 +86,8 @@ export default function EditorPage() {
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      const t = field === "title" ? value : title;
-      const c = field === "content" ? value : content;
       updateMutation.mutate(
-        { storyId, draftId, data: { title: t, content: c } },
+        { storyId, draftId, data: { title: latestTitle.current, content: latestContent.current } },
         { onSuccess: () => setSaved(true) }
       );
     }, 1500);
@@ -113,13 +115,16 @@ export default function EditorPage() {
   }
 
   function insertText(text: string) {
-    setContent((prev) => prev + (prev ? "\n\n" : "") + text);
+    setContent((prev) => {
+      const updated = prev + (prev ? "\n\n" : "") + text;
+      latestContent.current = updated;
+      return updated;
+    });
     setSaved(false);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      const newContent = content + (content ? "\n\n" : "") + text;
       updateMutation.mutate(
-        { storyId, draftId, data: { title, content: newContent } },
+        { storyId, draftId, data: { title: latestTitle.current, content: latestContent.current } },
         { onSuccess: () => setSaved(true) }
       );
     }, 1500);

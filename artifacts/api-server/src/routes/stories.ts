@@ -23,7 +23,11 @@ async function getStoryWithItems(storyId: string) {
 
 router.get("/stories", async (req: Request, res: Response) => {
   const parsed = ListStoriesQueryParams.safeParse(req.query);
-  const statusFilter = parsed.success && parsed.data.status ? parsed.data.status : undefined;
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid query parameters" });
+    return;
+  }
+  const statusFilter = parsed.data.status || undefined;
 
   const stories = statusFilter
     ? await db.select().from(storiesTable).where(eq(storiesTable.status, statusFilter)).orderBy(desc(storiesTable.updatedAt))
