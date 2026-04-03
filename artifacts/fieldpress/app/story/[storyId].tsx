@@ -1,6 +1,3 @@
-// FieldPress — Story Detail Screen
-// The reporter's desk: write text notes, record audio clips, open AI Producer.
-// Workflow: collect raw material here → AI Producer turns it into a publishable draft.
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +9,7 @@ import {
   FlatList,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -32,7 +30,7 @@ import {
 import { useStories } from '@/state/store';
 import { StoryItem } from '@/types';
 
-const GLITCH_CHARS = '█▓▒░▄▀▐▌┤┐└┴┬├─┼╞╟╚╔╩╦╠═╬▲►▼◄■○●◘◙';
+const GLITCH_CHARS = '\u2588\u2593\u2592\u2591\u2584\u2580\u2590\u258C\u2524\u2510\u2514\u2534\u252C\u251C\u2500\u253C\u255E\u255F\u255A\u2554\u2569\u2566\u2560\u2550\u256C\u25B2\u25BA\u25BC\u25C4\u25A0\u25CB\u25CF\u25D8\u25D9';
 
 function useGlitchText(length: number, active: boolean) {
   const [noise, setNoise] = useState('');
@@ -87,7 +85,7 @@ function GlitchRecordingBanner() {
       <View style={glitchStyles.centerRow}>
         <View style={glitchStyles.recDot} />
         <Text style={[glitchStyles.recLabel, labelGlitch && glitchStyles.recLabelGlitch]}>
-          {labelGlitch ? '▓▒R░E▒C▓' : '● REC'}
+          {labelGlitch ? '\u2593\u2592R\u2591E\u2592C\u2593' : '\u25CF REC'}
         </Text>
         <Text style={glitchStyles.recTime}>
           {new Date().toLocaleTimeString('en-US', { hour12: false })}
@@ -101,6 +99,17 @@ function GlitchRecordingBanner() {
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function TextNoteItem({ item }: { item: StoryItem }) {
@@ -167,6 +176,63 @@ function AudioClipItem({
   );
 }
 
+function buildExportText(title: string, items: StoryItem[]): string {
+  const divider = '='.repeat(48);
+  const subDivider = '-'.repeat(48);
+  const lines: string[] = [];
+
+  lines.push(divider);
+  lines.push('FIELDPRESS DISPATCH');
+  lines.push(divider);
+  lines.push('');
+  lines.push(`STORY: ${title}`);
+  lines.push(`EXPORTED: ${formatDateTime(new Date().toISOString())}`);
+  lines.push('');
+
+  const textNotes = items.filter((i) => i.type === 'text');
+  const audioClips = items.filter((i) => i.type === 'audio');
+
+  if (textNotes.length > 0) {
+    lines.push(subDivider);
+    lines.push(`FIELD NOTES (${textNotes.length})`);
+    lines.push(subDivider);
+    lines.push('');
+    textNotes.forEach((note, i) => {
+      lines.push(`[${formatDateTime(note.createdAt)}]`);
+      lines.push(note.content);
+      if (i < textNotes.length - 1) lines.push('');
+    });
+    lines.push('');
+  }
+
+  if (audioClips.length > 0) {
+    lines.push(subDivider);
+    lines.push(`AUDIO RECORDINGS (${audioClips.length})`);
+    lines.push(subDivider);
+    lines.push('');
+    audioClips.forEach((clip, i) => {
+      const filename = clip.content.split('/').pop() || `recording_${i + 1}`;
+      lines.push(`  ${i + 1}. ${filename}`);
+      lines.push(`     Recorded: ${formatDateTime(clip.createdAt)}`);
+    });
+    lines.push('');
+    lines.push('NOTE: Audio files are stored locally on device.');
+    lines.push('Transfer them separately via file manager.');
+    lines.push('');
+  }
+
+  if (textNotes.length === 0 && audioClips.length === 0) {
+    lines.push('(No notes or recordings yet)');
+    lines.push('');
+  }
+
+  lines.push(divider);
+  lines.push('// Filed via FieldPress - Pocket Newsroom');
+  lines.push(divider);
+
+  return lines.join('\n');
+}
+
 export default function StoryDetailScreen() {
   const insets = useSafeAreaInsets();
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
@@ -182,7 +248,6 @@ export default function StoryDetailScreen() {
 
   const recordPulse = useRef(new Animated.Value(1)).current;
 
-  // Pre-compute audio clip index so numbering is stable across re-renders
   const audioIndexMap = React.useMemo(() => {
     const map = new Map<string, number>();
     let count = 0;
@@ -282,6 +347,19 @@ export default function StoryDetailScreen() {
     router.push({ pathname: '/producer/[storyId]', params: { storyId: storyId ?? '' } });
   };
 
+  const handleExport = async () => {
+    if (!story) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const dispatch = buildExportText(story.title, items);
+    try {
+      await Share.share({
+        message: dispatch,
+        title: `FieldPress: ${story.title}`,
+      });
+    } catch {
+    }
+  };
+
   if (!story) {
     return (
       <View style={[styles.container, styles.centerContainer, { paddingTop: insets.top }]}>
@@ -303,7 +381,6 @@ export default function StoryDetailScreen() {
       style={[styles.container, { paddingBottom: webBottomPad }]}
       keyboardVerticalOffset={0}
     >
-      {/* Custom Header with scan-line gradient */}
       <LinearGradient
         colors={['#003300', Colors.background]}
         start={{ x: 0, y: 0 }}
@@ -320,6 +397,13 @@ export default function StoryDetailScreen() {
           {story.title}
         </Text>
         <Pressable
+          onPress={handleExport}
+          style={({ pressed }) => [styles.exportBtn, pressed && { opacity: 0.75 }]}
+        >
+          <Feather name="share" size={14} color={Colors.textSecondary} />
+          <Text style={styles.exportBtnText}>EXPORT</Text>
+        </Pressable>
+        <Pressable
           onPress={handleAiProducer}
           style={({ pressed }) => [styles.aiBtn, pressed && { opacity: 0.75 }]}
         >
@@ -328,10 +412,8 @@ export default function StoryDetailScreen() {
         </Pressable>
       </LinearGradient>
 
-      {/* Glitchy static recording indicator */}
       {isRecording && <GlitchRecordingBanner />}
 
-      {/* Items List */}
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
@@ -363,7 +445,6 @@ export default function StoryDetailScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Bottom Composer */}
       <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
         <TextInput
           style={styles.composerInput}
@@ -439,6 +520,23 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: Colors.text,
     letterSpacing: 0.8,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 0, 0.10)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 0, 0.25)',
+  },
+  exportBtnText: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 12,
+    color: Colors.textSecondary,
+    letterSpacing: 2,
   },
   aiBtn: {
     flexDirection: 'row',

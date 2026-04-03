@@ -1,5 +1,3 @@
-// FieldPress — Story List Screen
-// The newsroom home: all active stories. Tap to open, "+" to file a new story.
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -7,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -22,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/colors';
 import { useStories } from '@/state/store';
-import { Story } from '@/types';
+import { Story, StoryStatus } from '@/types';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -34,38 +33,87 @@ function formatDate(iso: string): string {
   });
 }
 
-function StoryCard({ story, itemCount }: { story: Story; itemCount: number }) {
+function StoryCard({
+  story,
+  itemCount,
+  onArchiveToggle,
+}: {
+  story: Story;
+  itemCount: number;
+  onArchiveToggle: (story: Story) => void;
+}) {
+  const isArchived = story.status === 'archived';
+
   const handlePress = () => {
     Haptics.selectionAsync();
     router.push({ pathname: '/story/[storyId]', params: { storyId: story.id } });
   };
 
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    onArchiveToggle(story);
+  };
+
   return (
     <Pressable
       onPress={handlePress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onLongPress={handleLongPress}
+      delayLongPress={400}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.cardPressed,
+        isArchived && styles.cardArchived,
+      ]}
     >
-      <View style={styles.cardAccent} />
+      <View style={[styles.cardAccent, isArchived && styles.cardAccentArchived]} />
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
+        <Text
+          style={[styles.cardTitle, isArchived && styles.cardTitleArchived]}
+          numberOfLines={2}
+        >
           {story.title}
         </Text>
         <View style={styles.cardMeta}>
-          <Feather name="clock" size={12} color={Colors.textMuted} />
+          <Feather name="clock" size={12} color={isArchived ? Colors.textMuted : Colors.textMuted} />
           <Text style={styles.cardDate}>{formatDate(story.createdAt)}</Text>
           {itemCount > 0 && (
-            <View style={styles.itemBadge}>
-              <Text style={styles.itemBadgeText}>{itemCount}</Text>
+            <View style={[styles.itemBadge, isArchived && styles.itemBadgeArchived]}>
+              <Text style={[styles.itemBadgeText, isArchived && styles.itemBadgeTextArchived]}>
+                {itemCount}
+              </Text>
+            </View>
+          )}
+          {isArchived && (
+            <View style={styles.archivedBadge}>
+              <Feather name="archive" size={10} color={Colors.textMuted} />
+              <Text style={styles.archivedBadgeText}>ARCHIVED</Text>
             </View>
           )}
         </View>
       </View>
-      <Feather name="chevron-right" size={18} color={Colors.textMuted} />
+      <Feather
+        name="chevron-right"
+        size={18}
+        color={isArchived ? Colors.textMuted : Colors.textMuted}
+      />
     </Pressable>
   );
 }
 
-function EmptyState() {
+function EmptyState({ filter }: { filter: StoryStatus }) {
+  if (filter === 'archived') {
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIcon}>
+          <Feather name="archive" size={36} color={Colors.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle}>NO ARCHIVED STORIES</Text>
+        <Text style={styles.emptySubtitle}>
+          Long-press any active story to move it to the archive.
+        </Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIcon}>
@@ -81,11 +129,37 @@ function EmptyState() {
 
 export default function StoryListScreen() {
   const insets = useSafeAreaInsets();
-  const { stories, getItemsForStory, createStory } = useStories();
+  const { stories, getItemsForStory, createStory, setStoryStatus } = useStories();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [filter, setFilter] = useState<StoryStatus>('active');
   const inputRef = useRef<TextInput>(null);
+
+  const filteredStories = stories.filter((s) => s.status === filter);
+
+  const handleArchiveToggle = (story: Story) => {
+    const newStatus: StoryStatus = story.status === 'active' ? 'archived' : 'active';
+    const action = newStatus === 'archived' ? 'Archive' : 'Restore';
+    const message = newStatus === 'archived'
+      ? 'This story will be moved to your archive. You can restore it anytime.'
+      : 'This story will be moved back to your active stories.';
+
+    Alert.alert(
+      `${action} Story`,
+      message,
+      [
+        { text: 'CANCEL', style: 'cancel' },
+        {
+          text: action.toUpperCase(),
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setStoryStatus(story.id, newStatus);
+          },
+        },
+      ],
+    );
+  };
 
   const openModal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -103,12 +177,19 @@ export default function StoryListScreen() {
     router.push({ pathname: '/story/[storyId]', params: { storyId: story.id } });
   };
 
+  const toggleFilter = () => {
+    Haptics.selectionAsync();
+    setFilter((prev) => (prev === 'active' ? 'archived' : 'active'));
+  };
+
+  const activeCount = stories.filter((s) => s.status === 'active').length;
+  const archivedCount = stories.filter((s) => s.status === 'archived').length;
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
   const webBottomPad = Platform.OS === 'web' ? 34 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      {/* Header with scan-line gradient */}
       <LinearGradient
         colors={['#003300', Colors.background]}
         start={{ x: 0, y: 0 }}
@@ -143,20 +224,49 @@ export default function StoryListScreen() {
       </LinearGradient>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>ACTIVE STORIES</Text>
-        <Text style={styles.sectionCount}>{stories.length}</Text>
+        <Pressable onPress={toggleFilter} style={styles.filterToggle}>
+          <Feather
+            name={filter === 'active' ? 'radio' : 'archive'}
+            size={14}
+            color={filter === 'active' ? Colors.accent : Colors.textMuted}
+          />
+          <Text style={[
+            styles.sectionTitle,
+            filter === 'archived' && styles.sectionTitleArchived,
+          ]}>
+            {filter === 'active' ? 'ACTIVE STORIES' : 'ARCHIVED'}
+          </Text>
+        </Pressable>
+        <View style={styles.filterRight}>
+          <Text style={styles.sectionCount}>
+            {filter === 'active' ? activeCount : archivedCount}
+          </Text>
+          {archivedCount > 0 && filter === 'active' && (
+            <Pressable onPress={toggleFilter} style={styles.archiveToggleBtn}>
+              <Feather name="archive" size={12} color={Colors.textMuted} />
+              <Text style={styles.archiveToggleText}>{archivedCount}</Text>
+            </Pressable>
+          )}
+          {filter === 'archived' && (
+            <Pressable onPress={toggleFilter} style={styles.archiveToggleBtn}>
+              <Feather name="radio" size={12} color={Colors.accent} />
+              <Text style={[styles.archiveToggleText, { color: Colors.accent }]}>ACTIVE</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <FlatList
-        data={stories}
+        data={filteredStories}
         keyExtractor={(s) => s.id}
         renderItem={({ item }) => (
           <StoryCard
             story={item}
             itemCount={getItemsForStory(item.id).length}
+            onArchiveToggle={handleArchiveToggle}
           />
         )}
-        ListEmptyComponent={<EmptyState />}
+        ListEmptyComponent={<EmptyState filter={filter} />}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: insets.bottom + webBottomPad + 100 },
@@ -165,25 +275,25 @@ export default function StoryListScreen() {
         scrollEnabled
       />
 
-      {/* Floating Action Button with neon glow gradient */}
-      <Pressable
-        onPress={openModal}
-        style={[
-          styles.fabWrapper,
-          { bottom: insets.bottom + webBottomPad + 24 },
-        ]}
-      >
-        <LinearGradient
-          colors={[Colors.accent, '#009900']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fab}
+      {filter === 'active' && (
+        <Pressable
+          onPress={openModal}
+          style={[
+            styles.fabWrapper,
+            { bottom: insets.bottom + webBottomPad + 24 },
+          ]}
         >
-          <Ionicons name="add" size={28} color={Colors.background} />
-        </LinearGradient>
-      </Pressable>
+          <LinearGradient
+            colors={[Colors.accent, '#009900']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fab}
+          >
+            <Ionicons name="add" size={28} color={Colors.background} />
+          </LinearGradient>
+        </Pressable>
+      )}
 
-      {/* New Story Modal with BlurView backdrop */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -344,6 +454,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   sectionTitle: {
     fontFamily: 'VT323_400Regular',
     fontSize: 18,
@@ -351,9 +466,34 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
+  sectionTitleArchived: {
+    color: Colors.textMuted,
+  },
+  filterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   sectionCount: {
     fontFamily: 'VT323_400Regular',
     fontSize: 18,
+    color: Colors.textMuted,
+    letterSpacing: 1,
+  },
+  archiveToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  archiveToggleText: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 14,
     color: Colors.textMuted,
     letterSpacing: 1,
   },
@@ -373,10 +513,16 @@ const styles = StyleSheet.create({
   cardPressed: {
     opacity: 0.7,
   },
+  cardArchived: {
+    opacity: 0.6,
+  },
   cardAccent: {
     width: 3,
     alignSelf: 'stretch',
     backgroundColor: Colors.accent,
+  },
+  cardAccentArchived: {
+    backgroundColor: Colors.textMuted,
   },
   cardBody: {
     flex: 1,
@@ -388,6 +534,9 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: Colors.text,
     lineHeight: 28,
+  },
+  cardTitleArchived: {
+    color: Colors.textMuted,
   },
   cardMeta: {
     flexDirection: 'row',
@@ -409,10 +558,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.accentDim,
   },
+  itemBadgeArchived: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.cardBorder,
+  },
   itemBadgeText: {
     fontFamily: 'VT323_400Regular',
     fontSize: 16,
     color: Colors.accent,
+    letterSpacing: 1,
+  },
+  itemBadgeTextArchived: {
+    color: Colors.textMuted,
+  },
+  archivedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 6,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  archivedBadgeText: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 12,
+    color: Colors.textMuted,
     letterSpacing: 1,
   },
   emptyContainer: {

@@ -1,8 +1,6 @@
-// FieldPress state store — React Context + AsyncStorage persistence
-// All data is local; no backend. Stories and items survive app restarts via AsyncStorage.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Story, StoryItem } from '@/types';
+import { Story, StoryItem, StoryStatus } from '@/types';
 import {
   loadStories,
   loadStoryItems,
@@ -10,7 +8,6 @@ import {
   saveStoryItems,
 } from '@/utils/storage';
 
-// Context shape is unchanged from v1 — hydration is a private implementation detail.
 interface StoriesContextValue {
   stories: Story[];
   storyItems: StoryItem[];
@@ -19,6 +16,7 @@ interface StoriesContextValue {
   getItemsForStory: (storyId: string) => StoryItem[];
   addTextItem: (storyId: string, content: string) => void;
   addAudioItem: (storyId: string, uri: string) => void;
+  setStoryStatus: (id: string, status: StoryStatus) => void;
 }
 
 const StoriesContext = createContext<StoriesContextValue | null>(null);
@@ -31,12 +29,8 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
   const [stories, setStories] = useState<Story[]>([]);
   const [storyItems, setStoryItems] = useState<StoryItem[]>([]);
 
-  // hydrated is a ref so it never causes a re-render and never leaks to consumers.
   const hydrated = useRef(false);
 
-  // Load persisted data once on mount.
-  // Merge strategy: any mutations that beat the async load (very rare race)
-  // are preserved — saved records not already in memory are appended.
   useEffect(() => {
     Promise.all([loadStories(), loadStoryItems()]).then(([savedStories, savedItems]) => {
       setStories((current) => {
@@ -45,7 +39,6 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
           ...current,
           ...savedStories.filter((s) => !existingIds.has(s.id)),
         ];
-        // Keep newest-first ordering consistent with createStory
         return merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       });
       setStoryItems((current) => {
@@ -56,13 +49,11 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Persist stories whenever they change (guarded: skip pre-hydration runs).
   useEffect(() => {
     if (!hydrated.current) return;
     saveStories(stories);
   }, [stories]);
 
-  // Persist storyItems whenever they change (guarded: skip pre-hydration runs).
   useEffect(() => {
     if (!hydrated.current) return;
     saveStoryItems(storyItems);
@@ -72,6 +63,7 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
     const story: Story = {
       id: generateId(),
       title: title.trim(),
+      status: 'active',
       createdAt: new Date().toISOString(),
     };
     setStories((prev) => [story, ...prev]);
@@ -108,6 +100,12 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
     setStoryItems((prev) => [...prev, item]);
   };
 
+  const setStoryStatus = (id: string, status: StoryStatus): void => {
+    setStories((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, status } : s)),
+    );
+  };
+
   const value = useMemo<StoriesContextValue>(
     () => ({
       stories,
@@ -117,6 +115,7 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
       getItemsForStory,
       addTextItem,
       addAudioItem,
+      setStoryStatus,
     }),
     [stories, storyItems],
   );
