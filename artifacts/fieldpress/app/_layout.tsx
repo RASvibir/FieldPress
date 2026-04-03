@@ -31,6 +31,7 @@ function RootLayoutNav() {
         <Stack.Screen name="index" />
         <Stack.Screen name="story/[storyId]" />
         <Stack.Screen name="producer/[storyId]" />
+        <Stack.Screen name="travel" />
       </Stack>
     </StoriesProvider>
   );

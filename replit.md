@@ -91,6 +91,22 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/fieldpress` (`@workspace/fieldpress`)
+
+Expo SDK 54 + React Native mobile app — FieldPress: Pocket Newsroom & Podcast Studio for indie journalists. Mobile-only, no backend required.
+
+- **Screens (file-based routing via expo-router):**
+  - `app/index.tsx` — Story list + FAB to create stories
+  - `app/story/[storyId].tsx` — Story detail: text notes + audio recording/playback
+  - `app/producer/[storyId].tsx` — AI Producer (mocked draft generator)
+  - `app/travel.tsx` — Travel Assistant: GPS location, reverse geocode, timezone, dispatch notes, share location
+- **State:** React Context (`state/store.ts`) + AsyncStorage persistence (`utils/storage.ts`)
+- **Services:** `services/audio.ts` (expo-av recording/playback), `services/aiMock.ts` (mock AI draft)
+- **Types:** `types/index.ts` — `Story`, `StoryItem` (text|audio), `AiDraft`
+- **Theme:** CRT terminal / cyberpunk — VT323 font, neon green (#39FF14), yellow (#FFFF00), red (#FF3131) on black
+- **Key packages:** expo-av (deprecated, migrate to expo-audio for SDK 55), expo-location, expo-image-picker (installed/unused), expo-haptics, expo-linear-gradient, expo-blur, expo-clipboard
+- **Do NOT use:** uuid (use Date.now().toString(36) + Math.random()), emojis (use @expo/vector-icons)
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.

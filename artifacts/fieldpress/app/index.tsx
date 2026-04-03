@@ -129,6 +129,13 @@ export default function StoryListScreen() {
             <Text style={styles.tagline}>// POCKET NEWSROOM</Text>
           </View>
         </View>
+        <Pressable
+          onPress={() => { Haptics.selectionAsync(); router.push('/travel'); }}
+          style={({ pressed }) => [styles.travelTag, pressed && { opacity: 0.7 }]}
+        >
+          <Feather name="navigation" size={14} color={Colors.accent} />
+          <Text style={styles.travelText}>NAV</Text>
+        </Pressable>
         <View style={styles.liveTag}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>WIRE</Text>
@@ -288,6 +295,24 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     letterSpacing: 2,
     marginTop: 2,
+  },
+  travelTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: Colors.accentDim,
+    marginRight: 6,
+  },
+  travelText: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
+    color: Colors.accent,
+    letterSpacing: 2,
   },
   liveTag: {
     flexDirection: 'row',
