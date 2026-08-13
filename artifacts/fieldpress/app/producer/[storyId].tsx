@@ -1,6 +1,5 @@
 // FieldPress — AI Producer Screen
-// Takes the story's text notes and generates a summary, outline, and social caption.
-// v1: All mocked locally. v2 hook: swap generateAiDraft() with a real API call.
+// Takes the story's text notes and asks the FieldPress API (Gemini) for a summary, outline, and caption.
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -19,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/colors';
-import { generateAiDraft } from '@/services/aiMock';
+import { generateAiDraft } from '@/services/producer';
 import { useStories } from '@/state/store';
 import { AiDraft } from '@/types';
 

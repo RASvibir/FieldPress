@@ -6,10 +6,11 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileText, Mic, Camera, ArrowLeft, Plus,
-  Newspaper, MessageSquare, Podcast, Trash2
+  Newspaper, MessageSquare, Podcast, Trash2, Cpu
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 const MODE_CONFIG = {
   article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
@@ -27,6 +28,26 @@ export default function StoryDetailPage() {
   const { data: drafts } = useListDrafts(storyId);
   const createDraftMutation = useCreateDraft();
   const deleteMutation = useDeleteStory();
+  const [producing, setProducing] = useState(false);
+  const [produceError, setProduceError] = useState<string | null>(null);
+
+  async function handleProduce() {
+    setProduceError(null);
+    setProducing(true);
+    try {
+      const response = await fetch(`/api/stories/${storyId}/produce`, { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? `Producer failed (${response.status})`);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      await queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}/drafts`] });
+    } catch (err) {
+      setProduceError(err instanceof Error ? err.message : "Producer failed");
+    } finally {
+      setProducing(false);
+    }
+  }
 
   function handleNewDraft(mode: "article" | "social" | "podcast") {
     createDraftMutation.mutate(
@@ -147,6 +168,18 @@ export default function StoryDetailPage() {
 
           <div>
             <h2 className="text-lg text-neon tracking-wider mb-3">PRODUCTION OUTPUTS</h2>
+            <Button
+              variant="outline"
+              className="w-full mb-3 border-cyan-400/30 text-cyan-300 hover:border-cyan-300/60"
+              onClick={handleProduce}
+              disabled={producing}
+            >
+              <Cpu className="w-4 h-4 mr-2" />
+              {producing ? "GENERATING WITH GEMINI..." : "AI PRODUCE"}
+            </Button>
+            {produceError && (
+              <p className="text-xs text-neon-red mb-3">{produceError}</p>
+            )}
             <div className="grid grid-cols-3 gap-2 mb-4">
               {(["article", "social", "podcast"] as const).map((mode) => {
                 const config = MODE_CONFIG[mode];

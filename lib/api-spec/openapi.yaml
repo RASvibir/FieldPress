@@ -282,6 +282,52 @@ paths:
         "204":
           description: Deleted
 
+  /produce:
+    post:
+      operationId: produceDraft
+      tags: [drafts]
+      summary: Generate AI producer drafts from a title and notes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProduceBody"
+      responses:
+        "200":
+          description: Generated producer output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProduceResult"
+        "400":
+          description: Invalid request
+        "502":
+          description: Gemini failed
+
+  /stories/{storyId}/produce:
+    post:
+      operationId: produceStoryDrafts
+      tags: [drafts]
+      summary: Generate AI drafts for a story and save them
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generated and saved drafts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProduceResult"
+        "404":
+          description: Not found
+        "502":
+          description: Gemini failed
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -432,6 +478,34 @@ components:
           type: string
         content:
           type: string
+
+    ProduceBody:
+      type: object
+      properties:
+        title:
+          type: string
+        notes:
+          type: array
+          items:
+            type: string
+      required: [title]
+
+    ProduceResult:
+      type: object
+      properties:
+        summary:
+          type: string
+        outline:
+          type: array
+          items:
+            type: string
+        caption:
+          type: string
+        drafts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Draft"
+      required: [summary, outline, caption, drafts]
 
     DashboardData:
       type: object
