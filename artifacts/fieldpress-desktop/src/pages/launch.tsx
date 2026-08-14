@@ -6,7 +6,7 @@ import { isStandaloneApp, useInstallApp } from "@/hooks/use-install";
 
 export default function LaunchPage() {
   const [, navigate] = useLocation();
-  const { device, installed, canNativeInstall, busy, install } = useInstallApp();
+  const { device, installed, canNativeInstall, busy, install, safari } = useInstallApp();
   const [copied, setCopied] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
   const [showAndroidHelp, setShowAndroidHelp] = useState(false);
@@ -22,17 +22,13 @@ export default function LaunchPage() {
   }, [navigate]);
 
   async function handleInstall() {
-    if (canNativeInstall) {
-      const ok = await install();
-      if (ok) navigate("/app");
+    const ok = await install();
+    if (ok) {
+      navigate("/app");
       return;
     }
     if (device === "ios") {
       setShowIosHelp(true);
-      return;
-    }
-    if (device === "android") {
-      setShowAndroidHelp(true);
       return;
     }
     setShowAndroidHelp(true);
@@ -75,38 +71,57 @@ export default function LaunchPage() {
                 disabled={busy}
               >
                 <Download className="w-5 h-5" />
-                {busy ? "INSTALLING…" : device === "ios" ? "DOWNLOAD TO PHONE" : "INSTALL ON THIS DEVICE"}
+                {busy ? "INSTALLING…" : device === "ios" ? "ADD TO HOME SCREEN" : "INSTALL ON THIS DEVICE"}
               </Button>
             )}
           </div>
 
           {(showAndroidHelp && device !== "ios") && (
             <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
-              <li className="flex gap-3">
-                <span className="text-neon-yellow">1</span>
-                <span>
-                  {device === "android"
-                    ? "Tap the ⋮ menu in Chrome"
-                    : "Click the install icon in the address bar (Chrome / Edge)"}
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-neon-yellow">2</span>
-                <span>
-                  Tap <strong>Install app</strong> / <strong>Add to Home screen</strong>
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-neon-yellow">3</span>
-                <span>
-                  Open <strong>FieldPress</strong> from your home screen
-                </span>
-              </li>
+              {canNativeInstall ? (
+                <li className="flex gap-3">
+                  <span className="text-neon-yellow">*</span>
+                  <span>
+                    Tap <strong>Install on this device</strong> again — Chrome is ready to add FieldPress to your home screen.
+                  </span>
+                </li>
+              ) : (
+                <>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">1</span>
+                    <span>
+                      {device === "android"
+                        ? "Tap the ⋮ menu in Chrome"
+                        : "Click the install icon in the address bar (Chrome / Edge)"}
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">2</span>
+                    <span>
+                      Tap <strong>Install app</strong> / <strong>Add to Home screen</strong>
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">3</span>
+                    <span>
+                      Open <strong>FieldPress</strong> from your home screen
+                    </span>
+                  </li>
+                </>
+              )}
             </ol>
           )}
 
           {showIosHelp && device === "ios" && (
             <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
+              {!safari && (
+                <li className="flex gap-3">
+                  <span className="text-neon-yellow">!</span>
+                  <span>
+                    iPhone can only install from <strong>Safari</strong>. Open this page there, then come back to this button.
+                  </span>
+                </li>
+              )}
               <li className="flex gap-3">
                 <span className="text-neon-yellow">1</span>
                 <span>

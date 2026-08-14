@@ -51,6 +51,9 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    headers: {
+      "Service-Worker-Allowed": "/",
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

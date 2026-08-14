@@ -1,9 +1,14 @@
-const CACHE = "fieldpress-v1";
-const SHELL = ["/", "/app", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE = "fieldpress-v2";
+const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()),
+    caches.open(CACHE).then(async (cache) => {
+      await Promise.all(
+        SHELL.map((url) => cache.add(url).catch(() => undefined)),
+      );
+      await self.skipWaiting();
+    }),
   );
 });
 
@@ -23,8 +28,10 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
       .catch(() => caches.match(event.request).then((hit) => hit || caches.match("/"))),

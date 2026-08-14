@@ -13,6 +13,13 @@
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      window.__fpDeferredPrompt = null;
+      window.addEventListener("beforeinstallprompt", function (event) {
+        event.preventDefault();
+        window.__fpDeferredPrompt = event;
+      });
+    </script>
     <meta property="og:title" content="FieldPress" />
     <meta property="og:description" content="Pocket newsroom. Open or install in one tap." />
     <meta property="og:image" content="/opengraph.jpg" />

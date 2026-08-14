@@ -4,9 +4,24 @@
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/fieldpress-desktop run build && pnpm --filter @workspace/api-server run build",
   "outputDirectory": "artifacts/fieldpress-desktop/dist/public",
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.mjs": {
