@@ -1,0 +1,6 @@
+.env
+.neon
+.git
+**/.expo
+artifacts/mockup-sandbox
+attached_assets

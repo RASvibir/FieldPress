@@ -43,7 +43,7 @@ const staticDir = process.env.STATIC_DIR
   : defaultStaticDir;
 const indexHtml = path.join(staticDir, "index.html");
 
-if (fs.existsSync(indexHtml)) {
+if (!process.env.VERCEL && fs.existsSync(indexHtml)) {
   app.use(express.static(staticDir));
   app.get(/.*/, (req, res, next) => {
     if (req.path.startsWith("/api")) {
