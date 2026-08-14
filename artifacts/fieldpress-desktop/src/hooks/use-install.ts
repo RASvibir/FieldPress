@@ -6,11 +6,15 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 export type DeviceKind = "ios" | "android" | "desktop";
+export type BrowserKind = "safari" | "chrome" | "edge" | "firefox" | "other";
 
 declare global {
   interface Window {
     __fpDeferredPrompt?: BeforeInstallPromptEvent | null;
     __fpInstallCapture?: boolean;
+  }
+  interface Navigator {
+    install?: () => Promise<void>;
   }
 }
 
@@ -62,6 +66,16 @@ function detectDevice(): DeviceKind {
   return "desktop";
 }
 
+function detectBrowser(): BrowserKind {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent;
+  if (/Edg\//i.test(ua) || /EdgiOS/i.test(ua)) return "edge";
+  if (/Chrome|CriOS|Chromium/i.test(ua)) return "chrome";
+  if (/Firefox|FxiOS/i.test(ua)) return "firefox";
+  if (/Safari/i.test(ua)) return "safari";
+  return "other";
+}
+
 export function isStandaloneApp() {
   if (typeof window === "undefined") return false;
   return (
@@ -70,17 +84,9 @@ export function isStandaloneApp() {
   );
 }
 
-export function isIosSafari() {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  const ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const webkit = /WebKit/i.test(ua);
-  const other = /CriOS|FxiOS|OPiOS|EdgiOS/i.test(ua);
-  return ios && webkit && !other;
-}
-
 export function useInstallApp() {
   const [device, setDevice] = useState<DeviceKind>("desktop");
+  const [browser, setBrowser] = useState<BrowserKind>("other");
   const [installed, setInstalled] = useState(false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(getDeferredPrompt);
   const [busy, setBusy] = useState(false);
@@ -88,6 +94,7 @@ export function useInstallApp() {
   useEffect(() => {
     captureInstallPrompt();
     setDevice(detectDevice());
+    setBrowser(detectBrowser());
     setInstalled(isStandaloneApp());
     setDeferred(getDeferredPrompt());
     void registerServiceWorker();
@@ -106,17 +113,25 @@ export function useInstallApp() {
   }, []);
 
   const canNativeInstall = Boolean(deferred) && !installed;
+  const safari = browser === "safari";
 
   const install = useCallback(async () => {
-    const event = getDeferredPrompt();
-    if (!event) return false;
     setBusy(true);
     try {
-      await event.prompt();
-      const choice = await event.userChoice;
-      setDeferredPrompt(null);
-      if (choice.outcome === "accepted") setInstalled(true);
-      return choice.outcome === "accepted";
+      const event = getDeferredPrompt();
+      if (event) {
+        await event.prompt();
+        const choice = await event.userChoice;
+        setDeferredPrompt(null);
+        if (choice.outcome === "accepted") setInstalled(true);
+        return choice.outcome === "accepted";
+      }
+      if (typeof navigator.install === "function") {
+        await navigator.install();
+        setInstalled(isStandaloneApp());
+        return true;
+      }
+      return false;
     } catch {
       return false;
     } finally {
@@ -127,9 +142,10 @@ export function useInstallApp() {
   const label = useMemo(() => {
     if (installed) return "Open FieldPress";
     if (device === "ios") return "Add to Home Screen";
+    if (safari && device === "desktop") return "Add to Dock";
     if (canNativeInstall) return "Install FieldPress";
     return "Install FieldPress";
-  }, [installed, device, canNativeInstall]);
+  }, [installed, device, safari, canNativeInstall]);
 
-  return { device, installed, canNativeInstall, busy, install, label, safari: isIosSafari() };
+  return { device, browser, installed, canNativeInstall, busy, install, label, safari };
 }

@@ -6,16 +6,18 @@ import { isStandaloneApp, useInstallApp } from "@/hooks/use-install";
 
 export default function LaunchPage() {
   const [, navigate] = useLocation();
-  const { device, installed, canNativeInstall, busy, install, safari } = useInstallApp();
+  const { device, browser, installed, canNativeInstall, busy, install, safari } = useInstallApp();
   const [copied, setCopied] = useState(false);
-  const [showIosHelp, setShowIosHelp] = useState(false);
-  const [showAndroidHelp, setShowAndroidHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const qrSrc = useMemo(
     () =>
       `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=39FF14&bgcolor=000000&margin=8&data=${encodeURIComponent(origin)}`,
     [origin],
   );
+  const safariMac = safari && device === "desktop";
+  const installLabel =
+    busy ? "INSTALLING…" : device === "ios" ? "ADD TO HOME SCREEN" : safariMac ? "ADD TO DOCK" : "INSTALL ON THIS DEVICE";
 
   useEffect(() => {
     if (isStandaloneApp()) navigate("/app");
@@ -27,11 +29,7 @@ export default function LaunchPage() {
       navigate("/app");
       return;
     }
-    if (device === "ios") {
-      setShowIosHelp(true);
-      return;
-    }
-    setShowAndroidHelp(true);
+    setShowHelp(true);
   }
 
   async function copyLink() {
@@ -71,48 +69,12 @@ export default function LaunchPage() {
                 disabled={busy}
               >
                 <Download className="w-5 h-5" />
-                {busy ? "INSTALLING…" : device === "ios" ? "ADD TO HOME SCREEN" : "INSTALL ON THIS DEVICE"}
+                {installLabel}
               </Button>
             )}
           </div>
 
-          {(showAndroidHelp && device !== "ios") && (
-            <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
-              {canNativeInstall ? (
-                <li className="flex gap-3">
-                  <span className="text-neon-yellow">*</span>
-                  <span>
-                    Tap <strong>Install on this device</strong> again — Chrome is ready to add FieldPress to your home screen.
-                  </span>
-                </li>
-              ) : (
-                <>
-                  <li className="flex gap-3">
-                    <span className="text-neon-yellow">1</span>
-                    <span>
-                      {device === "android"
-                        ? "Tap the ⋮ menu in Chrome"
-                        : "Click the install icon in the address bar (Chrome / Edge)"}
-                    </span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="text-neon-yellow">2</span>
-                    <span>
-                      Tap <strong>Install app</strong> / <strong>Add to Home screen</strong>
-                    </span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="text-neon-yellow">3</span>
-                    <span>
-                      Open <strong>FieldPress</strong> from your home screen
-                    </span>
-                  </li>
-                </>
-              )}
-            </ol>
-          )}
-
-          {showIosHelp && device === "ios" && (
+          {showHelp && device === "ios" && (
             <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
               {!safari && (
                 <li className="flex gap-3">
@@ -140,6 +102,73 @@ export default function LaunchPage() {
                   Tap the new <strong>FieldPress</strong> icon to open the app
                 </span>
               </li>
+            </ol>
+          )}
+
+          {showHelp && safariMac && (
+            <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
+              <li className="flex gap-3">
+                <span className="text-neon-yellow">!</span>
+                <span>
+                  Safari cannot install from a page button. Use <strong>Add to Dock</strong> here, or open this site in Chrome / Edge for a one-click install.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-neon-yellow">1</span>
+                <span>
+                  Menu bar: <strong>File → Add to Dock…</strong>
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-neon-yellow">2</span>
+                <span>
+                  Or click <Share className="inline w-4 h-4 text-neon" /> <strong>Share</strong> in the toolbar, then <strong>Add to Dock</strong>
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-neon-yellow">3</span>
+                <span>
+                  Open <strong>FieldPress</strong> from the Dock or Spotlight
+                </span>
+              </li>
+            </ol>
+          )}
+
+          {showHelp && device !== "ios" && !safariMac && (
+            <ol className="space-y-3 border border-neon/25 bg-card p-4 text-left text-base text-foreground/90">
+              {canNativeInstall ? (
+                <li className="flex gap-3">
+                  <span className="text-neon-yellow">*</span>
+                  <span>
+                    Tap <strong>Install on this device</strong> again — the browser is ready to add FieldPress.
+                  </span>
+                </li>
+              ) : (
+                <>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">1</span>
+                    <span>
+                      {device === "android"
+                        ? "Tap the ⋮ menu in Chrome"
+                        : browser === "firefox"
+                          ? "Open this page in Chrome or Edge, then click Install"
+                          : "Click the install icon in the address bar (Chrome / Edge)"}
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">2</span>
+                    <span>
+                      Tap <strong>Install app</strong> / <strong>Add to Home screen</strong>
+                    </span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="text-neon-yellow">3</span>
+                    <span>
+                      Open <strong>FieldPress</strong> from your home screen
+                    </span>
+                  </li>
+                </>
+              )}
             </ol>
           )}
 
