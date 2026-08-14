@@ -1,0 +1,13 @@
+.git
+.DS_Store
+.env
+.env.*
+!.env.example
+.neon
+.expo
+node_modules
+**/dist
+**/static-build
+artifacts/fieldpress/.expo
+attached_assets
+*.tsbuildinfo

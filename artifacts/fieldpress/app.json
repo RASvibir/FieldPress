@@ -15,23 +15,20 @@
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "org.chloreform.fieldpress",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "FieldPress needs microphone access to record audio clips for your stories."
       }
     },
     "android": {
+      "package": "org.chloreform.fieldpress",
       "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser",
       [

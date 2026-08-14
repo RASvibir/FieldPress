@@ -1,41 +1,52 @@
 # FieldPress
 
-Pocket newsroom and podcast studio for indie journalists. Capture in the field on mobile, then edit articles, social posts, and podcast scripts on desktop.
+Pocket newsroom for indie journalists. Capture in the field, then produce article, social, and podcast drafts with Gemini.
 
-This repo left Replit. Local development and GitHub are the source of truth.
+## How to open it
 
-## Apps
-
-| Package | What it is |
-| --- | --- |
-| `artifacts/fieldpress` | Expo / React Native — field capture, audio, archive, travel assistant |
-| `artifacts/fieldpress-desktop` | Vite + React — desktop editor with CRT / cyberpunk theme |
-| `artifacts/api-server` | Express API (`/api/stories`, drafts, dashboard) |
-| `lib/db` | PostgreSQL + Drizzle (`stories`, `story_items`, `drafts`) |
-
-## Setup
-
-Needs **Node 24**, **pnpm**, and **Postgres**.
+From the repo root:
 
 ```bash
-cp .env.example .env
-docker compose up -d
+pnpm start
+```
+
+Then open **http://localhost:3000** in a browser.
+
+That one command builds the desktop editor and starts the API. Same URL serves both.
+
+| What | Where |
+| --- | --- |
+| Newsroom editor | http://localhost:3000 |
+| API health | http://localhost:3000/api/healthz |
+
+Click **NEW STORY**, add notes, then **AI PRODUCE**.
+
+### Field app (phone)
+
+```bash
+pnpm dev:mobile
+```
+
+Scan the QR code with Expo Go. Set `EXPO_PUBLIC_API_URL` in `.env` to your machine’s LAN IP (not `localhost`) if the phone is a real device, e.g. `http://192.168.1.10:3000`.
+
+## First-time setup
+
+Needs Node 24+ and pnpm. Postgres is already Neon (see `.env`).
+
+```bash
 pnpm install
 pnpm db:push
 ```
 
-Run in separate terminals:
+## Ship
+
+**Web newsroom (Docker):**
 
 ```bash
-pnpm dev:api       # API on http://localhost:3000
-pnpm dev:desktop   # editor on http://localhost:5173
-pnpm dev:mobile    # Expo
+docker build -t fieldpress .
+docker run --rm -p 3000:3000 --env-file .env fieldpress
 ```
 
-`DATABASE_URL` in `.env` should point at your Postgres. The Replit host `helium` only worked inside Replit. Use local Docker, or a Neon URL.
+Then open http://localhost:3000. Point a host (Fly, Railway, Render) at this image and set `DATABASE_URL` + `GEMINI_API_KEY`.
 
-## Stack
-
-pnpm workspace, TypeScript 5.9, Express 5, Drizzle, Zod, Orval-generated React Query client, Expo 54, Vite.
-
-See `replit.md` for the original package map and API routes.
+**iOS / Android:** in `artifacts/fieldpress` run `npx eas-cli login`, then `npx eas-cli init`, then `npx eas-cli build --platform ios` or `android`.
