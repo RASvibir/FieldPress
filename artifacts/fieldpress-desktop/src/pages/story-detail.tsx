@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { DistributeDialog } from "@/components/distribute-dialog";
+import type { DistributePayload } from "@/lib/distribute";
 
 const MODE_CONFIG = {
   article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
@@ -60,6 +62,27 @@ export default function StoryDetailPage() {
       }
     );
   }
+
+  const packagePayload = useMemo<DistributePayload | null>(() => {
+    if (!story) return null;
+    const sections = [
+      `# ${story.title}`,
+      "",
+      "## Source notes",
+      story.items.length
+        ? story.items.map((item) => `- (${item.type}) ${item.content}`).join("\n")
+        : "_No field notes._",
+    ];
+    for (const draft of drafts ?? []) {
+      sections.push("", `## ${draft.mode.toUpperCase()}: ${draft.title || "Untitled"}`, "", draft.content || "_Empty draft._");
+    }
+    return {
+      storyTitle: story.title,
+      mode: "package",
+      title: story.title,
+      content: sections.join("\n"),
+    };
+  }, [story, drafts]);
 
   function handleDelete() {
     if (!confirm("DELETE THIS STORY AND ALL DRAFTS? This cannot be undone.")) return;
@@ -125,10 +148,13 @@ export default function StoryDetailPage() {
               </div>
             </div>
           </div>
-          <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
-            <Trash2 className="w-4 h-4 mr-1" />
-            DELETE
-          </Button>
+          <div className="flex items-center gap-2">
+            <DistributeDialog payload={packagePayload} triggerLabel="DISTRIBUTE STORY" />
+            <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
+              <Trash2 className="w-4 h-4 mr-1" />
+              DELETE
+            </Button>
+          </div>
         </div>
 
         <Separator className="bg-neon/10" />
@@ -231,6 +257,16 @@ export default function StoryDetailPage() {
                               Updated {new Date(draft.updatedAt).toLocaleString()}
                             </div>
                           </div>
+                          <DistributeDialog
+                            compact
+                            triggerLabel="SEND"
+                            payload={{
+                              storyTitle: story.title,
+                              mode: draft.mode as "article" | "social" | "podcast",
+                              title: draft.title,
+                              content: draft.content,
+                            }}
+                          />
                         </div>
                       </CardContent>
                     </Card>

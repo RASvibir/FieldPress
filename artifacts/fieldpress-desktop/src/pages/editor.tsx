@@ -9,9 +9,11 @@ import {
   ArrowLeft, Save, Trash2, Copy, FileText, Mic, Camera,
   Newspaper, MessageSquare, Podcast, Check
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { DistributeDialog } from "@/components/distribute-dialog";
+import type { DistributePayload } from "@/lib/distribute";
 
 const MODE_CONFIG = {
   article: {
@@ -138,6 +140,17 @@ export default function EditorPage() {
     }
   };
 
+  const mode = (draft?.mode ?? "article") as keyof typeof MODE_CONFIG;
+  const distributePayload = useMemo<DistributePayload>(
+    () => ({
+      storyTitle: story?.title ?? "FieldPress",
+      mode,
+      title,
+      content,
+    }),
+    [story?.title, mode, title, content],
+  );
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -193,6 +206,7 @@ export default function EditorPage() {
             {copied ? <Check className="w-4 h-4 mr-1 text-neon" /> : <Copy className="w-4 h-4 mr-1" />}
             {copied ? "COPIED" : "COPY"}
           </Button>
+          <DistributeDialog payload={distributePayload} compact triggerClassName="text-neon" />
           <Button variant="ghost" size="sm" className="text-neon-red" onClick={handleDelete}>
             <Trash2 className="w-4 h-4" />
           </Button>
