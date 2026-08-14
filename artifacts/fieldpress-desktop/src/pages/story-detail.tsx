@@ -69,7 +69,7 @@ export default function StoryDetailPage() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-          navigate("/");
+          navigate("/app");
         },
       }
     );
@@ -96,7 +96,7 @@ export default function StoryDetailPage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="text-neon-red text-xl mb-4">STORY NOT FOUND</div>
-          <Button variant="outline" onClick={() => navigate("/")}>
+          <Button variant="outline" onClick={() => navigate("/app")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             BACK TO DASHBOARD
           </Button>
@@ -110,7 +110,7 @@ export default function StoryDetailPage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/app")}>
               <ArrowLeft className="w-4 h-4 mr-1" />
               BACK
             </Button>

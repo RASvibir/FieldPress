@@ -4,15 +4,13 @@ Pocket newsroom for indie journalists. Capture in the field, then produce articl
 
 ## How to open it
 
-From the repo root:
+Go to **https://fieldpress-dusky.vercel.app**
 
-```bash
-pnpm start
-```
+1. Tap **OPEN APP** to use it now
+2. Tap **INSTALL** / **DOWNLOAD TO PHONE** to put it on your home screen
+3. Or **COPY LINK** / scan the QR to open it on another device
 
-Then open **http://localhost:3000** in a browser.
-
-That one command builds the desktop editor and starts the API. Same URL serves both.
+Locally: `pnpm start` then http://localhost:3000
 
 | What | Where |
 | --- | --- |
