@@ -10,9 +10,11 @@ import {
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { DistributeDialog } from "@/components/distribute-dialog";
+import { TrendDeskPanel } from "@/components/trend-desk";
 import type { DistributePayload } from "@/lib/distribute";
+import { deskFromProducePayload, loadTrendDesk, saveTrendDesk, type TrendDesk } from "@/lib/trend-desk";
 
 const MODE_CONFIG = {
   article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
@@ -32,15 +34,35 @@ export default function StoryDetailPage() {
   const deleteMutation = useDeleteStory();
   const [producing, setProducing] = useState(false);
   const [produceError, setProduceError] = useState<string | null>(null);
+  const [trendDesk, setTrendDesk] = useState<TrendDesk | null>(() => loadTrendDesk(storyId));
+
+  useEffect(() => {
+    setTrendDesk(loadTrendDesk(storyId));
+  }, [storyId]);
 
   async function handleProduce() {
     setProduceError(null);
     setProducing(true);
     try {
       const response = await fetch(`/api/stories/${storyId}/produce`, { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        summary?: string;
+        outline?: string[];
+        caption?: string;
+        whyNow?: string;
+        audience?: string;
+        trends?: TrendDesk["trends"];
+        trendQuery?: string;
+        headlineCount?: number;
+      } | null;
       if (!response.ok) {
         throw new Error(payload?.error ?? `Producer failed (${response.status})`);
+      }
+      if (payload) {
+        const desk = deskFromProducePayload(payload);
+        setTrendDesk(desk);
+        saveTrendDesk(storyId, desk);
       }
       await queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       await queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}/drafts`] });
@@ -201,10 +223,18 @@ export default function StoryDetailPage() {
               disabled={producing}
             >
               <Cpu className="w-4 h-4 mr-2" />
-              {producing ? "GENERATING WITH GEMINI..." : "AI PRODUCE"}
+              {producing ? "SCANNING TRENDS + PRODUCING..." : "AI PRODUCE"}
             </Button>
+            <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
+              Matches field notes to relatable, national, and global public conversation before drafting article, social, and podcast.
+            </p>
             {produceError && (
               <p className="text-xs text-neon-red mb-3">{produceError}</p>
+            )}
+            {trendDesk && (
+              <div className="mb-4">
+                <TrendDeskPanel desk={trendDesk} />
+              </div>
             )}
             <div className="grid grid-cols-3 gap-2 mb-4">
               {(["article", "social", "podcast"] as const).map((mode) => {

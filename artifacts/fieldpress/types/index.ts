@@ -21,4 +21,13 @@ export type AiDraft = {
   summary: string;
   outline: string[];
   caption: string;
+  whyNow?: string;
+  audience?: string;
+  trends?: Array<{
+    scale: 'relatable' | 'national' | 'global';
+    headline: string;
+    whyItMatters: string;
+    productHook: string;
+    source?: string;
+  }>;
 };

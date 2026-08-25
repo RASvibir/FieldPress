@@ -286,7 +286,7 @@ paths:
     post:
       operationId: produceDraft
       tags: [drafts]
-      summary: Generate AI producer drafts from a title and notes
+      summary: Generate AI producer drafts from a title, notes, and live public trends
       requestBody:
         required: true
         content:
@@ -309,7 +309,7 @@ paths:
     post:
       operationId: produceStoryDrafts
       tags: [drafts]
-      summary: Generate AI drafts for a story and save them
+      summary: Generate trend-aware AI drafts for a story and save them
       parameters:
         - name: storyId
           in: path
@@ -490,6 +490,22 @@ components:
             type: string
       required: [title]
 
+    ProduceTrend:
+      type: object
+      properties:
+        scale:
+          type: string
+          enum: [relatable, national, global]
+        headline:
+          type: string
+        whyItMatters:
+          type: string
+        productHook:
+          type: string
+        source:
+          type: string
+      required: [scale, headline, whyItMatters, productHook]
+
     ProduceResult:
       type: object
       properties:
@@ -501,6 +517,18 @@ components:
             type: string
         caption:
           type: string
+        whyNow:
+          type: string
+        audience:
+          type: string
+        trendQuery:
+          type: string
+        headlineCount:
+          type: integer
+        trends:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProduceTrend"
         drafts:
           type: array
           items:

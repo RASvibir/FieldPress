@@ -9,11 +9,13 @@ import {
   ArrowLeft, Save, Trash2, Copy, FileText, Mic, Camera,
   Newspaper, MessageSquare, Podcast, Check
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { DistributeDialog } from "@/components/distribute-dialog";
+import { TrendDeskPanel } from "@/components/trend-desk";
 import type { DistributePayload } from "@/lib/distribute";
+import { loadTrendDesk } from "@/lib/trend-desk";
 
 const MODE_CONFIG = {
   article: {
@@ -60,6 +62,7 @@ export default function EditorPage() {
   const latestContent = useRef(content);
   latestTitle.current = title;
   latestContent.current = content;
+  const trendDesk = loadTrendDesk(storyId);
 
   useEffect(() => {
     if (draft) {
@@ -140,17 +143,6 @@ export default function EditorPage() {
     }
   };
 
-  const mode = (draft?.mode ?? "article") as keyof typeof MODE_CONFIG;
-  const distributePayload = useMemo<DistributePayload>(
-    () => ({
-      storyTitle: story?.title ?? "FieldPress",
-      mode,
-      title,
-      content,
-    }),
-    [story?.title, mode, title, content],
-  );
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -173,9 +165,15 @@ export default function EditorPage() {
     );
   }
 
-  const mode = draft.mode as keyof typeof MODE_CONFIG;
+  const mode = (draft.mode in MODE_CONFIG ? draft.mode : "article") as keyof typeof MODE_CONFIG;
   const config = MODE_CONFIG[mode];
   const ModeIcon = config.icon;
+  const distributePayload: DistributePayload = {
+    storyTitle: story?.title ?? "FieldPress",
+    mode,
+    title,
+    content,
+  };
 
   return (
     <div className="h-screen bg-background flex flex-col">
@@ -243,6 +241,12 @@ export default function EditorPage() {
             </div>
           )}
           <Separator className="bg-neon/10 my-3" />
+          {trendDesk && (
+            <>
+              <TrendDeskPanel desk={trendDesk} compact onInsert={insertText} />
+              <Separator className="bg-neon/10 my-3" />
+            </>
+          )}
           <div className="text-xs text-muted-foreground tracking-widest mb-2">TEMPLATE</div>
           <pre className="text-[10px] text-muted-foreground/60 whitespace-pre-wrap font-mono leading-relaxed">
             {config.templateHint}

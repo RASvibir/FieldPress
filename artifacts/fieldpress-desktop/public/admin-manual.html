@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="googlebot" content="noindex, nofollow, noarchive" />
+  <title>FieldPress operator manual</title>
+  <style>
+    :root {
+      --green: #39ff14;
+      --yellow: #ffff00;
+      --red: #ff3131;
+      --ink: #111;
+      --paper: #f7f4ea;
+      --rule: #cfc8b4;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", "Source Sans 3", Georgia, serif;
+      background: #000;
+      color: var(--green);
+      line-height: 1.45;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 10px 16px;
+      background: #050505;
+      border-bottom: 1px solid rgba(57,255,20,0.25);
+      font-family: VT323, ui-monospace, monospace;
+      letter-spacing: 0.08em;
+    }
+    .toolbar a, .toolbar button {
+      appearance: none;
+      background: transparent;
+      color: var(--green);
+      border: 1px solid rgba(57,255,20,0.35);
+      padding: 8px 12px;
+      text-decoration: none;
+      font: inherit;
+      cursor: pointer;
+    }
+    .toolbar .muted { color: #8a8; border-color: #333; }
+    .sheet {
+      max-width: 800px;
+      margin: 24px auto 64px;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 48px 56px;
+      box-shadow: 0 0 40px rgba(57,255,20,0.12);
+    }
+    h1, h2, h3 { font-family: "IBM Plex Sans", sans-serif; letter-spacing: 0.02em; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .kicker { text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; color: #666; margin-bottom: 24px; }
+    h2 { font-size: 16px; margin: 28px 0 8px; border-top: 1px solid var(--rule); padding-top: 18px; text-transform: uppercase; letter-spacing: 0.08em; }
+    h3 { font-size: 14px; margin: 16px 0 6px; }
+    p, li { font-size: 14px; }
+    ul, ol { padding-left: 1.2em; }
+    code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 16px; }
+    th, td { text-align: left; vertical-align: top; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); }
+    th { text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; color: #555; }
+    .warn { border-left: 3px solid var(--red); padding: 8px 12px; background: #fff3f0; }
+    .note { border-left: 3px solid #888; padding: 8px 12px; background: #eeeade; }
+    @media print {
+      body { background: white; }
+      .toolbar { display: none; }
+      .sheet { margin: 0; padding: 0; box-shadow: none; max-width: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+    .toolbar.embed { display: none; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/app">BACK TO NEWSROOM</a>
+    <button type="button" onclick="window.print()">PRINT</button>
+    <a href="/admin-manual.html" download="fieldpress-admin-manual.html">DOWNLOAD HTML</a>
+    <span class="muted">Operator only · not linked from the public launch page</span>
+  </div>
+  <article class="sheet">
+    <p class="kicker">FieldPress · private operator manual · 25 Aug 2026</p>
+    <h1>How to run the newsroom</h1>
+    <p>This sheet is for the person who owns FieldPress. It is not a public help page. Do not link it from the launch screen, social posts, or README. Print it or save the HTML and keep it with your keys.</p>
+
+    <h2>What this product is</h2>
+    <p>FieldPress is a pocket newsroom. A reporter captures notes in the field, then produces three outputs: an article, a social post or thread, and a podcast script. Gemini drafts those outputs. Live public headlines (related, national, global) are pulled in so the drafts can land with an audience that is already paying attention.</p>
+    <ul>
+      <li><strong>Public surface:</strong> <span class="mono">https://fieldpress-dusky.vercel.app</span> — Open / Install / Copy link.</li>
+      <li><strong>Newsroom:</strong> <span class="mono">/app</span> — stories, produce, edit, distribute.</li>
+      <li><strong>This manual:</strong> <span class="mono">/admin</span> and <span class="mono">/admin-manual.html</span> — operator only.</li>
+    </ul>
+
+    <h2>Daily desk</h2>
+    <ol>
+      <li>Open the app. On a phone, install it to the home screen so it launches without the browser chrome.</li>
+      <li>Create a story with a working headline. The headline is the search seed for public trends, so make it specific.</li>
+      <li>Add field notes: what you saw, names you can stand behind, quotes, times, places. Thin notes produce thin drafts.</li>
+      <li>Optional: import a mobile dispatch. First line is the title. Following lines become notes.</li>
+      <li>Tap <strong>AI PRODUCE</strong>. Wait. It scans live headlines, then writes article, social, and podcast drafts.</li>
+      <li>Read the <strong>Trend Desk</strong> first: Why now, audience, relatable / national / global hooks. These are assignment notes, not facts you witnessed.</li>
+      <li>Open each draft. Cut anything the notes do not support. Verify names, counts, and any public-context claim before you publish.</li>
+      <li>Distribute: copy, download markdown, native share, or open a compose window for X, Threads, Bluesky, LinkedIn, email, and the rest.</li>
+    </ol>
+
+    <h2>Trend desk — how generation actually works</h2>
+    <p>Produce is not “write a recap of my notes.” It is “turn these notes into the strongest news product by connecting them to what the public is already talking about.”</p>
+    <table>
+      <thead><tr><th>Layer</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td>Field notes</td><td>Only source of original facts, quotes, names, counts, and on-scene detail. The model must not invent these.</td></tr>
+        <tr><td>Live headlines</td><td>Google News related search (last 7 days), US national, world, plus Wikipedia most-read as a public-attention proxy.</td></tr>
+        <tr><td>Trend Desk</td><td>Why now, audience, and 3–6 hooks labeled relatable / national / global, with a product hook for article, social, or podcast.</td></tr>
+        <tr><td>Drafts</td><td>Article nut graf, social open, and podcast cold open should use public conversation for <em>framing</em>, then drop into the reporter’s scene.</td></tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      Public headlines are context, not sourcing. Never let a draft present a national or global story as something the reporter observed. If a trend is only loosely related, drop it.
+    </div>
+    <h3>Make the notes earn the trend</h3>
+    <ul>
+      <li><strong>Relatable:</strong> one human scene, everyday stakes, the question a non-expert would ask.</li>
+      <li><strong>National:</strong> institutions, policy, who holds power, what the country-level coverage is missing.</li>
+      <li><strong>Global:</strong> a parallel or knock-on that keeps an overseas listener in the episode.</li>
+    </ul>
+    <p>Trend Desk on the story page is stored in this browser. The three drafts are stored in Postgres. If you switch devices, produce again or copy the drafts.</p>
+
+    <h2>Outputs</h2>
+    <table>
+      <thead><tr><th>Mode</th><th>What good looks like</th></tr></thead>
+      <tbody>
+        <tr><td>Article</td><td>Lede (scene or why-now), nut graf that places the reporting in public conversation, body from notes, kicker that looks forward.</td></tr>
+        <tr><td>Social</td><td>Open with a hook people already recognize, then the exclusive field detail. Real conversation hashtags, not generic #News.</td></tr>
+        <tr><td>Podcast</td><td>Cold open poses the national/global question, then the scene. Segments, outro, show notes that label “this week’s conversation” as public context.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Keys and environment</h2>
+    <p>Never commit <span class="mono">.env</span>. Copy <span class="mono">.env.example</span>.</p>
+    <table>
+      <thead><tr><th>Variable</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><span class="mono">DATABASE_URL</span></td><td>Neon pooled Postgres for the API.</td></tr>
+        <tr><td><span class="mono">DATABASE_URL_UNPOOLED</span></td><td>Drizzle push / schema.</td></tr>
+        <tr><td><span class="mono">GEMINI_API_KEY</span></td><td>Required for AI Produce. Without it, produce returns 502.</td></tr>
+        <tr><td><span class="mono">GEMINI_MODEL</span></td><td>Default <span class="mono">gemini-3.5-flash</span>.</td></tr>
+        <tr><td><span class="mono">GEMINI_TREND_SEARCH</span></td><td>Set to <span class="mono">1</span> to add a live Google Search assignment brief before drafting. Off by default so quota is spent on the actual drafts. RSS headlines still run.</td></tr>
+        <tr><td><span class="mono">PORT</span></td><td>Local API, default 3000.</td></tr>
+      </tbody>
+    </table>
+    <p>Same names belong in Vercel project env for production. After changing env, redeploy.</p>
+
+    <h2>Local and ship</h2>
+    <ol>
+      <li><span class="mono">pnpm install</span> then <span class="mono">pnpm db:push</span> if the schema changed.</li>
+      <li><span class="mono">pnpm dev</span> — API at <span class="mono">http://localhost:3000</span>, Vite newsroom at <span class="mono">http://localhost:5173</span> (use 5173 while iterating on UI).</li>
+      <li><span class="mono">pnpm start</span> — builds desktop into the API and serves everything on 3000.</li>
+      <li>Health: <span class="mono">GET /api/healthz</span>.</li>
+      <li>Mobile: <span class="mono">pnpm dev:mobile</span>. On a real phone set <span class="mono">EXPO_PUBLIC_API_URL</span> to the LAN IP, not localhost.</li>
+      <li>Production: <span class="mono">vercel deploy --prod --yes</span> from the repo root. Public URL: <span class="mono">https://fieldpress-dusky.vercel.app</span>.</li>
+    </ol>
+    <div class="note">
+      Produce can take 10–40 seconds. Headline fetch is fail-soft. Gemini 429/503 is retried twice. If quota is exhausted, drafts will still fail until the key has budget again.
+    </div>
+
+    <h2>When it breaks</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+      <tbody>
+        <tr><td>Produce 502, “GEMINI_API_KEY is not set”</td><td>Local <span class="mono">.env</span> or Vercel env. Restart after setting.</td></tr>
+        <tr><td>Produce 502, 429 / quota</td><td>Gemini billing and rate limits. Leave <span class="mono">GEMINI_TREND_SEARCH</span> off.</td></tr>
+        <tr><td>Produce 502, 503 high demand</td><td>Wait and retry. The server already retries twice.</td></tr>
+        <tr><td>Empty Trend Desk, drafts exist</td><td>Trend Desk is browser-local. Drafts are in the database. Produce again on this device or open the drafts.</td></tr>
+        <tr><td>Phone cannot produce</td><td><span class="mono">EXPO_PUBLIC_API_URL</span> must be the machine LAN IP. Phone and computer on the same network.</td></tr>
+        <tr><td>Install button does nothing</td><td>Safari on iPhone: Share → Add to Home Screen. Safari on Mac: File → Add to Dock.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Do not</h2>
+    <ul>
+      <li>Do not publish unverified names, casualty counts, or quotes.</li>
+      <li>Do not treat Trend Desk headlines as reporting from the scene.</li>
+      <li>Do not put this manual, keys, or operator URLs on the launch page.</li>
+      <li>Do not commit <span class="mono">.env</span>, <span class="mono">.vercel</span>, or API keys.</li>
+      <li>Do not brand FieldPress as another studio’s product. This newsroom stands alone.</li>
+    </ul>
+
+    <h2>One-page cheat sheet</h2>
+    <p>Headline with a place or subject → notes with scenes and attributable quotes → AI PRODUCE → read Why now / audience / three-scale hooks → edit article, social, podcast → verify → Distribute → delete nothing until the package has shipped.</p>
+    <p class="kicker" style="margin-top:32px">End of operator manual · keep offline if you print it</p>
+  </article>
+  <script>
+    if (window.self !== window.top) {
+      document.querySelector(".toolbar")?.classList.add("embed");
+    }
+  </script>
+</body>
+</html>

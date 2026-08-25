@@ -86,6 +86,28 @@ export function generateAiDraft(story: Story, textItems: StoryItem[]): Promise<A
           `DEVELOPING: ${story.title}. ` +
           `Reporter in the field — ${noteCount} note${noteCount !== 1 ? 's' : ''} captured. ` +
           `Full story coming. #FieldPress #BreakingNews #Journalism`,
+        whyNow: `Public attention is already on stories like "${titleWords}." Use the field notes to add what national coverage is missing.`,
+        audience: 'Readers and listeners who felt the national headline but have not heard from the ground.',
+        trends: [
+          {
+            scale: 'relatable',
+            headline: 'People want the human scene behind the headline',
+            whyItMatters: 'A single witnessed detail beats a generic recap.',
+            productHook: 'Open with the most concrete moment from the notes.',
+          },
+          {
+            scale: 'national',
+            headline: 'National coverage is moving without this reporting',
+            whyItMatters: 'The field notes can correct or complicate the official frame.',
+            productHook: 'In the nut graf, say what the national story is getting wrong or leaving out.',
+          },
+          {
+            scale: 'global',
+            headline: 'Listeners elsewhere will map this onto their own crisis',
+            whyItMatters: 'A parallel keeps overseas audiences in the episode.',
+            productHook: 'Podcast cold open: pose the global question, then drop into the scene.',
+          },
+        ],
       });
     }, 2000);
   });

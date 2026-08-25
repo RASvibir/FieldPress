@@ -13,7 +13,15 @@ export async function generateAiDraft(story: Story, textItems: StoryItem[]): Pro
   });
 
   const payload = (await response.json().catch(() => null)) as
-    | { summary?: string; outline?: string[]; caption?: string; error?: string }
+    | {
+        summary?: string;
+        outline?: string[];
+        caption?: string;
+        whyNow?: string;
+        audience?: string;
+        trends?: AiDraft['trends'];
+        error?: string;
+      }
     | null;
 
   if (!response.ok) {
@@ -28,5 +36,8 @@ export async function generateAiDraft(story: Story, textItems: StoryItem[]): Pro
     summary: payload.summary,
     outline: payload.outline,
     caption: payload.caption,
+    whyNow: payload.whyNow,
+    audience: payload.audience,
+    trends: payload.trends,
   };
 }

@@ -21,7 +21,7 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.mjs": {

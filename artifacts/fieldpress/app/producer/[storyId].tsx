@@ -76,7 +76,7 @@ function LoadingState() {
           <Animated.View key={i} style={[styles.dot, { opacity: dot }]} />
         ))}
       </View>
-      <Text style={styles.loadingSubtitle}>{'> Analysing field notes...'}</Text>
+      <Text style={styles.loadingSubtitle}>{'> Matching public, national, and global trends...'}</Text>
     </View>
   );
 }
@@ -181,6 +181,36 @@ export default function AiProducerScreen() {
             </View>
           </View>
 
+          {(draft.whyNow || draft.audience || (draft.trends && draft.trends.length > 0)) && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={[styles.sectionBadge, styles.sectionBadgeTrend]}>
+                  <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextTrend]}>TREND DESK</Text>
+                </View>
+              </View>
+              {draft.whyNow ? (
+                <View style={styles.trendCard}>
+                  <Text style={styles.trendLabel}>WHY NOW</Text>
+                  <Text style={styles.summaryText}>{draft.whyNow}</Text>
+                </View>
+              ) : null}
+              {draft.audience ? (
+                <View style={[styles.trendCard, { marginTop: 8 }]}>
+                  <Text style={styles.trendLabelAmber}>AUDIENCE</Text>
+                  <Text style={styles.summaryText}>{draft.audience}</Text>
+                </View>
+              ) : null}
+              {(draft.trends ?? []).map((trend, i) => (
+                <View key={`${trend.scale}-${i}`} style={[styles.trendItem, { marginTop: 8 }]}>
+                  <Text style={styles.trendScale}>{trend.scale.toUpperCase()}</Text>
+                  <Text style={styles.trendHeadline}>{trend.headline}</Text>
+                  <Text style={styles.bulletText}>{trend.whyItMatters}</Text>
+                  <Text style={styles.trendHook}>{trend.productHook}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Story Outline */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -214,7 +244,7 @@ export default function AiProducerScreen() {
           <View style={styles.disclaimer}>
             <Feather name="info" size={12} color={Colors.textMuted} />
             <Text style={styles.disclaimerText}>
-              AI-generated draft — verify all facts before publishing.
+              AI-generated draft — verify all facts and public-context claims before publishing.
             </Text>
           </View>
         </Animated.ScrollView>
@@ -384,6 +414,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,192,0,0.10)',
     borderColor: 'rgba(255,192,0,0.25)',
   },
+  sectionBadgeTrend: {
+    backgroundColor: 'rgba(0,255,255,0.08)',
+    borderColor: 'rgba(0,255,255,0.25)',
+  },
   sectionBadgeText: {
     fontFamily: 'VT323_400Regular',
     fontSize: 16,
@@ -395,6 +429,9 @@ const styles = StyleSheet.create({
   },
   sectionBadgeTextAmber: {
     color: Colors.amber,
+  },
+  sectionBadgeTextTrend: {
+    color: Colors.cyan,
   },
   summaryCard: {
     backgroundColor: Colors.card,
@@ -459,6 +496,57 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontStyle: 'italic',
     letterSpacing: 0.3,
+  },
+  trendCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 2,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.cyan,
+  },
+  trendItem: {
+    backgroundColor: Colors.card,
+    borderRadius: 2,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    gap: 4,
+  },
+  trendLabel: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 14,
+    color: Colors.cyan,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  trendLabelAmber: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 14,
+    color: Colors.amber,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  trendScale: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 14,
+    color: Colors.amber,
+    letterSpacing: 2,
+  },
+  trendHeadline: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 19,
+    color: Colors.text,
+    letterSpacing: 0.3,
+  },
+  trendHook: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 16,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    letterSpacing: 0.3,
+    marginTop: 4,
   },
   copyBtn: {
     flexDirection: 'row',
