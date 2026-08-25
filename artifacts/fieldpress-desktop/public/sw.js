@@ -1,5 +1,14 @@
-const CACHE = "fieldpress-v2";
-const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
+const CACHE = "fieldpress-v3";
+const SHELL = [
+  "/",
+  "/guide",
+  "/user-manual.html",
+  "/manifest.webmanifest",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+];
+const PRIVATE_PREFIXES = ["/admin"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -23,6 +32,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.pathname.startsWith("/api")) {
+    return;
+  }
+  if (PRIVATE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
+    event.respondWith(fetch(event.request));
     return;
   }
   event.respondWith(

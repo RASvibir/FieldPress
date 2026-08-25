@@ -17,11 +17,24 @@
       "headers": [
         { "key": "Content-Type", "value": "application/manifest+json" }
       ]
+    },
+    {
+      "source": "/admin-manual.html",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/admin-manual.md",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Type", "value": "text/markdown; charset=utf-8" }
+      ]
     }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|admin-manual\\.md|user-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.mjs": {

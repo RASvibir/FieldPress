@@ -6,6 +6,7 @@ import DashboardPage from "@/pages/dashboard";
 import StoryDetailPage from "@/pages/story-detail";
 import EditorPage from "@/pages/editor";
 import LaunchPage from "@/pages/launch";
+import UserManualPage from "@/pages/user-manual";
 import AdminManualPage from "@/pages/admin-manual";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +23,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LaunchPage} />
+      <Route path="/guide" component={UserManualPage} />
       <Route path="/admin" component={AdminManualPage} />
       <Route path="/app" component={DashboardPage} />
       <Route path="/story/:storyId" component={StoryDetailPage} />

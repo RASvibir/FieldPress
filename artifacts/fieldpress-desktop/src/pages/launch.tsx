@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Download, Share, Check, Copy, Smartphone, Monitor, ArrowRight } from "lucide-react";
+import { Download, Share, Check, Copy, Smartphone, Monitor, ArrowRight, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isStandaloneApp, useInstallApp } from "@/hooks/use-install";
 
@@ -72,6 +72,14 @@ export default function LaunchPage() {
                 {installLabel}
               </Button>
             )}
+            <Button
+              variant="ghost"
+              className="w-full min-h-11 text-base tracking-[0.14em] text-muted-foreground"
+              onClick={() => navigate("/guide")}
+            >
+              <BookOpen className="w-4 h-4" />
+              USER GUIDE
+            </Button>
           </div>
 
           {showHelp && device === "ios" && (

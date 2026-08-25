@@ -138,11 +138,11 @@ export default function DashboardPage() {
             <Button
               variant="ghost"
               className="text-muted-foreground"
-              onClick={() => navigate("/admin")}
-              title="Operator manual"
+              onClick={() => navigate("/guide")}
+              title="User guide"
             >
               <BookOpen className="w-4 h-4 mr-2" />
-              MANUAL
+              GUIDE
             </Button>
             <Button variant="ghost" className="text-muted-foreground" onClick={() => navigate("/")}>
               <Download className="w-4 h-4 mr-2" />

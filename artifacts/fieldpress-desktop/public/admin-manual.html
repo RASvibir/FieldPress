@@ -21,7 +21,7 @@
       font-family: "IBM Plex Sans", "Source Sans 3", Georgia, serif;
       background: #000;
       color: var(--green);
-      line-height: 1.45;
+      line-height: 1.5;
     }
     .toolbar {
       position: sticky;
@@ -34,8 +34,9 @@
       padding: 10px 16px;
       background: #050505;
       border-bottom: 1px solid rgba(57,255,20,0.25);
-      font-family: VT323, ui-monospace, monospace;
-      letter-spacing: 0.08em;
+      font-family: ui-monospace, Menlo, monospace;
+      letter-spacing: 0.06em;
+      font-size: 12px;
     }
     .toolbar a, .toolbar button {
       appearance: none;
@@ -49,8 +50,8 @@
     }
     .toolbar .muted { color: #8a8; border-color: #333; }
     .sheet {
-      max-width: 800px;
-      margin: 24px auto 64px;
+      max-width: 820px;
+      margin: 24px auto 72px;
       background: var(--paper);
       color: var(--ink);
       padding: 48px 56px;
@@ -59,147 +60,334 @@
     h1, h2, h3 { font-family: "IBM Plex Sans", sans-serif; letter-spacing: 0.02em; }
     h1 { font-size: 28px; margin: 0 0 8px; }
     .kicker { text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; color: #666; margin-bottom: 24px; }
-    h2 { font-size: 16px; margin: 28px 0 8px; border-top: 1px solid var(--rule); padding-top: 18px; text-transform: uppercase; letter-spacing: 0.08em; }
-    h3 { font-size: 14px; margin: 16px 0 6px; }
+    h2 { font-size: 15px; margin: 32px 0 8px; border-top: 1px solid var(--rule); padding-top: 20px; text-transform: uppercase; letter-spacing: 0.08em; }
+    h3 { font-size: 14px; margin: 18px 0 6px; }
     p, li { font-size: 14px; }
     ul, ol { padding-left: 1.2em; }
+    .toc { columns: 2; column-gap: 28px; font-size: 13px; }
+    .toc a { color: inherit; }
     code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+    pre {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      background: #efe9d8;
+      padding: 12px 14px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 16px; }
-    th, td { text-align: left; vertical-align: top; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); }
+    th, td { text-align: left; vertical-align: top; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule); }
     th { text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; color: #555; }
-    .warn { border-left: 3px solid var(--red); padding: 8px 12px; background: #fff3f0; }
-    .note { border-left: 3px solid #888; padding: 8px 12px; background: #eeeade; }
+    .warn { border-left: 3px solid var(--red); padding: 8px 12px; background: #fff3f0; margin: 12px 0; }
+    .note { border-left: 3px solid #888; padding: 8px 12px; background: #eeeade; margin: 12px 0; }
+    .ok { border-left: 3px solid #2a7; padding: 8px 12px; background: #eef8ef; margin: 12px 0; }
     @media print {
       body { background: white; }
-      .toolbar { display: none; }
+      .toolbar { display: none !important; }
       .sheet { margin: 0; padding: 0; box-shadow: none; max-width: none; }
       a { color: inherit; text-decoration: none; }
+      .toc { columns: 2; }
+      h2 { break-after: avoid; }
     }
     .toolbar.embed { display: none; }
+    @page { margin: 0.65in; }
   </style>
 </head>
 <body>
   <div class="toolbar">
     <a href="/app">BACK TO NEWSROOM</a>
-    <button type="button" onclick="window.print()">PRINT</button>
-    <a href="/admin-manual.html" download="fieldpress-admin-manual.html">DOWNLOAD HTML</a>
-    <span class="muted">Operator only · not linked from the public launch page</span>
+    <button type="button" onclick="window.print()">PRINT / PDF</button>
+    <button type="button" onclick="downloadHtml()">DOWNLOAD HTML</button>
+    <button type="button" onclick="downloadMarkdown()">DOWNLOAD MARKDOWN</button>
+    <span class="muted">Operator only · not on the public launch page</span>
   </div>
-  <article class="sheet">
-    <p class="kicker">FieldPress · private operator manual · 25 Aug 2026</p>
-    <h1>How to run the newsroom</h1>
-    <p>This sheet is for the person who owns FieldPress. It is not a public help page. Do not link it from the launch screen, social posts, or README. Print it or save the HTML and keep it with your keys.</p>
+  <article class="sheet" id="manual">
+    <p class="kicker">FieldPress · private operator manual · 25 Aug 2026 · keep with your keys</p>
+    <h1>FieldPress operator manual</h1>
+    <p>This is the desk book for the person who owns FieldPress. It is not public help copy. Do not link it from the launch screen, social posts, or README. Print it, save the HTML, or save the Markdown and store it next to <span class="mono">.env</span>.</p>
+    <p>Live newsroom: <span class="mono">https://fieldpress-dusky.vercel.app</span></p>
 
-    <h2>What this product is</h2>
-    <p>FieldPress is a pocket newsroom. A reporter captures notes in the field, then produces three outputs: an article, a social post or thread, and a podcast script. Gemini drafts those outputs. Live public headlines (related, national, global) are pulled in so the drafts can land with an audience that is already paying attention.</p>
-    <ul>
-      <li><strong>Public surface:</strong> <span class="mono">https://fieldpress-dusky.vercel.app</span> — Open / Install / Copy link.</li>
-      <li><strong>Newsroom:</strong> <span class="mono">/app</span> — stories, produce, edit, distribute.</li>
-      <li><strong>This manual:</strong> <span class="mono">/admin</span> and <span class="mono">/admin-manual.html</span> — operator only.</li>
-    </ul>
-
-    <h2>Daily desk</h2>
-    <ol>
-      <li>Open the app. On a phone, install it to the home screen so it launches without the browser chrome.</li>
-      <li>Create a story with a working headline. The headline is the search seed for public trends, so make it specific.</li>
-      <li>Add field notes: what you saw, names you can stand behind, quotes, times, places. Thin notes produce thin drafts.</li>
-      <li>Optional: import a mobile dispatch. First line is the title. Following lines become notes.</li>
-      <li>Tap <strong>AI PRODUCE</strong>. Wait. It scans live headlines, then writes article, social, and podcast drafts.</li>
-      <li>Read the <strong>Trend Desk</strong> first: Why now, audience, relatable / national / global hooks. These are assignment notes, not facts you witnessed.</li>
-      <li>Open each draft. Cut anything the notes do not support. Verify names, counts, and any public-context claim before you publish.</li>
-      <li>Distribute: copy, download markdown, native share, or open a compose window for X, Threads, Bluesky, LinkedIn, email, and the rest.</li>
+    <h2 id="contents">Contents</h2>
+    <ol class="toc">
+      <li><a href="#what">What this product is</a></li>
+      <li><a href="#map">Map of surfaces</a></li>
+      <li><a href="#first">First-run setup</a></li>
+      <li><a href="#desk">Daily desk</a></li>
+      <li><a href="#notes">How to write notes that produce</a></li>
+      <li><a href="#trends">Trend desk and AI Produce</a></li>
+      <li><a href="#edit">Edit, templates, and distribute</a></li>
+      <li><a href="#mobile">Phone / Expo field app</a></li>
+      <li><a href="#api">API map</a></li>
+      <li><a href="#data">Data model</a></li>
+      <li><a href="#env">Environment variables</a></li>
+      <li><a href="#run">Local, Docker, Vercel</a></li>
+      <li><a href="#break">When it breaks</a></li>
+      <li><a href="#publish">Before you publish</a></li>
+      <li><a href="#dont">Do not</a></li>
     </ol>
 
-    <h2>Trend desk — how generation actually works</h2>
-    <p>Produce is not “write a recap of my notes.” It is “turn these notes into the strongest news product by connecting them to what the public is already talking about.”</p>
-    <table>
-      <thead><tr><th>Layer</th><th>Job</th></tr></thead>
-      <tbody>
-        <tr><td>Field notes</td><td>Only source of original facts, quotes, names, counts, and on-scene detail. The model must not invent these.</td></tr>
-        <tr><td>Live headlines</td><td>Google News related search (last 7 days), US national, world, plus Wikipedia most-read as a public-attention proxy.</td></tr>
-        <tr><td>Trend Desk</td><td>Why now, audience, and 3–6 hooks labeled relatable / national / global, with a product hook for article, social, or podcast.</td></tr>
-        <tr><td>Drafts</td><td>Article nut graf, social open, and podcast cold open should use public conversation for <em>framing</em>, then drop into the reporter’s scene.</td></tr>
-      </tbody>
-    </table>
-    <div class="warn">
-      Public headlines are context, not sourcing. Never let a draft present a national or global story as something the reporter observed. If a trend is only loosely related, drop it.
-    </div>
-    <h3>Make the notes earn the trend</h3>
+    <h2 id="what">1. What this product is</h2>
+    <p>FieldPress is a pocket newsroom for indie journalists. Capture in the field, then produce three outputs with Gemini: a publication-ready article, a social thread or caption, and a podcast script with show notes.</p>
+    <p>Produce is not a recap bot. It pulls live public headlines (related to the story, national conversation, global/international, plus what the public is looking up) so the drafts can land with people who are already paying attention. Field notes remain the only source of original facts.</p>
     <ul>
-      <li><strong>Relatable:</strong> one human scene, everyday stakes, the question a non-expert would ask.</li>
-      <li><strong>National:</strong> institutions, policy, who holds power, what the country-level coverage is missing.</li>
-      <li><strong>Global:</strong> a parallel or knock-on that keeps an overseas listener in the episode.</li>
+      <li><strong>Public surface:</strong> Open / Install / Copy link / QR, plus the public user guide at <span class="mono">/guide</span>.</li>
+      <li><strong>Newsroom:</strong> <span class="mono">/app</span> — stories, produce, edit, distribute. Public <strong>GUIDE</strong> only — never this operator book.</li>
+      <li><strong>This operator manual (unlisted):</strong> <span class="mono">/admin</span>, <span class="mono">/admin-manual.html</span>, <span class="mono">/admin-manual.md</span>. Not linked from launch or the newsroom. Bookmark it. Search engines are told to skip it.</li>
     </ul>
-    <p>Trend Desk on the story page is stored in this browser. The three drafts are stored in Postgres. If you switch devices, produce again or copy the drafts.</p>
 
-    <h2>Outputs</h2>
+    <h2 id="map">2. Map of surfaces</h2>
     <table>
-      <thead><tr><th>Mode</th><th>What good looks like</th></tr></thead>
+      <thead><tr><th>Place</th><th>URL</th><th>Job</th></tr></thead>
       <tbody>
-        <tr><td>Article</td><td>Lede (scene or why-now), nut graf that places the reporting in public conversation, body from notes, kicker that looks forward.</td></tr>
-        <tr><td>Social</td><td>Open with a hook people already recognize, then the exclusive field detail. Real conversation hashtags, not generic #News.</td></tr>
-        <tr><td>Podcast</td><td>Cold open poses the national/global question, then the scene. Segments, outro, show notes that label “this week’s conversation” as public context.</td></tr>
+        <tr><td>Launch</td><td><span class="mono">/</span></td><td>Open app, install PWA, copy link, QR.</td></tr>
+        <tr><td>Newsroom</td><td><span class="mono">/app</span></td><td>Story list, new story, import, operator manual download.</td></tr>
+        <tr><td>Story</td><td><span class="mono">/story/:id</span></td><td>Source notes, AI Produce, Trend Desk, drafts, distribute package.</td></tr>
+        <tr><td>Editor</td><td><span class="mono">/story/:id/editor/:draftId</span></td><td>Title + body, autosave 1.5s, insert source or trend hooks, distribute one draft.</td></tr>
+        <tr><td>User guide</td><td><span class="mono">/guide</span> · <span class="mono">/user-manual.html</span></td><td>Public. How reporters use the newsroom.</td></tr>
+        <tr><td>Operator manual</td><td><span class="mono">/admin</span> · <span class="mono">/admin-manual.html</span></td><td>Unlisted. Keys, env, API, deploy. Download HTML or Markdown from that page.</td></tr>
+        <tr><td>Health</td><td><span class="mono">/api/healthz</span></td><td>Must return <span class="mono">{"status":"ok"}</span> or similar 200.</td></tr>
       </tbody>
     </table>
+    <p>Local while iterating UI: Vite at <span class="mono">http://localhost:5173</span> (proxies <span class="mono">/api</span> to 3000). Packaged newsroom: <span class="mono">http://localhost:3000</span>.</p>
 
-    <h2>Keys and environment</h2>
-    <p>Never commit <span class="mono">.env</span>. Copy <span class="mono">.env.example</span>.</p>
-    <table>
-      <thead><tr><th>Variable</th><th>Role</th></tr></thead>
-      <tbody>
-        <tr><td><span class="mono">DATABASE_URL</span></td><td>Neon pooled Postgres for the API.</td></tr>
-        <tr><td><span class="mono">DATABASE_URL_UNPOOLED</span></td><td>Drizzle push / schema.</td></tr>
-        <tr><td><span class="mono">GEMINI_API_KEY</span></td><td>Required for AI Produce. Without it, produce returns 502.</td></tr>
-        <tr><td><span class="mono">GEMINI_MODEL</span></td><td>Default <span class="mono">gemini-3.5-flash</span>.</td></tr>
-        <tr><td><span class="mono">GEMINI_TREND_SEARCH</span></td><td>Set to <span class="mono">1</span> to add a live Google Search assignment brief before drafting. Off by default so quota is spent on the actual drafts. RSS headlines still run.</td></tr>
-        <tr><td><span class="mono">PORT</span></td><td>Local API, default 3000.</td></tr>
-      </tbody>
-    </table>
-    <p>Same names belong in Vercel project env for production. After changing env, redeploy.</p>
-
-    <h2>Local and ship</h2>
+    <h2 id="first">3. First-run setup</h2>
     <ol>
-      <li><span class="mono">pnpm install</span> then <span class="mono">pnpm db:push</span> if the schema changed.</li>
-      <li><span class="mono">pnpm dev</span> — API at <span class="mono">http://localhost:3000</span>, Vite newsroom at <span class="mono">http://localhost:5173</span> (use 5173 while iterating on UI).</li>
-      <li><span class="mono">pnpm start</span> — builds desktop into the API and serves everything on 3000.</li>
-      <li>Health: <span class="mono">GET /api/healthz</span>.</li>
-      <li>Mobile: <span class="mono">pnpm dev:mobile</span>. On a real phone set <span class="mono">EXPO_PUBLIC_API_URL</span> to the LAN IP, not localhost.</li>
-      <li>Production: <span class="mono">vercel deploy --prod --yes</span> from the repo root. Public URL: <span class="mono">https://fieldpress-dusky.vercel.app</span>.</li>
+      <li>Node 24+ and pnpm. From the repo root: <span class="mono">pnpm install</span>.</li>
+      <li>Copy <span class="mono">.env.example</span> to <span class="mono">.env</span>. Fill Neon URLs and <span class="mono">GEMINI_API_KEY</span>. Never commit <span class="mono">.env</span>.</li>
+      <li><span class="mono">pnpm db:push</span> if tables are missing (stories, story_items, drafts).</li>
+      <li><span class="mono">pnpm dev</span> for API + Vite, or <span class="mono">pnpm start</span> for a single port.</li>
+      <li>Confirm <span class="mono">GET /api/healthz</span> and <span class="mono">GET /api/dashboard</span>.</li>
+      <li>Install the PWA from the launch page so the phone opens the newsroom without browser chrome.</li>
+      <li>On Vercel, set the same env names on the <span class="mono">fieldpress</span> project, then redeploy. Production alias: <span class="mono">https://fieldpress-dusky.vercel.app</span>.</li>
     </ol>
     <div class="note">
-      Produce can take 10–40 seconds. Headline fetch is fail-soft. Gemini 429/503 is retried twice. If quota is exhausted, drafts will still fail until the key has budget again.
+      Deploy from this machine: <span class="mono">vercel deploy --prod --yes --scope tuffputer</span>. A deploy without the team scope can fail with “Not authorized.”
     </div>
 
-    <h2>When it breaks</h2>
+    <h2 id="desk">4. Daily desk</h2>
+    <ol>
+      <li><strong>Open.</strong> Production launch page → OPEN APP, or the installed icon. Installed (standalone) skips launch and goes to <span class="mono">/app</span>.</li>
+      <li><strong>New story.</strong> Headline is the search seed for public trends. Prefer “Emu on Main, Danville IL” over “weird animal.” 255 character max.</li>
+      <li><strong>Notes.</strong> Add what you saw, names you can stand behind, quotes, times, places, what you could not confirm. Thin notes produce thin drafts.</li>
+      <li><strong>Import (optional).</strong> Paste a mobile dispatch. First line becomes the title (strips <span class="mono">#</span> or <span class="mono">DISPATCH:</span>). Later lines become notes.</li>
+      <li><strong>AI PRODUCE.</strong> 10–40 seconds. Scans live headlines, then writes article, social, and podcast. Existing drafts for those three modes are overwritten.</li>
+      <li><strong>Trend Desk.</strong> Read Why now, Audience, and the relatable / national / global hooks before you touch the copy. These are assignment notes, not witnessed facts. Stored in this browser only.</li>
+      <li><strong>Edit.</strong> Open each draft. Autosave. Click a source note or a trend hook in the sidebar to insert it. Cut anything the notes do not support.</li>
+      <li><strong>Distribute.</strong> One draft or the whole package: copy, save markdown, native share, or compose on X, Threads, Bluesky, LinkedIn, Facebook, Instagram, WhatsApp, email.</li>
+    </ol>
+    <div class="warn">AI Produce replaces the latest article, social, and podcast drafts for that story. Copy out anything you still need before you hit it again.</div>
+
+    <h2 id="notes">5. How to write notes that produce</h2>
+    <p>The model is only as good as the notes. Put the exclusive on the page.</p>
+    <ul>
+      <li>One scene a reader can see (sound, weather, a person’s hands, a closed street).</li>
+      <li>Attributable quotes in quotation marks. Unnamed sources labeled as such.</li>
+      <li>Numbers you counted or an official gave you — and who gave them.</li>
+      <li>Time and place. “Tonight, 4th and Main” beats “earlier.”</li>
+      <li>What you do not know. Produce will say what still needs verification if you write it down.</li>
+      <li>Do not dump a national recap into notes and expect an exclusive. The exclusive is what you witnessed.</li>
+    </ul>
+
+    <h2 id="trends">6. Trend desk and AI Produce</h2>
+    <p>Produce does two jobs: look at the public conversation, then write drafts that use that conversation for framing only.</p>
     <table>
-      <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+      <thead><tr><th>Layer</th><th>What it is</th><th>Where it lives</th></tr></thead>
       <tbody>
-        <tr><td>Produce 502, “GEMINI_API_KEY is not set”</td><td>Local <span class="mono">.env</span> or Vercel env. Restart after setting.</td></tr>
-        <tr><td>Produce 502, 429 / quota</td><td>Gemini billing and rate limits. Leave <span class="mono">GEMINI_TREND_SEARCH</span> off.</td></tr>
-        <tr><td>Produce 502, 503 high demand</td><td>Wait and retry. The server already retries twice.</td></tr>
-        <tr><td>Empty Trend Desk, drafts exist</td><td>Trend Desk is browser-local. Drafts are in the database. Produce again on this device or open the drafts.</td></tr>
-        <tr><td>Phone cannot produce</td><td><span class="mono">EXPO_PUBLIC_API_URL</span> must be the machine LAN IP. Phone and computer on the same network.</td></tr>
-        <tr><td>Install button does nothing</td><td>Safari on iPhone: Share → Add to Home Screen. Safari on Mac: File → Add to Dock.</td></tr>
+        <tr><td>Field notes</td><td>Only source of original facts, quotes, names, counts, on-scene detail.</td><td>Postgres <span class="mono">story_items</span></td></tr>
+        <tr><td>Live headlines</td><td>Google News related search (last 7 days), US national, world, Wikipedia most-read.</td><td>Fetched at produce time; fail-soft</td></tr>
+        <tr><td>Optional Gemini search</td><td><span class="mono">GEMINI_TREND_SEARCH=1</span> adds a live web assignment brief. Uses extra quota. Off by default.</td><td>Gemini, then discarded</td></tr>
+        <tr><td>Trend Desk</td><td>Why now, audience, 3–6 hooks with a productHook for article/social/podcast.</td><td>This browser, <span class="mono">localStorage</span> key <span class="mono">fieldpress.trendDesk.&lt;storyId&gt;</span></td></tr>
+        <tr><td>Drafts</td><td>Article, social, podcast. Overwritten on each successful produce.</td><td>Postgres <span class="mono">drafts</span></td></tr>
+      </tbody>
+    </table>
+    <h3>How the three scales should be used</h3>
+    <ul>
+      <li><strong>Relatable:</strong> everyday stakes, the question a non-expert would ask, one human scene.</li>
+      <li><strong>National:</strong> institutions, policy, who holds power, what country-level coverage is missing.</li>
+      <li><strong>Global:</strong> a parallel or knock-on that keeps an overseas listener in the episode.</li>
+    </ul>
+    <p>Drafts should: article nut graf places the reporting in public conversation; social opens on a hook people already recognize, then the exclusive field detail; podcast cold open poses the national/global question, then drops into the scene. Show notes must label public context as public context.</p>
+    <div class="warn">Never let a draft present a headline as something the reporter observed. If a trend is only loosely related, drop it. Verify every public-context claim before publish.</div>
+    <p>Switching phones or browsers: drafts are in the database; Trend Desk is not. Produce again on the new device, or work from the drafts.</p>
+    <p>Retries: Gemini 429 and 503 are retried twice with backoff. Headline fetch failures do not abort produce.</p>
+
+    <h2 id="edit">7. Edit, templates, and distribute</h2>
+    <h3>Editor</h3>
+    <ul>
+      <li>Autosave 1.5 seconds after the last keystroke. Status line shows SAVED / UNSAVED.</li>
+      <li>Click a source item to append it to the draft. Click a Trend Desk hook to append the product hook.</li>
+      <li>Article template: HEADLINE / BYLINE / DATELINE → lede → body → nut graf → kicker.</li>
+      <li>Social: thread posts separated by a line with only <span class="mono">---</span>, or a single caption.</li>
+      <li>Podcast: cold open, intro, segments with timestamps, outro, show notes.</li>
+    </ul>
+    <h3>Distribute</h3>
+    <table>
+      <thead><tr><th>Target</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td>Copy</td><td>Plain text of title + body.</td></tr>
+        <tr><td>Save / download</td><td>Markdown file named from the slug + mode (<span class="mono">story-title-article.md</span>).</td></tr>
+        <tr><td>Native share</td><td>Phone share sheet when the browser supports it.</td></tr>
+        <tr><td>X / Threads / Bluesky</td><td>Opens compose with the first thread chunk (about 270 characters).</td></tr>
+        <tr><td>LinkedIn / email</td><td>Longer body (LinkedIn ~3000, email ~1800).</td></tr>
+        <tr><td>Facebook / Instagram</td><td>Opens the app/site; paste from copy.</td></tr>
+        <tr><td>WhatsApp</td><td>First chunk in the compose URL.</td></tr>
+        <tr><td>Package</td><td>Whole story: notes + every draft, for handing a package to an editor.</td></tr>
       </tbody>
     </table>
 
-    <h2>Do not</h2>
+    <h2 id="mobile">8. Phone / Expo field app</h2>
+    <pre>pnpm dev:mobile</pre>
+    <p>Scan the QR with Expo Go. On a real device, <span class="mono">EXPO_PUBLIC_API_URL</span> must be the computer’s LAN IP (example <span class="mono">http://192.168.1.10:3000</span>), not <span class="mono">localhost</span>. Phone and computer on the same network.</p>
+    <ul>
+      <li>Story list, archive/restore, text notes, audio recording.</li>
+      <li>AI Producer screen calls <span class="mono">POST /api/produce</span> and shows summary, Trend Desk, outline, caption.</li>
+      <li>Export dispatch via the system share sheet, then paste into desktop IMPORT.</li>
+    </ul>
+    <p>Native store builds: from <span class="mono">artifacts/fieldpress</span>, <span class="mono">npx eas-cli login</span>, <span class="mono">npx eas-cli init</span>, then <span class="mono">npx eas-cli build --platform ios</span> or <span class="mono">android</span>.</p>
+
+    <h2 id="api">9. API map</h2>
+    <p>Base path <span class="mono">/api</span>. JSON in and out unless noted.</p>
+    <table>
+      <thead><tr><th>Method</th><th>Path</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td><span class="mono">/healthz</span></td><td>Liveness.</td></tr>
+        <tr><td>GET</td><td><span class="mono">/dashboard</span></td><td>Counts + recent stories.</td></tr>
+        <tr><td>GET</td><td><span class="mono">/stories?status=active|archived</span></td><td>List with items.</td></tr>
+        <tr><td>POST</td><td><span class="mono">/stories</span></td><td>Body: title (required), optional id, status, createdAt.</td></tr>
+        <tr><td>GET</td><td><span class="mono">/stories/:id</span></td><td>Story + items.</td></tr>
+        <tr><td>DELETE</td><td><span class="mono">/stories/:id</span></td><td>Cascades items and drafts.</td></tr>
+        <tr><td>POST</td><td><span class="mono">/stories/import</span></td><td>title + items[{type, content}].</td></tr>
+        <tr><td>POST</td><td><span class="mono">/stories/:id/items</span></td><td>type note|audio|photo, content.</td></tr>
+        <tr><td>DELETE</td><td><span class="mono">/stories/:id/items/:itemId</span></td><td></td></tr>
+        <tr><td>GET/POST</td><td><span class="mono">/stories/:id/drafts</span></td><td>mode article|social|podcast.</td></tr>
+        <tr><td>GET/PATCH/DELETE</td><td><span class="mono">/stories/:id/drafts/:draftId</span></td><td>PATCH title and/or content.</td></tr>
+        <tr><td>POST</td><td><span class="mono">/produce</span></td><td>Ephemeral: title + notes[]. Does not save.</td></tr>
+        <tr><td>POST</td><td><span class="mono">/stories/:id/produce</span></td><td>Reads notes, writes three drafts, returns Trend Desk fields.</td></tr>
+      </tbody>
+    </table>
+    <p>Produce response includes <span class="mono">summary</span>, <span class="mono">outline</span>, <span class="mono">caption</span>, <span class="mono">whyNow</span>, <span class="mono">audience</span>, <span class="mono">trends[]</span>, <span class="mono">trendQuery</span>, <span class="mono">headlineCount</span>, and <span class="mono">drafts</span>. Story produce returns saved draft rows in <span class="mono">drafts</span>.</p>
+
+    <h2 id="data">10. Data model</h2>
+    <ul>
+      <li><span class="mono">stories</span> — id, title (255), status active|archived, timestamps.</li>
+      <li><span class="mono">story_items</span> — type note|audio|photo, content (note body, audio URI, or caption), belongs to story, cascade delete.</li>
+      <li><span class="mono">drafts</span> — mode article|social|podcast, title (500), content, belongs to story, cascade delete. Produce upserts the latest row per mode.</li>
+    </ul>
+    <p>There is no login. Anyone with the URL can read and write the newsroom. Treat the production URL as a desk tool, not a public CMS, until you add auth.</p>
+
+    <h2 id="env">11. Environment variables</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><span class="mono">DATABASE_URL</span></td><td>Neon pooled Postgres for the API. Required.</td></tr>
+        <tr><td><span class="mono">DATABASE_URL_UNPOOLED</span></td><td>Drizzle push / migrations.</td></tr>
+        <tr><td><span class="mono">GEMINI_API_KEY</span></td><td>Required for AI Produce. Missing → 502.</td></tr>
+        <tr><td><span class="mono">GEMINI_MODEL</span></td><td>Default <span class="mono">gemini-3.5-flash</span>.</td></tr>
+        <tr><td><span class="mono">GEMINI_TREND_SEARCH</span></td><td><span class="mono">1</span> / <span class="mono">true</span> / <span class="mono">yes</span> enables extra Google Search briefing. Leave empty to save quota. RSS headlines still run.</td></tr>
+        <tr><td><span class="mono">PORT</span></td><td>API listen port, default 3000.</td></tr>
+        <tr><td><span class="mono">API_URL</span></td><td>Vite proxy target, default <span class="mono">http://localhost:3000</span>.</td></tr>
+        <tr><td><span class="mono">EXPO_PUBLIC_API_URL</span></td><td>Phone app API base. LAN IP on device.</td></tr>
+        <tr><td><span class="mono">STATIC_DIR</span></td><td>Override desktop build path if the API is not next to <span class="mono">artifacts/fieldpress-desktop/dist/public</span>.</td></tr>
+      </tbody>
+    </table>
+    <p>Vercel: same names in Project → Environment Variables for Production. After changing them, redeploy. Do not put keys in this manual’s downloaded copy if you print it for someone else — print a redacted sheet.</p>
+
+    <h2 id="run">12. Local, Docker, Vercel</h2>
+    <pre>pnpm install
+pnpm db:push
+pnpm dev          # API :3000 + Vite :5173
+pnpm start        # build desktop + API, serve :3000
+pnpm dev:mobile   # Expo field app</pre>
+    <pre>docker build -t fieldpress .
+docker run --rm -p 3000:3000 --env-file .env fieldpress</pre>
+    <pre>vercel deploy --prod --yes --scope tuffputer</pre>
+    <p>Health after ship: <span class="mono">curl -sS https://fieldpress-dusky.vercel.app/api/healthz</span>. Manual file: <span class="mono">https://fieldpress-dusky.vercel.app/admin-manual.html</span> must be the paper page, not the React shell.</p>
+    <div class="ok">If produce is slow, that is normal. If it fails with 429, the Gemini project is out of quota — drafts will not generate until billing/rate limits recover. Leave trend search off.</div>
+
+    <h2 id="break">13. When it breaks</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Launch loads, /app is empty or errors</td><td><span class="mono">/api/stories</span> and Neon. Check <span class="mono">DATABASE_URL</span>.</td></tr>
+        <tr><td>Produce 502, key not set</td><td>Local <span class="mono">.env</span> or Vercel env. Restart/redeploy.</td></tr>
+        <tr><td>Produce 502, 429 quota</td><td>Gemini billing. Keep <span class="mono">GEMINI_TREND_SEARCH</span> off.</td></tr>
+        <tr><td>Produce 502, 503 high demand</td><td>Wait and retry. Server already retries twice.</td></tr>
+        <tr><td>Trend Desk empty, drafts exist</td><td>Desk is browser-local. Open the drafts; produce again on this device to refill the desk.</td></tr>
+        <tr><td>Phone cannot produce / load stories</td><td>LAN IP in <span class="mono">EXPO_PUBLIC_API_URL</span>, same Wi-Fi, API bound on 0.0.0.0.</td></tr>
+        <tr><td>Install button does nothing</td><td>iPhone: Safari → Share → Add to Home Screen. Mac Safari: File → Add to Dock. Chrome/Edge: install icon in the address bar.</td></tr>
+        <tr><td>Manual download opens in the tab instead of saving</td><td>Use DOWNLOAD HTML / DOWNLOAD MARKDOWN on this page (blob save), or Print → Save as PDF.</td></tr>
+        <tr><td>Stale UI on the installed app</td><td>Service worker cache. Close all FieldPress tabs, reopen, or unregister the worker in DevTools → Application.</td></tr>
+        <tr><td>Vercel “Not authorized”</td><td>Deploy with <span class="mono">--scope tuffputer</span>.</td></tr>
+        <tr><td>Produce overwrote a draft you liked</td><td>No draft history. Copy out before re-produce. Restore from a markdown file you distributed earlier if you have one.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="publish">14. Before you publish</h2>
+    <ol>
+      <li>Every name, title, and count is in the notes or a named public source you checked.</li>
+      <li>Quotes are accurate. Unnamed material is labeled.</li>
+      <li>Why-now and trend hooks are framed as public context, not as reporting from the scene.</li>
+      <li>Social hashtags match the real conversation. Kill generic #News if that is all you have.</li>
+      <li>Podcast show notes distinguish “this week’s conversation” from your tape.</li>
+      <li>You would read this aloud to the people in the notes without flinching.</li>
+    </ol>
+
+    <h2 id="dont">15. Do not</h2>
     <ul>
       <li>Do not publish unverified names, casualty counts, or quotes.</li>
       <li>Do not treat Trend Desk headlines as reporting from the scene.</li>
-      <li>Do not put this manual, keys, or operator URLs on the launch page.</li>
+      <li>Do not put this manual, keys, or operator URLs on the launch page, the public user guide, or README.</li>
       <li>Do not commit <span class="mono">.env</span>, <span class="mono">.vercel</span>, or API keys.</li>
       <li>Do not brand FieldPress as another studio’s product. This newsroom stands alone.</li>
+      <li>Do not assume the newsroom is private just because the manual is unlisted. There is no login yet.</li>
     </ul>
 
-    <h2>One-page cheat sheet</h2>
-    <p>Headline with a place or subject → notes with scenes and attributable quotes → AI PRODUCE → read Why now / audience / three-scale hooks → edit article, social, podcast → verify → Distribute → delete nothing until the package has shipped.</p>
-    <p class="kicker" style="margin-top:32px">End of operator manual · keep offline if you print it</p>
+    <h2>Cheat sheet</h2>
+    <p>Specific headline → notes with a scene and attributable quotes → AI PRODUCE → read Why now / audience / three-scale hooks → edit article, social, podcast → verify → Distribute → keep a markdown copy → only then delete or overwrite.</p>
+    <p class="kicker" style="margin-top:36px">End of operator manual · 25 Aug 2026 · print or download and keep offline</p>
   </article>
   <script>
-    if (window.self !== window.top) {
-      document.querySelector(".toolbar")?.classList.add("embed");
-    }
+    (function () {
+      const MD_URL = "/admin-manual.md";
+
+      function saveBlob(filename, text, mime) {
+        const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      window.downloadHtml = function downloadHtml() {
+        const root = document.documentElement.cloneNode(true);
+        const bar = root.querySelector(".toolbar");
+        if (bar) bar.remove();
+        const scripts = root.querySelectorAll("script");
+        scripts.forEach((node) => node.remove());
+        saveBlob("fieldpress-admin-manual.html", "<!DOCTYPE html>\n" + root.outerHTML, "text/html");
+      };
+
+      window.downloadMarkdown = async function downloadMarkdown() {
+        const response = await fetch(MD_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error("Markdown manual missing");
+        saveBlob("fieldpress-admin-manual.md", await response.text(), "text/markdown");
+      };
+
+      if (window.self !== window.top) {
+        document.querySelector(".toolbar")?.classList.add("embed");
+      }
+
+      const params = new URLSearchParams(location.search);
+      if (params.get("download") === "md") {
+        window.downloadMarkdown();
+      } else if (params.has("download")) {
+        window.downloadHtml();
+      }
+    })();
   </script>
 </body>
 </html>

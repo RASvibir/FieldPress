@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FieldPress user guide</title>
+  <meta name="description" content="How to capture field notes and produce article, social, and podcast drafts in FieldPress." />
+  <style>
+    :root { --green: #39ff14; --ink: #111; --paper: #f7f4ea; --rule: #cfc8b4; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: "IBM Plex Sans", Georgia, serif; background: #000; color: var(--green); line-height: 1.5; }
+    .toolbar {
+      position: sticky; top: 0; z-index: 4; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      padding: 10px 16px; background: #050505; border-bottom: 1px solid rgba(57,255,20,0.25);
+      font-family: ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: 0.06em;
+    }
+    .toolbar a, .toolbar button {
+      appearance: none; background: transparent; color: var(--green); border: 1px solid rgba(57,255,20,0.35);
+      padding: 8px 12px; text-decoration: none; font: inherit; cursor: pointer;
+    }
+    .sheet {
+      max-width: 800px; margin: 24px auto 72px; background: var(--paper); color: var(--ink);
+      padding: 48px 56px; box-shadow: 0 0 40px rgba(57,255,20,0.12);
+    }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 15px; margin: 28px 0 8px; border-top: 1px solid var(--rule); padding-top: 18px; text-transform: uppercase; letter-spacing: 0.08em; }
+    h3 { font-size: 14px; margin: 16px 0 6px; }
+    .kicker { text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; color: #666; margin-bottom: 20px; }
+    p, li { font-size: 14px; }
+    ul, ol { padding-left: 1.2em; }
+    .mono, code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 16px; }
+    th, td { text-align: left; vertical-align: top; padding: 7px 8px 7px 0; border-bottom: 1px solid var(--rule); }
+    th { text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; color: #555; }
+    .warn { border-left: 3px solid #ff3131; padding: 8px 12px; background: #fff3f0; margin: 12px 0; }
+    .note { border-left: 3px solid #888; padding: 8px 12px; background: #eeeade; margin: 12px 0; }
+    .toolbar.embed { display: none; }
+    @media print {
+      body { background: white; }
+      .toolbar { display: none !important; }
+      .sheet { margin: 0; padding: 0; box-shadow: none; max-width: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+    @page { margin: 0.7in; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/">HOME</a>
+    <a href="/app">OPEN NEWSROOM</a>
+    <button type="button" onclick="window.print()">PRINT / PDF</button>
+    <button type="button" onclick="downloadHtml()">DOWNLOAD GUIDE</button>
+  </div>
+  <article class="sheet" id="guide">
+    <p class="kicker">FieldPress · user guide</p>
+    <h1>How to use the pocket newsroom</h1>
+    <p>FieldPress turns what you captured in the field into three drafts: an article, a social post or thread, and a podcast script. This page is for reporters. Save it, print it, or keep it open beside the newsroom.</p>
+    <p>Open the app at <span class="mono">https://fieldpress-dusky.vercel.app</span> → <strong>OPEN APP</strong>. On a phone, install it to your home screen so it launches like an app.</p>
+
+    <h2>1. Start a story</h2>
+    <ol>
+      <li>Tap <strong>NEW STORY</strong>.</li>
+      <li>Write a specific headline. Include the place or subject (“Warehouse fire on 4th, downtown”), not a vague label (“fire”). The headline helps the producer find what the public is already talking about.</li>
+      <li>Open the story.</li>
+    </ol>
+    <p>Already have notes on your phone? Use <strong>IMPORT</strong>. Paste a dispatch: first line is the title, each following line becomes a note.</p>
+
+    <h2>2. Add what you actually saw</h2>
+    <p>Notes are the only source of original facts. Put the exclusive on the page:</p>
+    <ul>
+      <li>A scene a reader can see — weather, sound, a closed street, someone’s hands.</li>
+      <li>Quotes in quotation marks. Say who spoke, or label an unnamed source as unnamed.</li>
+      <li>Numbers you counted or an official gave you, and who gave them.</li>
+      <li>Time and place. “Tonight, 4th and Main” beats “earlier.”</li>
+      <li>What you could not confirm. The draft should say what still needs a check.</li>
+    </ul>
+    <div class="note">Thin notes produce thin drafts. A national recap pasted into notes is not an exclusive. The exclusive is what you witnessed.</div>
+
+    <h2>3. Produce the package</h2>
+    <ol>
+      <li>Tap <strong>AI PRODUCE</strong> and wait. It can take half a minute.</li>
+      <li>Read the <strong>Trend Desk</strong> first: why this story now, who it is for, and hooks labeled relatable, national, and global.</li>
+      <li>Then open the three drafts: <strong>ARTICLE</strong>, <strong>SOCIAL</strong>, <strong>PODCAST</strong>.</li>
+    </ol>
+    <p>Trend Desk is assignment help. Those headlines are public conversation, not something you observed. Use them to frame the piece. Do not write them as if you were on that other scene.</p>
+    <div class="warn">AI Produce overwrites the latest article, social, and podcast drafts for this story. Copy out anything you still need before you run it again.</div>
+
+    <h2>4. What good drafts look like</h2>
+    <table>
+      <thead><tr><th>Draft</th><th>Use it for</th></tr></thead>
+      <tbody>
+        <tr><td>Article</td><td>Headline, lede, body from your notes, a nut graf that says why it matters now, a close.</td></tr>
+        <tr><td>Social</td><td>A hook people already recognize, then the detail only you have. Thread posts can be split with a line that is only ---.</td></tr>
+        <tr><td>Podcast</td><td>Cold open, intro, segments, outro, show notes. The open can pose a bigger question, then drop into your scene.</td></tr>
+      </tbody>
+    </table>
+    <p>In the editor, click a source note on the left to drop it into the draft. Click a trend hook to drop the suggested angle. The editor saves about a second and a half after you stop typing.</p>
+
+    <h2>5. Send it out</h2>
+    <p>On a draft or on the whole story, tap <strong>DISTRIBUTE</strong> / <strong>SEND</strong>:</p>
+    <ul>
+      <li><strong>Copy</strong> — paste anywhere.</li>
+      <li><strong>Save / download</strong> — a markdown file named from your headline.</li>
+      <li><strong>Share</strong> — the phone share sheet, when the browser supports it.</li>
+      <li><strong>Compose</strong> — X, Threads, Bluesky, LinkedIn, WhatsApp, email. Facebook and Instagram open the app; paste from copy.</li>
+    </ul>
+    <p><strong>DISTRIBUTE STORY</strong> packages your notes plus every draft for an editor.</p>
+
+    <h2>6. Install on this device</h2>
+    <ul>
+      <li><strong>iPhone:</strong> open the site in Safari → Share → Add to Home Screen.</li>
+      <li><strong>Mac Safari:</strong> File → Add to Dock.</li>
+      <li><strong>Chrome / Edge:</strong> install icon in the address bar, or the install button on the home screen.</li>
+    </ul>
+    <p>Once it is installed, it opens straight into the newsroom.</p>
+
+    <h2>7. Before you publish</h2>
+    <ol>
+      <li>Every name, title, and count is in your notes or a public source you checked.</li>
+      <li>Quotes are accurate.</li>
+      <li>Trend / “why now” lines are framed as public context, not as reporting from your scene.</li>
+      <li>You would read this aloud to the people in the notes.</li>
+    </ol>
+    <div class="warn">FieldPress drafts are a start. You are the reporter. Verify before you hit send.</div>
+
+    <h2>Cheat sheet</h2>
+    <p>Specific headline → notes with a scene and real quotes → AI PRODUCE → read Trend Desk → edit article, social, podcast → verify → Distribute.</p>
+    <p class="kicker" style="margin-top:32px">FieldPress user guide · pocket newsroom</p>
+  </article>
+  <script>
+    (function () {
+      function saveBlob(filename, text, mime) {
+        const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      window.downloadHtml = function () {
+        const root = document.documentElement.cloneNode(true);
+        root.querySelector(".toolbar")?.remove();
+        root.querySelectorAll("script").forEach((node) => node.remove());
+        saveBlob("fieldpress-user-guide.html", "<!DOCTYPE html>\n" + root.outerHTML, "text/html");
+      };
+      if (window.self !== window.top) document.querySelector(".toolbar")?.classList.add("embed");
+      if (new URLSearchParams(location.search).has("download")) window.downloadHtml();
+    })();
+  </script>
+</body>
+</html>

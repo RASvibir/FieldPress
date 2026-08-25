@@ -42,9 +42,14 @@ export default function AdminManualPage() {
           PRINT
         </Button>
         <Button variant="outline" size="sm" asChild>
-          <a href="/admin-manual.html" download="fieldpress-admin-manual.html">
+          <a href="/admin-manual.html?download=1">
             <Download className="w-4 h-4 mr-1" />
-            DOWNLOAD
+            DOWNLOAD HTML
+          </a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/admin-manual.html?download=md">
+            DOWNLOAD MD
           </a>
         </Button>
         <span className="text-[10px] text-muted-foreground tracking-widest">
