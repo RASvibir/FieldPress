@@ -39,3 +39,4 @@ export type StoryItem = typeof storyItemsTable.$inferSelect;
 export const insertDraftSchema = createInsertSchema(draftsTable).omit({ updatedAt: true });
 export type InsertDraft = z.infer<typeof insertDraftSchema>;
 export type Draft = typeof draftsTable.$inferSelect;
+export { storiesTable as stories };

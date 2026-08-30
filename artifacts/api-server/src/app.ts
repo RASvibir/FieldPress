@@ -1,3 +1,4 @@
+import { imagesRouter } from "./routes/images";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -9,6 +10,7 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+app.use("/api", imagesRouter);
 app.use(
   pinoHttp({
     logger,
@@ -56,5 +58,6 @@ if (!process.env.VERCEL && fs.existsSync(indexHtml)) {
 } else {
   logger.warn({ staticDir }, "Desktop UI not built; API-only mode");
 }
+
 
 export default app;
