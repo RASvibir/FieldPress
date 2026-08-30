@@ -160,6 +160,38 @@ async function geminiPost(
   throw lastError instanceof Error ? lastError : new Error("Gemini request failed");
 }
 
+async function ollamaPost(
+  host: string,
+  model: string,
+  prompt: string,
+  timeoutMs: number = 60000,
+): Promise<string> {
+  const endpoint = `${host.replace(/\/v1\/?$/, "")}/api/generate`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt: `${prompt}\n\nIMPORTANT: Respond with pure JSON matching the requested keys (summary, outline, caption, whyNow, audience, articleTitle, article, socialTitle, social, podcastTitle, podcast, trends).`,
+      format: "json",
+      stream: false,
+      options: {
+        num_ctx: 4096,
+        temperature: 0.55,
+      },
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Ollama ${response.status}: ${detail.slice(0, 400)}`);
+  }
+
+  const data = (await response.json()) as { response: string };
+  return data.response;
+}
+
 function normalizeTrends(raw: GeminiJson["trends"]): ProducerTrend[] {
   if (!Array.isArray(raw)) return [];
   const allowed = new Set(["relatable", "national", "global"]);
@@ -195,21 +227,6 @@ Find what actually helps this field story land with audiences:
 2. National: policy, institutions, politics, economy, who holds power in the country this story sits in.
 3. Global: international parallels, knock-on effects, why a listener overseas should care.
 
-Rules:
-- Search the live web. Prefer the last 7 days.
-- Only keep connections that are genuine. If a headline is unrelated, drop it.
-- Do not invent facts about the reporter's scene.
-- Return a compact briefing in this shape (plain text, not JSON):
-WHY NOW:
-RELATABLE:
-NATIONAL:
-GLOBAL:
-PRODUCT HOOKS:
-- article:
-- social:
-- podcast:
-SOURCES:
-
 Story title: ${input.title}
 
 Field notes:
@@ -240,12 +257,11 @@ export async function generateProducerDraft(input: {
   notes: string[];
   audioCount?: number;
 }): Promise<ProducerResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
+  const useOllama =
+    process.env.AI_PROVIDER === "ollama" ||
+    process.env.OPENAI_API_KEY === "ollama" ||
+    !process.env.GEMINI_API_KEY;
 
-  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
   const notes =
     input.notes.length > 0
       ? input.notes.map((note, i) => `${i + 1}. ${note}`).join("\n")
@@ -265,25 +281,6 @@ export async function generateProducerDraft(input: {
     };
   });
   const headlineBrief = formatTrendBrief(publicHeadlines);
-  logger.info(
-    { headlineCount: publicHeadlines.headlines.length, query: publicHeadlines.query },
-    "public headlines gathered",
-  );
-
-  const searchEnabled = /^(1|true|yes)$/i.test(process.env.GEMINI_TREND_SEARCH?.trim() || "");
-  const editorialBrief = searchEnabled
-    ? await gatherEditorialTrendBrief({
-        apiKey,
-        model,
-        title: input.title,
-        notes,
-        headlineBrief,
-        today,
-      }).catch((err) => {
-        logger.warn({ err }, "editorial trend search failed");
-        return "";
-      })
-    : "";
 
   const prompt = `You are FieldPress: assignment editor and producer for indie journalists. Turn field notes into the strongest possible news products by connecting what the reporter actually witnessed to what the public is already talking about.
 
@@ -296,21 +293,16 @@ HARD RULES
 - If notes are thin, say what is known and what still needs verification.
 - Keep the voice concrete and field-side, not marketing.
 
-MAKE IT LAND
-- Relatable: one human scene, everyday stakes, the question a non-expert would ask.
-- National: institutions, policy, who holds power, what this says about the country.
-- Global: parallels, knock-on effects, why a listener overseas should care.
-
-OUTPUTS
-- article: publication-ready. Lede with a scene or a why-now. Nut graf that places this reporting inside the public conversation. Body from notes. Kicker that looks forward.
-- social: open with the public hook people already recognize, then the exclusive field detail they cannot get elsewhere. Thread or caption. Hashtags that match real conversation, not generic #News.
-- podcast: cold open that poses the national/global question, then drop into the reporter's scene. Segments, outro, and show notes that list "this week's conversation" as public context.
-- summary: 2-4 sentences — what happened (from notes) plus why it matters now (from public context).
-- outline: section headings a producer can follow, including a why-now beat.
-- caption: short social line with a few sharp hashtags.
-- whyNow: one tight assignment-desk paragraph.
-- audience: who this is for and the relatable entry point.
-- trends: 3-6 items across relatable, national, and global that actually help this story. productHook says how to use it in article, social, or podcast. source is the outlet or "public conversation".
+OUTPUTS (JSON):
+- article: publication-ready story.
+- social: thread or sharp post.
+- podcast: script with cold open, segments, and outro.
+- summary: 2-4 sentences.
+- outline: array of string section headings.
+- caption: short social headline.
+- whyNow: tight assignment-desk paragraph.
+- audience: target audience.
+- trends: array of objects { scale, headline, whyItMatters, productHook, source }.
 
 Story title: ${input.title}
 ${audioLine}
@@ -319,50 +311,52 @@ Field notes:
 ${notes}
 
 LIVE PUBLIC HEADLINES:
-${headlineBrief}
+${headlineBrief}`;
 
-${editorialBrief ? `ASSIGNMENT EDITOR BRIEFING (from live search):\n${editorialBrief}` : "No live search briefing. Use the headlines above and clearly labeled widely known public context."}`;
+  let parsed: GeminiJson;
 
-  const payload = await geminiPost(
-    apiKey,
-    model,
-    {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: PRODUCER_SCHEMA,
-        maxOutputTokens: 8192,
-        temperature: 0.55,
+  if (useOllama) {
+    const ollamaHost = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
+    const ollamaModel = process.env.AI_MODEL || "llama3.2";
+    logger.info({ provider: "ollama", host: ollamaHost, model: ollamaModel }, "generating producer draft via Ollama");
+    const rawJson = await ollamaPost(ollamaHost, ollamaModel, prompt, 60000);
+    parsed = JSON.parse(rawJson) as GeminiJson;
+  } else {
+    const apiKey = process.env.GEMINI_API_KEY!.trim();
+    const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
+    logger.info({ provider: "gemini", model }, "generating producer draft via Gemini");
+    const payload = await geminiPost(
+      apiKey,
+      model,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: PRODUCER_SCHEMA,
+          maxOutputTokens: 8192,
+          temperature: 0.55,
+        },
       },
-    },
-    45000,
-  );
+      45000,
+    );
+    parsed = JSON.parse(extractText(payload)) as GeminiJson;
+  }
 
-  const parsed = JSON.parse(extractText(payload)) as GeminiJson;
   const trends = normalizeTrends(parsed.trends);
 
-  logger.info(
-    {
-      headlineCount: publicHeadlines.headlines.length,
-      trendCount: trends.length,
-      searched: Boolean(editorialBrief),
-    },
-    "producer draft generated with trend desk",
-  );
-
   return {
-    summary: parsed.summary,
-    outline: parsed.outline,
-    caption: parsed.caption,
+    summary: parsed.summary || "",
+    outline: parsed.outline || [],
+    caption: parsed.caption || "",
     whyNow: (parsed.whyNow ?? "").trim(),
     audience: (parsed.audience ?? "").trim(),
     trends,
     trendQuery: publicHeadlines.query,
     headlineCount: publicHeadlines.headlines.length,
     drafts: [
-      { mode: "article", title: parsed.articleTitle, content: parsed.article },
-      { mode: "social", title: parsed.socialTitle, content: parsed.social },
-      { mode: "podcast", title: parsed.podcastTitle, content: parsed.podcast },
+      { mode: "article", title: parsed.articleTitle || `${input.title} — Field Report`, content: parsed.article || "" },
+      { mode: "social", title: parsed.socialTitle || `${input.title} — Social Thread`, content: parsed.social || "" },
+      { mode: "podcast", title: parsed.podcastTitle || `${input.title} — Audio Dispatch`, content: parsed.podcast || "" },
     ],
   };
 }
