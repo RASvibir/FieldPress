@@ -11,7 +11,7 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const basePath = process.env.BASE_PATH ?? "/";
-const apiTarget = process.env.API_URL ?? "http://localhost:3000";
+const apiTarget = process.env.API_URL ?? "https://api.fieldpress.studio";
 
 export default defineConfig({
   base: basePath,

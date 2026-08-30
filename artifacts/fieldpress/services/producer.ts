@@ -1,6 +1,6 @@
 import { AiDraft, Story, StoryItem } from '@/types';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://api.fieldpress.studio').replace(/\/+$/, '');
 
 export async function generateAiDraft(story: Story, textItems: StoryItem[]): Promise<AiDraft> {
   const response = await fetch(`${API_URL}/api/produce`, {
