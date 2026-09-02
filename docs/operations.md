@@ -19,8 +19,8 @@ Canonical site: **fieldpress.studio**
 Recommended:
 
 1. Cloudflare zone for `fieldpress.studio` (DNS, TLS, WAF).
-2. Apex + `www` CNAME/ALIAS to the Vercel project.
-3. Optional `api.fieldpress.studio` when the API is split from the static app.
+2. Apex, `www`, and `app` CNAME to `fieldpress-desktop.pages.dev`.
+3. `api.fieldpress.studio` CNAME to the same Pages host; the `fieldpress-api` Worker serves `/api*` (and `/healthz` on the api host).
 4. Keep Vercel preview hostnames for pull requests only.
 
 Set production `APP_URL` and `PUBLIC_ORIGIN` to `https://fieldpress.studio`. Never put storage secrets in `VITE_*`.

@@ -11,5 +11,13 @@ pattern = "fieldpress.studio/api*"
 zone_name = "fieldpress.studio"
 
 [[routes]]
+pattern = "www.fieldpress.studio/api*"
+zone_name = "fieldpress.studio"
+
+[[routes]]
 pattern = "app.fieldpress.studio/api*"
+zone_name = "fieldpress.studio"
+
+[[routes]]
+pattern = "api.fieldpress.studio/*"
 zone_name = "fieldpress.studio"

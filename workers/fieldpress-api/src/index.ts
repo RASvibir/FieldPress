@@ -7,11 +7,31 @@ type Env = {
 
 const COOKIE = "fp_session";
 
-function json(data: unknown, status = 200, extra: HeadersInit = {}) {
+const ALLOW_ORIGINS = new Set([
+  "https://fieldpress.studio",
+  "https://www.fieldpress.studio",
+  "https://app.fieldpress.studio",
+  "https://api.fieldpress.studio",
+]);
+
+function corsHeaders(req: Request): HeadersInit {
+  const origin = req.headers.get("origin") || "";
+  const allow = ALLOW_ORIGINS.has(origin) ? origin : "https://fieldpress.studio";
+  return {
+    "access-control-allow-origin": allow,
+    "access-control-allow-credentials": "true",
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
+    vary: "Origin",
+  };
+}
+
+function json(data: unknown, status = 200, extra: HeadersInit = {}, req?: Request) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json",
+      ...(req ? corsHeaders(req) : {}),
       ...extra,
     },
   });
@@ -75,9 +95,12 @@ function readCookie(req: Request, name: string): string | null {
 
 function pathOf(req: Request): { pathname: string; parts: string[] } {
   const url = new URL(req.url);
-  const pathname = url.pathname.replace(/\/+$/, "") || "/";
-  const stripped = pathname.replace(/^\/api/, "") || "/";
-  const parts = stripped.split("/").filter(Boolean);
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    let stripped = pathname.replace(/^\/api/, "") || "/";
+    if (stripped === "/health" || stripped === "/healthz") {
+      stripped = "/healthz";
+    }
+    const parts = stripped.split("/").filter(Boolean);
   return { pathname: stripped, parts };
 }
 
@@ -132,14 +155,7 @@ async function storyWithItems(sql: Sql, userId: string, storyId: string) {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     if (req.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "access-control-allow-origin": "https://fieldpress.studio",
-          "access-control-allow-credentials": "true",
-          "access-control-allow-headers": "content-type",
-          "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
-        },
-      });
+      return new Response(null, { headers: corsHeaders(req) });
     }
     if (!env.DATABASE_URL) return json({ error: "DATABASE_URL missing" }, 500);
     const sql = neon(env.DATABASE_URL);
