@@ -59,7 +59,13 @@ export default function LoginPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof body.error === "string" ? body.error : "Could not sign in");
+        const err = typeof body.error === "string" ? body.error : "Could not sign in";
+        if (res.status === 409) {
+          setMode("login");
+          setError("This email already has a desk. Sign in below, or use Reset with desk word.");
+          return;
+        }
+        setError(err);
         return;
       }
       const next = new URLSearchParams(window.location.search).get("next") || "/app";
@@ -77,7 +83,7 @@ export default function LoginPage() {
         <div className="space-y-1 text-center">
           <h1 className="text-3xl tracking-[0.18em] text-glow-pulse">FIELDPRESS</h1>
           <p className="text-muted-foreground text-sm">
-            {mode === "register" ? "Create a desk account" : mode === "forgot" ? "Reset access" : "Sign in to capture photos and keep private files"}
+            {mode === "register" ? "Create a desk account" : mode === "forgot" ? "Reset access" : "Sign in with your password or desk word"}
           </p>
         </div>
         <Input
@@ -116,13 +122,13 @@ export default function LoginPage() {
             <fieldset className="space-y-2 border border-neon/20 p-3">
               <legend className="px-1 text-xs tracking-widest text-muted-foreground">DESK RATING</legend>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                No birthday. Pick a band. Porn is blocked for everyone. Under 13 is G / Kids. Teenager is PG-13. Over 18 can see the rest, including news and art that includes nudity.
+                No birthday. Under 13 is G / Kids. Teenager is PG-13. Over 18 has no extra label.
               </p>
               {(
                 [
-                  ["kids", "Under 13", "G / Kids only"],
+                  ["kids", "Under 13", "G / Kids"],
                   ["teen", "Teenager", "PG-13"],
-                  ["adult", "Over 18", "All else except porn"],
+                  ["adult", "Over 18", ""],
                 ] as const
               ).map(([value, label, hint]) => (
                 <label key={value} className="flex items-start gap-2 text-sm cursor-pointer">
@@ -136,7 +142,7 @@ export default function LoginPage() {
                   />
                   <span>
                     <span className="text-neon">{label}</span>
-                    <span className="block text-xs text-muted-foreground">{hint}</span>
+                    {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
                   </span>
                 </label>
               ))}

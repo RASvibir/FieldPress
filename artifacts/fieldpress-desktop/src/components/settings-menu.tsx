@@ -55,7 +55,7 @@ export function SettingsMenu() {
   }
 
   const ageLabel =
-    user?.ageBand === "kids" ? "Under 13 · G / Kids" : user?.ageBand === "adult" ? "Over 18 · all else except porn" : user ? "Teenager · PG-13" : "Unsigned visitors see PG-13";
+    user?.ageBand === "kids" ? "Under 13 · G / Kids" : user?.ageBand === "adult" ? "Over 18" : user ? "Teenager · PG-13" : "Unsigned visitors see PG-13";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

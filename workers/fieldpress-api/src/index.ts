@@ -116,17 +116,26 @@ async function userFromSession(sql: Sql, req: Request) {
   const rows = await sql`
     select u.id, u.email, u.display_name as "displayName", u.status, s.expires_at as "expiresAt",
       coalesce(u.desk_links, '{}'::jsonb) as "deskLinks",
-      coalesce(u.age_band, 'teen') as "ageBand"
+      coalesce(u.age_band, 'teen') as "ageBand",
+      coalesce(u.role, 'user') as role
     from sessions s
     join users u on u.id = s.user_id
     where s.token_hash = ${tokenHash}
     limit 1
   `;
   const row = rows[0] as
-    | { id: string; email: string; displayName: string; status: string; expiresAt: string; deskLinks?: unknown; ageBand?: string }
+    | { id: string; email: string; displayName: string; status: string; expiresAt: string; deskLinks?: unknown; ageBand?: string; role?: string }
     | undefined;
-  if (!row || row.status !== "active" || new Date(row.expiresAt).getTime() < Date.now()) return null;
-  return { id: row.id, email: row.email, displayName: row.displayName, deskLinks: row.deskLinks || {}, ageBand: row.ageBand || "teen" };
+  if (!row || new Date(row.expiresAt).getTime() < Date.now()) return null;
+  if (row.status !== "active" && row.status !== "superadmin") return null;
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+    deskLinks: row.deskLinks || {},
+    ageBand: row.ageBand || "teen",
+    role: row.role === "superadmin" || row.status === "superadmin" ? "superadmin" : "user",
+  };
 }
 
 async function createSession(sql: Sql, userId: string) {
@@ -182,6 +191,7 @@ async function ensureAgeSchema(sql: Sql) {
   if (schemaReady) return;
   try {
     await sql`alter table users add column if not exists age_band text not null default 'teen'`;
+    await sql`alter table users add column if not exists role text not null default 'user'`;
     await sql`alter table stories add column if not exists content_rating text not null default 'pg13'`;
     schemaReady = true;
   } catch {
@@ -532,7 +542,9 @@ export default {
         if (!email.includes("@") || password.length < 10) return json({ error: "Invalid email or password" }, 400);
         if (!ageBand) return json({ error: "Choose under 13, teenager, or over 18. We do not collect birthdays." }, 400);
         const existing = await sql`select id from users where email = ${email} limit 1`;
-        if (existing.length) return json({ error: "An account with that email already exists" }, 409);
+        if (existing.length) {
+          return json({ error: "This email already has a desk. Sign in, or reset with your desk word." }, 409);
+        }
         const userId = id();
         const displayName = (body.displayName || email.split("@")[0] || "Reporter").slice(0, 200);
         await sql`
@@ -554,17 +566,28 @@ export default {
       if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
         const body = (await req.json()) as { email?: string; password?: string };
         const email = (body.email || "").trim().toLowerCase();
-        const rows = await sql`select id, email, display_name as "displayName", status, password_hash as "passwordHash", coalesce(age_band, 'teen') as "ageBand" from users where email = ${email} limit 1`;
+        const rows = await sql`select id, email, display_name as "displayName", status, password_hash as "passwordHash", reset_word_hash as "resetWordHash", coalesce(age_band, 'teen') as "ageBand", coalesce(role, 'user') as role from users where email = ${email} limit 1`;
         const user = rows[0] as
-          | { id: string; email: string; displayName: string; status: string; passwordHash: string; ageBand?: string }
+          | { id: string; email: string; displayName: string; status: string; passwordHash: string; resetWordHash?: string | null; ageBand?: string; role?: string }
           | undefined;
-        if (!user?.passwordHash || !(await verifySecret(body.password || "", user.passwordHash))) {
+        const password = body.password || "";
+        const passwordOk = user?.passwordHash ? await verifySecret(password, user.passwordHash) : false;
+        const deskWordOk = user?.resetWordHash ? await verifySecret(password, user.resetWordHash) : false;
+        if (!user || (!passwordOk && !deskWordOk)) {
           return json({ error: "Invalid email or password" }, 401);
         }
-        if (user.status !== "active") return json({ error: "Account is not active" }, 403);
+        if (user.status !== "active" && user.status !== "superadmin") return json({ error: "Account is not active" }, 403);
         const token = await createSession(sql, user.id);
         return json(
-          { user: { id: user.id, email: user.email, displayName: user.displayName, ageBand: user.ageBand || "teen" } },
+          {
+            user: {
+              id: user.id,
+              email: user.email,
+              displayName: user.displayName,
+              ageBand: user.ageBand || "teen",
+              role: user.role === "superadmin" || user.status === "superadmin" ? "superadmin" : "user",
+            },
+          },
           200,
           { "set-cookie": cookieHeader(token) },
         );

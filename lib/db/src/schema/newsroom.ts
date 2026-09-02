@@ -56,6 +56,7 @@ export const usersTable = pgTable(
     resetWordHash: text("reset_word_hash"),
     deskLinks: jsonb("desk_links").$type<Record<string, string>>().notNull().default({}),
     ageBand: varchar("age_band", { length: 20 }).notNull().default("teen"),
+    role: varchar("role", { length: 40 }).notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("users_email_idx").on(table.email)],
