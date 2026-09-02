@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2026-09-02"
 compatibility_flags = ["nodejs_compat"]
 
+[vars]
+GEMINI_MODEL = "gemini-3.5-flash"
+OLLAMA_MODEL = "llama3.2"
+
 [observability]
 enabled = true
 

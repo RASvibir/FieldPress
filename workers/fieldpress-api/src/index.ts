@@ -4,6 +4,9 @@ type Env = {
   DATABASE_URL: string;
   AUTH_SECRET?: string;
   GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  OLLAMA_HOST?: string;
+  OLLAMA_MODEL?: string;
   GOOGLE_CSE_ID?: string;
   GOOGLE_CSE_KEY?: string;
 };
@@ -289,20 +292,164 @@ function localProduce(title: string, notes: string[]) {
   };
 }
 
+const GEMINI_TEXT_MODELS = [
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+  "gemini-3.6-flash",
+  "gemini-2.0-flash",
+  "gemini-flash-latest",
+];
+
+function scrubGemini(text: string) {
+  return text.replace(/AIza[0-9A-Za-z_-]+/g, "[key]").replace(/AQ\.[0-9A-Za-z._-]+/g, "[key]").slice(0, 500);
+}
+
+function extractGeminiText(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const row = payload as {
+    output_text?: string;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    outputs?: Array<{ text?: string; content?: string }>;
+  };
+  if (typeof row.output_text === "string" && row.output_text.trim()) return row.output_text.trim();
+  const fromCandidates = row.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+  if (fromCandidates.trim()) return fromCandidates.trim();
+  const fromOutputs = (row.outputs || []).map((item) => item.text || item.content || "").join("");
+  return fromOutputs.trim();
+}
+
+async function geminiGenerateText(
+  apiKey: string,
+  prompt: string,
+  opts: { json?: boolean; maxOutputTokens?: number; temperature?: number; preferredModel?: string } = {},
+): Promise<string> {
+  const key = apiKey.trim();
+  if (!key) throw new Error("GEMINI_API_KEY is empty");
+  const models = [opts.preferredModel, ...GEMINI_TEXT_MODELS].filter((m, i, all): m is string => Boolean(m) && all.indexOf(m) === i);
+  const headers = { "content-type": "application/json", "x-goog-api-key": key };
+  const genBody = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      maxOutputTokens: opts.maxOutputTokens || 2048,
+      temperature: opts.temperature ?? 0.5,
+      ...(opts.json ? { responseMimeType: "application/json" } : {}),
+    },
+  };
+  let last = "Gemini did not answer";
+  for (const model of models) {
+    for (const version of ["v1beta", "v1"] as const) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`,
+          { method: "POST", headers, body: JSON.stringify(genBody) },
+        );
+        const raw = await response.text();
+        if (!response.ok) {
+          last = `Gemini ${response.status} ${model}: ${scrubGemini(raw)}`;
+          continue;
+        }
+        const text = extractGeminiText(JSON.parse(raw) as unknown);
+        if (text) {
+          if (opts.json) {
+            const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+            JSON.parse(cleaned);
+            return cleaned;
+          }
+          return text;
+        }
+        last = `Gemini ${model} returned an empty reply`;
+      } catch (err) {
+        last = err instanceof Error ? err.message : "Gemini request failed";
+      }
+    }
+  }
+  try {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model: "gemini-2.5-flash", input: prompt }),
+    });
+    const raw = await response.text();
+    if (response.ok) {
+      const text = extractGeminiText(JSON.parse(raw) as unknown);
+      if (text) return text;
+    } else {
+      last = `Gemini interactions ${response.status}: ${scrubGemini(raw)}`;
+    }
+  } catch (err) {
+    last = err instanceof Error ? err.message : last;
+  }
+  throw new Error(last);
+}
+
+function ollamaUsable(host: string | undefined, req?: Request) {
+  if (!host) return false;
+  const local = /127\.0\.0\.1|localhost/i.test(host);
+  if (!local) return true;
+  if (!req) return false;
+  const hostname = new URL(req.url).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+async function ollamaGenerate(host: string, model: string, prompt: string, json: boolean): Promise<string> {
+  const base = host.replace(/\/$/, "").replace(/\/v1$/i, "");
+  const response = await fetch(`${base}/api/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false,
+      ...(json ? { format: "json" } : {}),
+      options: { temperature: 0.4, num_predict: json ? 700 : 260, num_ctx: 2048 },
+    }),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`Ollama ${response.status}: ${raw.slice(0, 200)}`);
+  const data = JSON.parse(raw) as { response?: string };
+  const text = (data.response || "").trim();
+  if (!text) throw new Error("Ollama returned an empty reply");
+  return text;
+}
+
+async function deskText(
+  env: Env,
+  prompt: string,
+  opts: { json?: boolean; maxGeminiTokens?: number; req?: Request } = {},
+): Promise<{ text: string; desk: string }> {
+  let draft = "";
+  const host = env.OLLAMA_HOST?.trim().replace(/^["']|["']$/g, "");
+  if (host && ollamaUsable(host, opts.req)) {
+    try {
+      draft = await ollamaGenerate(host, env.OLLAMA_MODEL || "llama3.2", prompt.slice(0, 5000), Boolean(opts.json));
+    } catch {
+      draft = "";
+    }
+  }
+  if (env.GEMINI_API_KEY) {
+    const polish = draft
+      ? `You are Pressy, FieldPress desk bot. Improve this draft. Do not invent facts. Keep it short.\nDRAFT:\n${draft.slice(0, 2200)}\n\nASK:\n${prompt.slice(0, 1800)}`
+      : prompt;
+    try {
+      const text = await geminiGenerateText(env.GEMINI_API_KEY, polish, {
+        json: opts.json,
+        maxOutputTokens: opts.maxGeminiTokens || (draft ? 512 : 900),
+        temperature: 0.4,
+        preferredModel: env.GEMINI_MODEL,
+      });
+      return { text, desk: draft ? "ollama+gemini" : "gemini" };
+    } catch (err) {
+      if (draft) return { text: draft, desk: "ollama" };
+      throw err;
+    }
+  }
+  if (draft) return { text: draft, desk: "ollama" };
+  throw new Error("Desk AI is not configured. Add Gemini, or a public Ollama host.");
+}
+
 async function geminiProduce(apiKey: string, title: string, notes: string[]) {
   const prompt = `You are FieldPress. Turn field notes into JSON with keys: summary, outline (string array), caption, whyNow, audience, articleTitle, article, socialTitle, social, podcastTitle, podcast. Do not invent facts. Title: ${title}\nNotes:\n${notes.join("\n") || "(none)"}`;
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4096, temperature: 0.5 },
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) throw new Error(`Gemini ${response.status}`);
-  const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const text = payload.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+  const text = await geminiGenerateText(apiKey, prompt, { json: true, maxOutputTokens: 4096, temperature: 0.5 });
   const parsed = JSON.parse(text) as Record<string, unknown>;
   const outline = Array.isArray(parsed.outline) ? parsed.outline.filter((x): x is string => typeof x === "string") : [];
   return {
@@ -434,20 +581,9 @@ function localIdeas(title: string, notes: string[]) {
   };
 }
 
-async function geminiIdeas(apiKey: string, title: string, notes: string[]) {
+async function geminiIdeas(apiKey: string, title: string, notes: string[], preferredModel?: string) {
   const prompt = `You are a newsroom idea editor, not a publisher. Do not write finished posts or scripts ready to ship. Return JSON keys: searchQueries (string[3]), spiffs (array of {headline, visual, hook}), articleIdeas (string[3]), socialIdeas (string[3]), podcastIdeas (string[3]). Headline: ${title}\nNotes:\n${notes.join("\n") || "(none)"}`;
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2048, temperature: 0.4 },
-    }),
-    signal: AbortSignal.timeout(18000),
-  });
-  if (!response.ok) throw new Error(`Gemini ${response.status}`);
-  const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const text = payload.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+  const text = await geminiGenerateText(apiKey, prompt, { json: true, maxOutputTokens: 900, temperature: 0.35, preferredModel });
   const parsed = JSON.parse(text) as Record<string, unknown>;
   const strings = (value: unknown) => (Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : []);
   const spiffs = Array.isArray(parsed.spiffs)
@@ -477,35 +613,19 @@ function localPressy(message: string, title: string) {
   return `Pressy here. I can draft a lede, a photo prompt, and a what-still-needs-checking list for “${subject}.” Sign in on a desk with Gemini configured for a live pass. Do not invent quotes. Confirm names before you publish.`;
 }
 
-async function geminiPressyChat(
-  apiKey: string,
-  ageBand: string,
-  message: string,
-  history: Array<{ role: string; content: string }>,
-) {
+async function pressyChat(env: Env, ageBand: string, message: string, history: Array<{ role: string; content: string }>, req: Request) {
   const turns = history
-    .slice(-12)
+    .slice(-6)
     .map((turn) => `${turn.role === "pressy" || turn.role === "model" ? "Pressy" : "Reporter"}: ${turn.content}`)
     .join("\n");
-  const prompt = `You are Pressy, the FieldPress newsroom prompt tool. Talk like a copy editor sitting next to the reporter: short, useful, no fluff.
+  const prompt = `You are Pressy, the FieldPress newsroom bot. Short. Useful. No fluff.
 ${pressyRatingLine(ageBand)}
-Never invent facts, quotes, or sources. Offer headlines, ledes, nut grafs, photo prompts, questions to ask, and feed copy. If the user wants a finished Pressie (that is the article), outline it and mark what still needs reporting. You are Pressy the bot. The written piece is a Pressie.
+Never invent facts or quotes. Help with headlines, ledes, nut grafs, photo prompts, and questions to ask. A Pressie is the written piece; you are the bot.
 Prior chat:
 ${turns || "(none)"}
 Reporter: ${message}
-Reply as Pressy only. Plain text.`;
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.55 },
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) throw new Error(`Gemini ${response.status}`);
-  const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  return (payload.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "").trim();
+Reply as Pressy only. Plain text. Under 160 words.`;
+  return deskText(env, prompt, { maxGeminiTokens: 420, req });
 }
 
 async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string): Promise<string> {
@@ -715,14 +835,13 @@ export default {
           .map((turn) => ({ role: String(turn.role || "user"), content: String(turn.content || "").slice(0, 4000) }))
           .filter((turn) => turn.content);
         try {
-          const reply = env.GEMINI_API_KEY
-            ? await geminiPressyChat(env.GEMINI_API_KEY, ageBand, message, history)
-            : localPressy(message, "");
+          const { text: reply, desk } = await pressyChat(env, ageBand, message, history, req);
           if (!reply) return json({ error: "Pressy had nothing to say. Try again." }, 502);
           if (looksPorn(reply)) return json({ error: PORN_BLOCK }, 400);
-          return json({ reply, name: "Pressy" });
-        } catch {
-          return json({ reply: localPressy(message, ""), name: "Pressy", usedFallback: true });
+          return json({ reply, name: "Pressy", desk });
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "Desk AI failed";
+          return json({ error: detail.slice(0, 280), name: "Pressy" }, 502);
         }
       }
 
@@ -747,7 +866,7 @@ export default {
         let ideas = localIdeas(title, notes);
         if (env.GEMINI_API_KEY) {
           try {
-            ideas = await geminiIdeas(env.GEMINI_API_KEY, title, notes);
+            ideas = await geminiIdeas(env.GEMINI_API_KEY, title, notes, env.GEMINI_MODEL);
           } catch {
             ideas = localIdeas(title, notes);
           }
