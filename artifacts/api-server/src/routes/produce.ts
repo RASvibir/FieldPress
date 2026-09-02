@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable, storyItemsTable } from "@workspace/db";
 import { generateProducerDraft } from "../lib/gemini";
 import { logger } from "../lib/logger";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -95,8 +96,8 @@ router.post("/produce", async (req: Request, res: Response) => {
 
 router.post("/stories/:storyId/produce", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const story = await db.select().from(storiesTable).where(eq(storiesTable.id, storyId)).limit(1);
-  if (!story[0]) {
+  const story = await getOwnedStory(req.user!.id, storyId);
+  if (!story) {
     res.status(404).json({ error: "Story not found" });
     return;
   }
@@ -110,7 +111,7 @@ router.post("/stories/:storyId/produce", async (req: Request, res: Response) => 
 
   try {
     const result = await generateProducerDraft({
-      title: story[0].title,
+      title: story.title,
       notes,
       audioCount,
     });

@@ -19,7 +19,7 @@ export async function searchArchivalMedia(query: string): Promise<MediaSearchRes
   if (!response.ok) {
     throw new Error(`Wikimedia API error: ${response.statusText}`);
   }
-  const data = await response.json();
+  const data = (await response.json()) as { query?: { pages?: Record<string, unknown> } };
   const pages = data.query?.pages || {};
 
   return Object.values(pages).map((page: any) => {

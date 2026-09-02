@@ -1,12 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { storiesTable, storyItemsTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
   ImportStoryBody,
 } from "@workspace/api-zod";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -14,11 +15,11 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
-async function getStoryWithItems(storyId: string) {
-  const story = await db.select().from(storiesTable).where(eq(storiesTable.id, storyId)).limit(1);
-  if (!story.length) return null;
+async function getStoryWithItems(userId: string, storyId: string) {
+  const story = await getOwnedStory(userId, storyId);
+  if (!story) return null;
   const items = await db.select().from(storyItemsTable).where(eq(storyItemsTable.storyId, storyId)).orderBy(desc(storyItemsTable.createdAt));
-  return { ...story[0], items };
+  return { ...story, items };
 }
 
 router.get("/stories", async (req: Request, res: Response) => {
@@ -27,11 +28,12 @@ router.get("/stories", async (req: Request, res: Response) => {
     res.status(400).json({ error: "Invalid query parameters" });
     return;
   }
+  const ownerId = req.user!.id;
   const statusFilter = parsed.data.status || undefined;
 
   const stories = statusFilter
-    ? await db.select().from(storiesTable).where(eq(storiesTable.status, statusFilter)).orderBy(desc(storiesTable.updatedAt))
-    : await db.select().from(storiesTable).orderBy(desc(storiesTable.updatedAt));
+    ? await db.select().from(storiesTable).where(and(eq(storiesTable.ownerId, ownerId), eq(storiesTable.status, statusFilter))).orderBy(desc(storiesTable.updatedAt))
+    : await db.select().from(storiesTable).where(eq(storiesTable.ownerId, ownerId)).orderBy(desc(storiesTable.updatedAt));
 
   const result = await Promise.all(
     stories.map(async (s) => {
@@ -54,19 +56,20 @@ router.post("/stories", async (req: Request, res: Response) => {
 
   await db.insert(storiesTable).values({
     id,
+    ownerId: req.user!.id,
     title: data.title,
     status: data.status || "active",
     createdAt: now,
     updatedAt: now,
   });
 
-  const result = await getStoryWithItems(id);
+  const result = await getStoryWithItems(req.user!.id, id);
   res.status(201).json(result);
 });
 
 router.get("/stories/:storyId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const result = await getStoryWithItems(storyId);
+  const result = await getStoryWithItems(req.user!.id, storyId);
   if (!result) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -76,6 +79,11 @@ router.get("/stories/:storyId", async (req: Request, res: Response) => {
 
 router.delete("/stories/:storyId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const story = await getOwnedStory(req.user!.id, storyId);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   await db.delete(storiesTable).where(eq(storiesTable.id, storyId));
   res.status(204).end();
 });
@@ -92,6 +100,7 @@ router.post("/stories/import", async (req: Request, res: Response) => {
 
   await db.insert(storiesTable).values({
     id: storyId,
+    ownerId: req.user!.id,
     title,
     status: "active",
     createdAt: now,
@@ -110,7 +119,7 @@ router.post("/stories/import", async (req: Request, res: Response) => {
     );
   }
 
-  const result = await getStoryWithItems(storyId);
+  const result = await getStoryWithItems(req.user!.id, storyId);
   res.status(201).json(result);
 });
 

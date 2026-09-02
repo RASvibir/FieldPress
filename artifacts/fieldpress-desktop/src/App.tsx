@@ -6,9 +6,12 @@ import DashboardPage from "@/pages/dashboard";
 import StoryDetailPage from "@/pages/story-detail";
 import EditorPage from "@/pages/editor";
 import LaunchPage from "@/pages/launch";
+import LoginPage from "@/pages/login";
+import ResetPasswordPage from "@/pages/reset-password";
 import UserManualPage from "@/pages/user-manual";
 import AdminManualPage from "@/pages/admin-manual";
 import NotFound from "@/pages/not-found";
+import { AuthGate } from "@/components/auth-gate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,11 +26,31 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LaunchPage} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/guide" component={UserManualPage} />
       <Route path="/admin" component={AdminManualPage} />
-      <Route path="/app" component={DashboardPage} />
-      <Route path="/story/:storyId" component={StoryDetailPage} />
-      <Route path="/story/:storyId/editor/:draftId" component={EditorPage} />
+      <Route path="/app">
+        {() => (
+          <AuthGate>
+            <DashboardPage />
+          </AuthGate>
+        )}
+      </Route>
+      <Route path="/story/:storyId/editor/:draftId">
+        {() => (
+          <AuthGate>
+            <EditorPage />
+          </AuthGate>
+        )}
+      </Route>
+      <Route path="/story/:storyId">
+        {() => (
+          <AuthGate>
+            <StoryDetailPage />
+          </AuthGate>
+        )}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

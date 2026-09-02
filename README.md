@@ -12,7 +12,7 @@ Offline-aware field reporting and audio production for independent journalists. 
 | Newsroom | http://localhost:3000 |
 | API health | http://localhost:3000/api/healthz |
 
-Create a story, add notes, then produce drafts. On a phone, use the browser (or install the PWA). Do not use Expo Go.
+Create an account at `/login`, then add notes and produce drafts. Reset a password with the email link or the optional **desk word** set at signup. On a phone, use the browser (or install the PWA). Do not use Expo Go.
 
 ## First-time setup
 

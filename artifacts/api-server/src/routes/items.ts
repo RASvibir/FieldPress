@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { storyItemsTable, storiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { AddStoryItemBody } from "@workspace/api-zod";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -12,6 +13,11 @@ function generateId(): string {
 
 router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
   const parsed = AddStoryItemBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -20,12 +26,6 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
   const data = parsed.data;
   const id = data.id || generateId();
   const now = data.createdAt ? new Date(String(data.createdAt)) : new Date();
-
-  const storyExists = await db.select({ id: storiesTable.id }).from(storiesTable).where(eq(storiesTable.id, storyId)).limit(1);
-  if (!storyExists.length) {
-    res.status(404).json({ error: "Story not found" });
-    return;
-  }
 
   await db.insert(storyItemsTable).values({
     id,
@@ -44,6 +44,11 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
 router.delete("/stories/:storyId/items/:itemId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const itemId = req.params.itemId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
   await db.delete(storyItemsTable).where(
     and(eq(storyItemsTable.id, itemId), eq(storyItemsTable.storyId, storyId))
   );

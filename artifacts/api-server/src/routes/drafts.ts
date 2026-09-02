@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { CreateDraftBody, UpdateDraftBody } from "@workspace/api-zod";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -12,6 +13,11 @@ function generateId(): string {
 
 router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const drafts = await db.select().from(draftsTable)
     .where(eq(draftsTable.storyId, storyId))
     .orderBy(desc(draftsTable.updatedAt));
@@ -26,8 +32,8 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
     return;
   }
 
-  const storyExists = await db.select({ id: storiesTable.id }).from(storiesTable).where(eq(storiesTable.id, storyId)).limit(1);
-  if (!storyExists.length) {
+  const storyExists = await getOwnedStory(req.user!.id, storyId);
+  if (!storyExists) {
     res.status(404).json({ error: "Story not found" });
     return;
   }
@@ -53,6 +59,11 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const draft = await db.select().from(draftsTable)
     .where(and(eq(draftsTable.id, draftId), eq(draftsTable.storyId, storyId)))
     .limit(1);
@@ -66,6 +77,11 @@ router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const parsed = UpdateDraftBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -92,6 +108,11 @@ router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 router.delete("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
+  const owned = await getOwnedStory(req.user!.id, storyId);
+  if (!owned) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   await db.delete(draftsTable)
     .where(and(eq(draftsTable.id, draftId), eq(draftsTable.storyId, storyId)));
   res.status(204).end();

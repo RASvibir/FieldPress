@@ -6,10 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Mic, Camera, Plus, Upload, Trash2, Radio, Archive, Download, BookOpen } from "lucide-react";
+import { FileText, Mic, Camera, Plus, Upload, Trash2, Radio, Archive, Download, BookOpen, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { signOut } from "@/lib/session";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -143,6 +144,17 @@ export default function DashboardPage() {
             >
               <BookOpen className="w-4 h-4 mr-2" />
               GUIDE
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={async () => {
+                await signOut();
+                navigate("/login");
+              }}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              SIGN OUT
             </Button>
             <Button variant="ghost" className="text-muted-foreground" onClick={() => navigate("/")}>
               <Download className="w-4 h-4 mr-2" />

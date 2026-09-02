@@ -1,10 +1,11 @@
 import express, { Router, Request, Response } from 'express';
 import { searchArchivalMedia, synthesizePhotoPrompt } from '../lib/images';
+import { requireAuth } from '../lib/auth';
 
 export const imagesRouter = Router();
 
-// Ensure body parser runs at the router level regardless of app mount order
 imagesRouter.use(express.json());
+imagesRouter.use(requireAuth);
 
 // Validate UUID vs preview slug
 const isUuid = (id: string) =>
@@ -42,7 +43,7 @@ imagesRouter.post('/stories/:id/images/generate-prompt', async (req: Request, re
 // POST /api/stories/:id/media-assets
 imagesRouter.post('/stories/:id/media-assets', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     if (!isUuid(id)) {
       return res.json({ success: true, mode: 'preview', asset: req.body || {} });
     }

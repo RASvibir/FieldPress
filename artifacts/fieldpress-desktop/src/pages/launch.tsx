@@ -55,9 +55,9 @@ export default function LaunchPage() {
           <div className="space-y-3">
             <Button
               className="w-full min-h-14 text-xl tracking-[0.2em]"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/login")}
             >
-              OPEN APP
+            SIGN IN
               <ArrowRight className="w-5 h-5" />
             </Button>
 

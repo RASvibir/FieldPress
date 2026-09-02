@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const storiesTable = pgTable("stories", {
   id: text("id").primaryKey(),
+  ownerId: text("owner_id"),
   title: varchar("title", { length: 255 }).notNull(),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

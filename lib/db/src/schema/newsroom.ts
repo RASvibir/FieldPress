@@ -45,13 +45,19 @@ export const mediaKindEnum = pgEnum("media_kind", [
   "transcript_sidecar",
 ]);
 
-export const usersTable = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: varchar("email", { length: 320 }).notNull(),
-  displayName: varchar("display_name", { length: 200 }).notNull(),
-  status: varchar("status", { length: 40 }).notNull().default("active"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const usersTable = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: varchar("email", { length: 320 }).notNull(),
+    displayName: varchar("display_name", { length: 200 }).notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("active"),
+    passwordHash: text("password_hash").notNull().default(""),
+    resetWordHash: text("reset_word_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_email_idx").on(table.email)],
+);
 
 export const organizationsTable = pgTable("organizations", {
   id: text("id").primaryKey(),
@@ -210,5 +216,26 @@ export const mediaJobsTable = pgTable("media_jobs", {
   name: varchar("name", { length: 80 }).notNull(),
   status: varchar("status", { length: 32 }).notNull().default("queued"),
   attempt: integer("attempt").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sessionsTable = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const passwordResetTokensTable = pgTable("password_reset_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
