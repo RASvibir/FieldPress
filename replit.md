@@ -98,26 +98,9 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`, `Create
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useListStories`, `useGetStory`, `useCreateStory`, `useImportStory`, `useGetDashboard`, `useCreateDraft`, `useUpdateDraft`).
 
-### `artifacts/fieldpress` (`@workspace/fieldpress`)
+### `artifacts/fieldpress`
 
-Expo SDK 54 + React Native mobile app — FieldPress: Pocket Newsroom & Podcast Studio for indie journalists. Mobile-only, no backend required.
-
-- **Screens (file-based routing via expo-router):**
-  - `app/index.tsx` — Story list + FAB to create stories
-  - `app/story/[storyId].tsx` — Story detail: text notes + audio recording/playback
-  - `app/producer/[storyId].tsx` — AI Producer (mocked draft generator)
-  - `app/travel.tsx` — Travel Assistant: GPS location, reverse geocode, timezone, dispatch notes, share location
-- **State:** React Context (`state/store.ts`) + AsyncStorage persistence (`utils/storage.ts`)
-- **Services:** `services/audio.ts` (expo-av recording/playback), `services/aiMock.ts` (mock AI draft)
-- **Types:** `types/index.ts` — `Story` (with `status: 'active' | 'archived'`), `StoryItem` (text|audio), `AiDraft`, `StoryStatus`
-- **Features:**
-  - Archive/restore stories via long-press on story cards (with confirmation dialog)
-  - Filter toggle between Active and Archived views on story list
-  - Export story dispatch via native Share sheet (text notes + audio manifest)
-  - Storage migration handles legacy stories without `status` field (defaults to 'active')
-- **Theme:** CRT terminal / cyberpunk — VT323 font, neon green (#39FF14), yellow (#FFFF00), red (#FF3131) on black
-- **Key packages:** expo-av (deprecated, migrate to expo-audio for SDK 55), expo-location, expo-image-picker (installed/unused), expo-haptics, expo-linear-gradient, expo-blur, expo-clipboard
-- **Do NOT use:** uuid (use Date.now().toString(36) + Math.random()), emojis (use @expo/vector-icons)
+Retired. Not a workspace package. The product client is `artifacts/fieldpress-desktop`.
 
 ### `artifacts/fieldpress-desktop` (`@workspace/fieldpress-desktop`)
 

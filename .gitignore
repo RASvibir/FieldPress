@@ -61,3 +61,7 @@ api-server.stderr.log
 .fieldpress-backups/
 
 lib/fieldpress-pro/node_modules/
+
+# Retired Expo tree leftovers (node_modules, dist, local experiments)
+artifacts/fieldpress/**
+!artifacts/fieldpress/README.md
