@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable, storyItemsTable } from "@workspace/db";
 import { generateProducerDraft } from "../lib/gemini";
 import { logger } from "../lib/logger";
-import { getOwnedStory } from "../lib/auth";
+import { getAccessibleStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -96,7 +96,7 @@ router.post("/produce", async (req: Request, res: Response) => {
 
 router.post("/stories/:storyId/produce", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const story = await getOwnedStory(req.user!.id, storyId);
+  const story = await getAccessibleStory(req.user?.id, storyId);
   if (!story) {
     res.status(404).json({ error: "Story not found" });
     return;
@@ -120,10 +120,23 @@ router.post("/stories/:storyId/produce", async (req: Request, res: Response) => 
       .update(storiesTable)
       .set({ updatedAt: new Date() })
       .where(eq(storiesTable.id, storyId));
-    res.json({ ...result, drafts });
+    res.json({ ...result, drafts, usedFallback: false });
   } catch (err) {
     logger.error({ err }, "story produce failed");
-    res.status(502).json({ error: err instanceof Error ? err.message : "Producer failed" });
+    const notesText = notes.join("\n") || "No field notes yet.";
+    const drafts = await upsertDrafts(storyId, [
+      { mode: "article", title: `${story.title} — Field Report`, content: `# ${story.title}\n\n${notesText}` },
+      { mode: "social", title: `${story.title} — Social`, content: notesText },
+      { mode: "podcast", title: `${story.title} — Dispatch`, content: notesText },
+    ]);
+    res.json({
+      summary: notes[0] || story.title,
+      outline: ["What we know", "What still needs checking"],
+      caption: story.title,
+      drafts,
+      usedFallback: true,
+      error: "Live AI was unavailable, so FieldPress drafted from your notes instead.",
+    });
   }
 });
 

@@ -6,11 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Mic, Camera, Plus, Upload, Trash2, Radio, Archive, Download, BookOpen, LogOut } from "lucide-react";
-import { useState } from "react";
+import { FileText, Mic, Camera, Plus, Upload, Trash2, Radio } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { signOut } from "@/lib/session";
+import { fetchMe } from "@/lib/session";
+import { DistributeDialog } from "@/components/distribute-dialog";
+import { PageShell } from "@/components/page-shell";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -64,7 +66,7 @@ function ImportDialog() {
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
           placeholder={"DISPATCH: Story Title\n- First note from the field\n- Second observation\n- Source quote here"}
-          className="min-h-[200px] bg-black border-neon/20 text-foreground font-mono"
+          className="min-h-[200px] bg-card border-neon/20 text-foreground font-mono"
         />
         <DialogFooter>
           <DialogClose asChild>
@@ -83,12 +85,17 @@ export default function DashboardPage() {
   const [, navigate] = useLocation();
   const [newTitle, setNewTitle] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: dashboard, isLoading: dashLoading } = useGetDashboard();
+  const { data: dashboard } = useGetDashboard();
   const { data: stories, isLoading: storiesLoading } = useListStories({ status: "active" });
   const createMutation = useCreateStory();
   const deleteMutation = useDeleteStory();
+
+  useEffect(() => {
+    fetchMe().then((user) => setSignedIn(Boolean(user)));
+  }, []);
 
   function handleCreate() {
     if (!newTitle.trim()) return;
@@ -128,38 +135,16 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <PageShell>
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-end justify-between gap-4">
           <div>
             <h1 className="text-4xl text-neon text-glow-pulse tracking-wider">FIELDPRESS</h1>
-            <p className="text-muted-foreground text-sm mt-1">DESKTOP EDITOR // POCKET NEWSROOM</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              {signedIn ? "Signed-in desk" : "Public desk · sign in from Settings to capture photos"}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <Button
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={() => navigate("/guide")}
-              title="User guide"
-            >
-              <BookOpen className="w-4 h-4 mr-2" />
-              GUIDE
-            </Button>
-            <Button
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={async () => {
-                await signOut();
-                navigate("/login");
-              }}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              SIGN OUT
-            </Button>
-            <Button variant="ghost" className="text-muted-foreground" onClick={() => navigate("/")}>
-              <Download className="w-4 h-4 mr-2" />
-              GET APP
-            </Button>
+          <div className="flex flex-wrap gap-2 justify-end">
             <ImportDialog />
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
@@ -176,7 +161,7 @@ export default function DashboardPage() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="Story headline..."
-                  className="bg-black border-neon/20"
+                  className="bg-card border-neon/20"
                   onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 />
                 <DialogFooter>
@@ -191,30 +176,17 @@ export default function DashboardPage() {
         </div>
 
         {dashboard && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {[
-              { label: "STORIES", value: dashboard.totalStories, color: "text-neon" },
-              { label: "ACTIVE", value: dashboard.activeStories, color: "text-neon" },
-              { label: "ARCHIVED", value: dashboard.archivedStories, color: "text-muted-foreground" },
-              { label: "ITEMS", value: dashboard.totalItems, color: "text-neon-yellow" },
-              { label: "DRAFTS", value: dashboard.totalDrafts, color: "text-neon-red" },
-            ].map((stat) => (
-              <Card key={stat.label} className="border-neon/20 bg-card">
-                <CardContent className="p-4 text-center">
-                  <div className={`text-3xl font-bold ${stat.color} text-glow`}>{stat.value}</div>
-                  <div className="text-xs text-muted-foreground tracking-widest mt-1">{stat.label}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <p className="text-xs text-muted-foreground tracking-widest">
+            {dashboard.activeStories} active · {dashboard.totalItems} items · {dashboard.totalDrafts} drafts
+          </p>
         )}
 
-        <Separator className="bg-neon/10" />
+        <Separator className="bg-border" />
 
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Radio className="w-4 h-4 text-neon-red" />
-            <h2 className="text-xl text-neon tracking-wider">ACTIVE STORIES</h2>
+            <h2 className="text-xl text-neon tracking-wider">{signedIn ? "Feed" : "Stories"}</h2>
           </div>
 
           {storiesLoading ? (
@@ -222,11 +194,11 @@ export default function DashboardPage() {
           ) : !stories?.length ? (
             <Card className="border-neon/10 bg-card">
               <CardContent className="p-8 text-center text-muted-foreground">
-                NO ACTIVE STORIES. CREATE ONE OR IMPORT FROM MOBILE.
+                NO STORIES YET. START ONE OR IMPORT NOTES.
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={signedIn ? "max-w-xl mx-auto space-y-4" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
               {stories.map((story) => (
                 <Card
                   key={story.id}
@@ -258,17 +230,29 @@ export default function DashboardPage() {
                     </div>
                     {story.items.length > 0 && (
                       <div className="space-y-1">
-                        {story.items.slice(0, 3).map((item) => (
+                        {story.items.slice(0, signedIn ? 2 : 3).map((item) => (
                           <div key={item.id} className="flex items-start gap-2 text-sm">
                             {itemIcon(item.type)}
                             <span className="text-muted-foreground truncate text-xs">{item.content}</span>
                           </div>
                         ))}
-                        {story.items.length > 3 && (
-                          <div className="text-xs text-muted-foreground pl-5">
-                            +{story.items.length - 3} more...
-                          </div>
-                        )}
+                      </div>
+                    )}
+                    {signedIn && (
+                      <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                        <DistributeDialog
+                          compact
+                          triggerLabel="SHARE"
+                          payload={{
+                            storyTitle: story.title,
+                            mode: "package",
+                            title: story.title,
+                            content: story.items
+                              .filter((item) => item.type === "note")
+                              .map((item) => item.content)
+                              .join("\n") || story.title,
+                          }}
+                        />
                       </div>
                     )}
                   </CardContent>
@@ -278,6 +262,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -54,6 +54,8 @@ export const usersTable = pgTable(
     status: varchar("status", { length: 40 }).notNull().default("active"),
     passwordHash: text("password_hash").notNull().default(""),
     resetWordHash: text("reset_word_hash"),
+    deskLinks: jsonb("desk_links").$type<Record<string, string>>().notNull().default({}),
+    ageBand: varchar("age_band", { length: 20 }).notNull().default("teen"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("users_email_idx").on(table.email)],

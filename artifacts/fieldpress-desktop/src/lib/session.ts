@@ -2,6 +2,8 @@ export type SessionUser = {
   id: string;
   email: string;
   displayName: string;
+  deskLinks?: Record<string, string>;
+  ageBand?: "kids" | "teen" | "adult" | string;
 };
 
 export async function fetchMe(): Promise<SessionUser | null> {

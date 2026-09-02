@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageShell } from "@/components/page-shell";
 
 export default function ResetPasswordPage() {
   const [, navigate] = useLocation();
@@ -42,8 +43,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-neon flex items-center justify-center p-5">
-      <form onSubmit={submit} className="w-full max-w-md space-y-5 border border-neon/25 bg-card p-6">
+    <PageShell center>
+      <form onSubmit={submit} className="w-full max-w-md space-y-5 border border-border bg-card p-6">
         <h1 className="text-2xl tracking-[0.14em] text-center">RESET PASSWORD</h1>
         {token ? (
           <p className="text-sm text-muted-foreground">Using the email reset link. Choose a new password (10+ characters).</p>
@@ -60,7 +61,7 @@ export default function ResetPasswordPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
-              className="bg-black border-neon/20"
+              className="bg-card border-neon/20"
             />
             <Input
               value={resetWord}
@@ -68,7 +69,7 @@ export default function ResetPasswordPage() {
               minLength={8}
               onChange={(e) => setResetWord(e.target.value)}
               placeholder="Desk word"
-              className="bg-black border-neon/20"
+              className="bg-card border-neon/20"
             />
           </>
         )}
@@ -79,7 +80,7 @@ export default function ResetPasswordPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="New password (10+ characters)"
-          className="bg-black border-neon/20"
+          className="bg-card border-neon/20"
         />
         {error && <p className="text-neon-red text-sm">{error}</p>}
         <Button type="submit" className="w-full" disabled={busy}>
@@ -89,6 +90,6 @@ export default function ResetPasswordPage() {
           BACK TO SIGN IN
         </Link>
       </form>
-    </div>
+    </PageShell>
   );
 }

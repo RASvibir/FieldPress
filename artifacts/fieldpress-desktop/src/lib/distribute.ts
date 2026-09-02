@@ -119,6 +119,7 @@ export const COMPOSE_TARGETS = [
   { id: "bluesky", label: "Bluesky", color: "text-cyan-300" },
   { id: "linkedin", label: "LinkedIn", color: "text-neon" },
   { id: "facebook", label: "Facebook", color: "text-neon-yellow" },
+  { id: "reddit", label: "Reddit", color: "text-neon-red" },
   { id: "instagram", label: "Instagram", color: "text-neon-red" },
   { id: "whatsapp", label: "WhatsApp", color: "text-neon" },
   { id: "email", label: "Email", color: "text-neon-yellow" },
@@ -130,6 +131,7 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
   const full = buildPlainText(payload);
   const short = firstShareChunk(full);
   const subject = payload.title.trim() || payload.storyTitle;
+  const pageUrl = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : "https://fieldpress.studio";
   switch (target) {
     case "x":
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}`;
@@ -140,7 +142,9 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
     case "linkedin":
       return `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(full.slice(0, 3000))}`;
     case "facebook":
-      return "https://www.facebook.com/";
+      return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}&quote=${encodeURIComponent(short)}`;
+    case "reddit":
+      return `https://www.reddit.com/submit?title=${encodeURIComponent(subject.slice(0, 300))}&text=${encodeURIComponent(full.slice(0, 40000))}`;
     case "instagram":
       return "https://www.instagram.com/";
     case "whatsapp":

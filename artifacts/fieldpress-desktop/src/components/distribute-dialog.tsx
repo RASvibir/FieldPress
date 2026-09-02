@@ -59,7 +59,10 @@ export function DistributeDialog({
     const url = composeUrl(target, payload);
     if (target === "facebook" || target === "instagram") {
       void copyText(buildPlainText(payload));
-      setStatus(`Caption copied — paste into ${target === "instagram" ? "Instagram" : "Facebook"}`);
+      setStatus(`Caption copied — paste into ${target === "instagram" ? "Instagram" : "Facebook"} if the share box is empty`);
+    }
+    if (target === "reddit") {
+      setStatus("Reddit opens a text post with your title and body. You still hit Post.");
     }
     window.open(url, "_blank", "noopener,noreferrer");
   }
@@ -80,9 +83,9 @@ export function DistributeDialog({
       </DialogTrigger>
       <DialogContent className="bg-terminal border-neon/30 max-w-lg" onClick={(event) => event.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle className="text-neon text-glow tracking-widest">DISTRIBUTE</DialogTitle>
+          <DialogTitle className="tracking-widest">DISTRIBUTE</DialogTitle>
           <DialogDescription>
-            Send this {payload?.mode === "package" ? "dispatch" : payload?.mode ?? "draft"} to social apps, email, or a drive folder.
+            Prefill or copy, then you post. Connected outlets live in Settings.
           </DialogDescription>
         </DialogHeader>
 

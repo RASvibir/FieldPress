@@ -177,7 +177,7 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen bg-background flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-neon/10 bg-card">
+      <div className="flex items-center justify-between px-4 py-2 pr-16 border-b border-border bg-card">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(`/story/${storyId}`)}>
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -192,7 +192,7 @@ export default function EditorPage() {
             {story?.title}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-14">
           <span className="text-[10px] text-muted-foreground">
             {saved ? "SAVED" : "UNSAVED"}
           </span>
