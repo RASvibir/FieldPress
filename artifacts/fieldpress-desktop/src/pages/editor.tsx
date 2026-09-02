@@ -19,10 +19,10 @@ import { loadTrendDesk } from "@/lib/trend-desk";
 
 const MODE_CONFIG = {
   article: {
-    label: "ARTICLE",
+    label: "PRESSIE",
     icon: Newspaper,
     color: "text-neon",
-    placeholder: "Write your publication-ready article here...\n\nUse the source material in the sidebar as reference. Structure your piece with a compelling lede, supporting evidence from your field notes, and a strong closing.\n\nTip: Copy quotes and observations from the source panel on the left.",
+    placeholder: "Write the Pressie here…\n\nUse the source material in the sidebar as reference. Lede, evidence from field notes, close.\n\nTip: Copy quotes and observations from the source panel on the left.",
     templateHint: "HEADLINE // BYLINE // DATELINE\n\nLEDE - Hook the reader\n\nBODY - Evidence, quotes, context\n\nNUT GRAF - Why this matters\n\nKICKER - Memorable close",
   },
   social: {

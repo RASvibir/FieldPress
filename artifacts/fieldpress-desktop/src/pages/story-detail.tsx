@@ -21,7 +21,7 @@ import { fetchMe } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
 
 const MODE_CONFIG = {
-  article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
+  article: { label: "PRESSIE", icon: Newspaper, color: "text-neon" },
   social: { label: "SOCIAL", icon: MessageSquare, color: "text-neon-yellow" },
   podcast: { label: "PODCAST", icon: Podcast, color: "text-neon-red" },
 } as const;
@@ -244,7 +244,7 @@ export default function StoryDetailPage() {
                 onClick={() => navigate(`/story/${storyId}/news`)}
               >
                 <Newspaper className="w-4 h-4 mr-1" />
-                NEWS DESK
+                PRESSIE DESK
               </Button>
               <Button
                 variant="outline"

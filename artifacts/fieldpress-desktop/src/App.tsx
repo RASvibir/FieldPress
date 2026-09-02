@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsMenu } from "@/components/settings-menu";
+import { PressyBubble } from "@/components/pressy-bubble";
 import DashboardPage from "@/pages/dashboard";
 import StoryDetailPage from "@/pages/story-detail";
 import EditorPage from "@/pages/editor";
@@ -28,12 +29,13 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LaunchPage} />
+      <Route path="/" component={DashboardPage} />
+      <Route path="/app" component={DashboardPage} />
+      <Route path="/launch" component={LaunchPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/guide" component={UserManualPage} />
       <Route path="/admin" component={AdminManualPage} />
-      <Route path="/app" component={DashboardPage} />
       <Route path="/story/:storyId/news" component={NewsDeskPage} />
       <Route path="/story/:storyId/podcast" component={PodcastDeskPage} />
       <Route path="/story/:storyId/editor/:draftId" component={EditorPage} />
@@ -54,6 +56,7 @@ function App() {
                 <SettingsMenu />
               </div>
               <Router />
+              <PressyBubble />
             </div>
           </WouterRouter>
           <Toaster />

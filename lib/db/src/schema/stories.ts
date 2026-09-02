@@ -10,6 +10,7 @@ export const storiesTable = pgTable("stories", {
   visibility: varchar("visibility", { length: 20 }).notNull().default("public"),
   nsfw: integer("nsfw").notNull().default(0),
   contentRating: varchar("content_rating", { length: 20 }).notNull().default("pg13"),
+  lane: varchar("lane", { length: 20 }).notNull().default("wall"),
   embargoUntil: timestamp("embargo_until", { withTimezone: true }),
   deskChecks: jsonb("desk_checks").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

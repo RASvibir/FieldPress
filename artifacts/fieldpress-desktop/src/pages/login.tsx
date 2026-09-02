@@ -68,8 +68,8 @@ export default function LoginPage() {
         setError(err);
         return;
       }
-      const next = new URLSearchParams(window.location.search).get("next") || "/app";
-      navigate(next.startsWith("/") ? next : "/app");
+      const next = new URLSearchParams(window.location.search).get("next") || "/";
+      navigate(next.startsWith("/") ? next : "/");
     } catch {
       setError("Network error");
     } finally {

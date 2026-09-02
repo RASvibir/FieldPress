@@ -26,7 +26,7 @@ type Props = {
 };
 
 const FORMATS = [
-  { id: "article_hero", label: "Article 16:9" },
+  { id: "article_hero", label: "Pressie 16:9" },
   { id: "social_feed", label: "Social 4:5" },
   { id: "podcast_square", label: "Podcast 1:1" },
 ] as const;
@@ -192,7 +192,7 @@ export function VisualDesk({
           </Button>
           <Button onClick={() => void renderImage()} disabled={busy === "render"}>
             <Wand2 className="w-4 h-4 mr-1" />
-            {busy === "render" ? "RENDERING…" : signedIn ? "RENDER STILL" : "SIGN IN TO RENDER"}
+            {busy === "render" ? "RENDERING…" : signedIn ? "RENDER PRESSY AI FLOW" : "SIGN IN TO RENDER"}
           </Button>
         </div>
         {prompt && (

@@ -3,7 +3,7 @@ import { useCreateDraft, useGetStory, useListDrafts, useUpdateDraft } from "@wor
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useLocation, useParams } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Save } from "lucide-react";
 import { DistributeDialog } from "@/components/distribute-dialog";
 import { PageShell } from "@/components/page-shell";
@@ -66,13 +66,13 @@ export default function NewsDeskPage() {
     setStatus(null);
     if (article) {
       updateDraft.mutate(
-        { storyId, draftId: article.id, data: { title: headline || story?.title || "Article", content } },
+        { storyId, draftId: article.id, data: { title: headline || story?.title || "Pressie", content } },
         { onSuccess: () => setStatus("Saved") },
       );
       return;
     }
     createDraft.mutate(
-      { storyId, data: { mode: "article", title: headline || story?.title || "Article", content } },
+      { storyId, data: { mode: "article", title: headline || story?.title || "Pressie", content } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}/drafts`] });
@@ -98,7 +98,7 @@ export default function NewsDeskPage() {
                 title: headline,
                 content,
               }}
-              triggerLabel="SHARE ARTICLE"
+              triggerLabel="SHARE PRESSIE"
             />
             <Button onClick={() => void save()} disabled={updateDraft.isPending || createDraft.isPending}>
               <Save className="w-4 h-4 mr-1" />
@@ -107,9 +107,9 @@ export default function NewsDeskPage() {
           </div>
         </div>
         <div>
-          <h1 className="text-3xl text-neon tracking-wider">News desk</h1>
+          <h1 className="text-3xl text-neon tracking-wider">Pressie desk</h1>
           <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            Lede, nut graf, voices, kicker. Share when the file is ready.
+            Write a Pressie: lede, nut graf, voices, kicker. Pressy is the bot if you need a prompt.
           </p>
         </div>
         <Input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline" className="bg-card border-neon/20 text-xl h-12" />

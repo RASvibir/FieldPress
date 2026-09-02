@@ -193,6 +193,9 @@ async function ensureAgeSchema(sql: Sql) {
     await sql`alter table users add column if not exists age_band text not null default 'teen'`;
     await sql`alter table users add column if not exists role text not null default 'user'`;
     await sql`alter table stories add column if not exists content_rating text not null default 'pg13'`;
+    await sql`alter table stories add column if not exists embargo_until timestamptz`;
+    await sql`alter table stories add column if not exists desk_checks jsonb not null default '{}'::jsonb`;
+    await sql`alter table stories add column if not exists lane text not null default 'wall'`;
     schemaReady = true;
   } catch {
     schemaReady = true;
@@ -209,6 +212,7 @@ type StoryRow = {
   contentRating?: string;
   embargoUntil?: string | null;
   deskChecks?: Record<string, unknown>;
+  lane?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -249,6 +253,7 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
       coalesce(content_rating, 'pg13') as "contentRating",
       embargo_until as "embargoUntil",
       coalesce(desk_checks, '{}'::jsonb) as "deskChecks",
+      coalesce(lane, 'wall') as lane,
       created_at as "createdAt", updated_at as "updatedAt"
     from stories
     where id = ${storyId}
@@ -461,6 +466,48 @@ async function geminiIdeas(apiKey: string, title: string, notes: string[]) {
   };
 }
 
+function pressyRatingLine(ageBand: string) {
+  if (ageBand === "kids") return "G / kids desk only. No violence, no sexual content, no nudity.";
+  if (ageBand === "teen") return "PG-13. Mild intensity only. No pornography. No nudity.";
+  return "Adult desk. No pornography. News, art, and documentary nudity is allowed.";
+}
+
+function localPressy(message: string, title: string) {
+  const subject = title || message.slice(0, 80) || "this assignment";
+  return `Pressy here. I can draft a lede, a photo prompt, and a what-still-needs-checking list for “${subject}.” Sign in on a desk with Gemini configured for a live pass. Do not invent quotes. Confirm names before you publish.`;
+}
+
+async function geminiPressyChat(
+  apiKey: string,
+  ageBand: string,
+  message: string,
+  history: Array<{ role: string; content: string }>,
+) {
+  const turns = history
+    .slice(-12)
+    .map((turn) => `${turn.role === "pressy" || turn.role === "model" ? "Pressy" : "Reporter"}: ${turn.content}`)
+    .join("\n");
+  const prompt = `You are Pressy, the FieldPress newsroom prompt tool. Talk like a copy editor sitting next to the reporter: short, useful, no fluff.
+${pressyRatingLine(ageBand)}
+Never invent facts, quotes, or sources. Offer headlines, ledes, nut grafs, photo prompts, questions to ask, and feed copy. If the user wants a finished Pressie (that is the article), outline it and mark what still needs reporting. You are Pressy the bot. The written piece is a Pressie.
+Prior chat:
+${turns || "(none)"}
+Reporter: ${message}
+Reply as Pressy only. Plain text.`;
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.55 },
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok) throw new Error(`Gemini ${response.status}`);
+  const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  return (payload.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "").trim();
+}
+
 async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string): Promise<string> {
   const ratingLine =
     ageBand === "kids"
@@ -655,6 +702,68 @@ export default {
       const ageBand = parseAgeBand(user?.ageBand) || "teen";
       const userId = user?.id ?? null;
 
+      if (parts[0] === "pressy" && parts.length === 1 && method === "POST") {
+        const body = (await req.json()) as { message?: string; history?: Array<{ role?: string; content?: string }> };
+        const message = (body.message || "").trim().slice(0, 4000);
+        if (!message) return json({ error: "Prompt Pressy with a question or headline." }, 400);
+        if (looksPorn(message, ...(body.history || []).map((t) => t.content || ""))) return json({ error: PORN_BLOCK }, 400);
+        if (!canSeeRating(contentRating(message), ageBand, false)) {
+          return json({ error: "That prompt is outside this desk’s rating." }, 403);
+        }
+        const history = (body.history || [])
+          .slice(-12)
+          .map((turn) => ({ role: String(turn.role || "user"), content: String(turn.content || "").slice(0, 4000) }))
+          .filter((turn) => turn.content);
+        try {
+          const reply = env.GEMINI_API_KEY
+            ? await geminiPressyChat(env.GEMINI_API_KEY, ageBand, message, history)
+            : localPressy(message, "");
+          if (!reply) return json({ error: "Pressy had nothing to say. Try again." }, 502);
+          if (looksPorn(reply)) return json({ error: PORN_BLOCK }, 400);
+          return json({ reply, name: "Pressy" });
+        } catch {
+          return json({ reply: localPressy(message, ""), name: "Pressy", usedFallback: true });
+        }
+      }
+
+      if (parts[0] === "pressy" && parts[1] === "flow" && method === "POST") {
+        const body = (await req.json()) as { title?: string; prompt?: string };
+        const title = (body.title || body.prompt || "").trim().slice(0, 255);
+        const extra = (body.prompt || "").trim().slice(0, 4000);
+        if (!title) return json({ error: "Give Pressy a headline to render a flow." }, 400);
+        if (looksPorn(title, extra)) return json({ error: PORN_BLOCK }, 400);
+        if (!canSeeRating(contentRating(`${title} ${extra}`), ageBand, false)) {
+          return json({ error: "That flow is outside this desk’s rating." }, 403);
+        }
+        const storyId = id();
+        await sql`
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'wall')
+        `;
+        if (extra) {
+          await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${extra})`;
+        }
+        const notes = extra ? [extra] : [];
+        let ideas = localIdeas(title, notes);
+        if (env.GEMINI_API_KEY) {
+          try {
+            ideas = await geminiIdeas(env.GEMINI_API_KEY, title, notes);
+          } catch {
+            ideas = localIdeas(title, notes);
+          }
+        }
+        const pack = [
+          "Pressy AI flow",
+          ideas.spiffs.map((s) => `• ${s.headline} — ${s.hook}`).join("\n"),
+          ideas.articleIdeas.map((s) => `Pressie: ${s}`).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n");
+        await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${pack.slice(0, 8000)})`;
+        const story = await storyWithItems(sql, userId, storyId, ageBand);
+        return json({ story, ideas, automates: false }, 201);
+      }
+
       if (parts[0] === "dashboard" && method === "GET") {
         const [totals] = (await sql`
           select
@@ -673,14 +782,14 @@ export default {
         const stories = status
           ? await sql`
               select id, title, status, owner_id as "ownerId", coalesce(visibility, 'public') as visibility, coalesce(nsfw, 0) as nsfw,
-                embargo_until as "embargoUntil", created_at as "createdAt", updated_at as "updatedAt"
+                embargo_until as "embargoUntil", coalesce(lane, 'wall') as lane, created_at as "createdAt", updated_at as "updatedAt"
               from stories
               where (coalesce(visibility, 'public') <> 'private' or owner_id = ${userId}) and status = ${status}
               order by updated_at desc
             `
           : await sql`
               select id, title, status, owner_id as "ownerId", coalesce(visibility, 'public') as visibility, coalesce(nsfw, 0) as nsfw,
-                embargo_until as "embargoUntil", created_at as "createdAt", updated_at as "updatedAt"
+                embargo_until as "embargoUntil", coalesce(lane, 'wall') as lane, created_at as "createdAt", updated_at as "updatedAt"
               from stories
               where coalesce(visibility, 'public') <> 'private' or owner_id = ${userId}
               order by updated_at desc
@@ -700,8 +809,8 @@ export default {
         const blob = [title, ...(body.items || []).map((i) => i.content)].join(" ");
         if (looksPorn(blob)) return json({ error: PORN_BLOCK }, 400);
         await sql`
-          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)})
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall')
         `;
         for (const item of body.items || []) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, ${item.type || "note"}, ${item.content || ""})`;
@@ -710,17 +819,21 @@ export default {
       }
 
       if (parts[0] === "stories" && parts.length === 1 && method === "POST") {
-        const body = (await req.json()) as { id?: string; title?: string; status?: string; private?: boolean };
+        const body = (await req.json()) as { id?: string; title?: string; status?: string; private?: boolean; lane?: string; note?: string };
         if (body.private && !userId) return json({ error: "Sign in required to keep a story private" }, 401);
         const storyId = body.id || id();
         const title = (body.title || "Untitled").slice(0, 255);
-        if (looksPorn(title)) return json({ error: PORN_BLOCK }, 400);
+        if (looksPorn(title, body.note || "")) return json({ error: PORN_BLOCK }, 400);
         const visibility = body.private ? "private" : "public";
-        const owner = body.private ? userId : userId;
+        const owner = userId;
+        const lane = body.lane === "feed" ? "feed" : "wall";
         await sql`
-          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating)
-          values (${storyId}, ${owner}, ${title}, ${body.status || "active"}, ${visibility}, 0, ${contentRating(title)})
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
+          values (${storyId}, ${owner}, ${title}, ${body.status || "active"}, ${visibility}, 0, ${contentRating(`${title} ${body.note || ""}`)}, ${lane})
         `;
+        if (body.note?.trim()) {
+          await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${body.note.trim().slice(0, 8000)})`;
+        }
         return json(await storyWithItems(sql, userId, storyId, ageBand), 201);
       }
 

@@ -8,7 +8,7 @@ export type DistributePayload = {
 };
 
 const MODE_HEADING: Record<DraftMode | "package", string> = {
-  article: "Article",
+  article: "Pressie",
   social: "Social",
   podcast: "Podcast",
   package: "Dispatch",
@@ -36,7 +36,7 @@ export function buildMarkdown(payload: DistributePayload) {
 
 export function filenameFor(payload: DistributePayload, ext: "md" | "txt") {
   const base = slugify(payload.title || payload.storyTitle);
-  const kind = payload.mode === "package" ? "dispatch" : payload.mode;
+  const kind = payload.mode === "package" ? "dispatch" : payload.mode === "article" ? "pressie" : payload.mode;
   return `${base}-${kind}.${ext}`;
 }
 

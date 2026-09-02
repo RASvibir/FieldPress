@@ -88,7 +88,7 @@ export function IdeaDesk({ storyId, onUseQuery }: Props) {
             </div>
           </div>
           {([
-            ["ARTICLE ANGLES", pack.articleIdeas],
+            ["PRESSIE ANGLES", pack.articleIdeas],
             ["SOCIAL ANGLES", pack.socialIdeas],
             ["PODCAST ANGLES", pack.podcastIdeas],
           ] as const).map(([label, items]) => (

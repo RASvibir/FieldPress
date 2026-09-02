@@ -24,13 +24,13 @@ export default function LaunchPage() {
     busy ? "INSTALLING…" : device === "ios" ? "ADD TO HOME SCREEN" : safariMac ? "ADD TO DOCK" : "INSTALL ON THIS DEVICE";
 
   useEffect(() => {
-    if (isStandaloneApp()) navigate("/app");
+    if (isStandaloneApp()) navigate("/");
   }, [navigate]);
 
   async function handleInstall() {
     const ok = await install();
     if (ok) {
-      navigate("/app");
+      navigate("/");
       return;
     }
     setShowHelp(true);
@@ -58,7 +58,7 @@ export default function LaunchPage() {
           <div className="space-y-3">
             <Button
               className="w-full min-h-14 text-xl tracking-[0.2em]"
-              onClick={() => navigate("/app")}
+              onClick={() => navigate("/")}
             >
             OPEN NEWSROOM
               <ArrowRight className="w-5 h-5" />
@@ -66,7 +66,7 @@ export default function LaunchPage() {
             <Button
               variant="outline"
               className="w-full min-h-12 text-lg tracking-[0.14em] border-neon/40"
-              onClick={() => navigate("/login?next=%2Fapp")}
+              onClick={() => navigate("/login?next=%2F")}
             >
             SIGN IN
             </Button>
