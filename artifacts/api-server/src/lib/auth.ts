@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db, sessionsTable, storiesTable, usersTable } from "@workspace/db";
 import { sha256 } from "./crypto";
 
@@ -68,7 +68,7 @@ export async function getOwnedStory(userId: string, storyId: string) {
   const rows = await db
     .select()
     .from(storiesTable)
-    .where(and(eq(storiesTable.id, storyId), eq(storiesTable.ownerId, userId)))
+    .where(and(eq(storiesTable.id, storyId), or(eq(storiesTable.ownerId, userId), isNull(storiesTable.ownerId))))
     .limit(1);
   return rows[0] ?? null;
 }

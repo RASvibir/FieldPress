@@ -1,13 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { storiesTable, storyItemsTable, draftsTable } from "@workspace/db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, or } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/dashboard", async (req: Request, res: Response) => {
   const ownerId = req.user!.id;
-  const owned = eq(storiesTable.ownerId, ownerId);
+  const owned = or(eq(storiesTable.ownerId, ownerId), isNull(storiesTable.ownerId));
   const [totalStories] = await db.select({ count: sql<number>`count(*)::int` }).from(storiesTable).where(owned);
   const [activeStories] = await db.select({ count: sql<number>`count(*)::int` }).from(storiesTable).where(and(owned, eq(storiesTable.status, "active")));
   const [archivedStories] = await db.select({ count: sql<number>`count(*)::int` }).from(storiesTable).where(and(owned, eq(storiesTable.status, "archived")));

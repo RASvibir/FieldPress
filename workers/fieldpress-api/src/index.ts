@@ -139,7 +139,7 @@ async function storyWithItems(sql: Sql, userId: string, storyId: string) {
   const stories = await sql`
     select id, title, status, created_at as "createdAt", updated_at as "updatedAt"
     from stories
-    where id = ${storyId} and owner_id = ${userId}
+    where id = ${storyId} and (owner_id = ${userId} or owner_id is null)
     limit 1
   `;
   const story = stories[0];
@@ -256,11 +256,11 @@ export default {
       if (parts[0] === "dashboard" && method === "GET") {
         const [totals] = (await sql`
           select
-            (select count(*)::int from stories where owner_id = ${user.id}) as "totalStories",
-            (select count(*)::int from stories where owner_id = ${user.id} and status = 'active') as "activeStories",
-            (select count(*)::int from stories where owner_id = ${user.id} and status = 'archived') as "archivedStories",
-            (select count(*)::int from story_items i join stories s on s.id = i.story_id where s.owner_id = ${user.id}) as "totalItems",
-            (select count(*)::int from drafts d join stories s on s.id = d.story_id where s.owner_id = ${user.id}) as "totalDrafts"
+            (select count(*)::int from stories where owner_id = ${user.id} or owner_id is null) as "totalStories",
+            (select count(*)::int from stories where (owner_id = ${user.id} or owner_id is null) and status = 'active') as "activeStories",
+            (select count(*)::int from stories where (owner_id = ${user.id} or owner_id is null) and status = 'archived') as "archivedStories",
+            (select count(*)::int from story_items i join stories s on s.id = i.story_id where s.owner_id = ${user.id} or s.owner_id is null) as "totalItems",
+            (select count(*)::int from drafts d join stories s on s.id = d.story_id where s.owner_id = ${user.id} or s.owner_id is null) as "totalDrafts"
         `) as Record<string, number>[];
         return json({ ...totals, recentStories: [] });
       }
@@ -269,8 +269,8 @@ export default {
         const url = new URL(req.url);
         const status = url.searchParams.get("status");
         const stories = status
-          ? await sql`select id, title, status, created_at as "createdAt", updated_at as "updatedAt" from stories where owner_id = ${user.id} and status = ${status} order by updated_at desc`
-          : await sql`select id, title, status, created_at as "createdAt", updated_at as "updatedAt" from stories where owner_id = ${user.id} order by updated_at desc`;
+          ? await sql`select id, title, status, created_at as "createdAt", updated_at as "updatedAt" from stories where (owner_id = ${user.id} or owner_id is null) and status = ${status} order by updated_at desc`
+          : await sql`select id, title, status, created_at as "createdAt", updated_at as "updatedAt" from stories where owner_id = ${user.id} or owner_id is null order by updated_at desc`;
         const result = [];
         for (const s of stories as { id: string }[]) {
           const items = await sql`
@@ -310,14 +310,14 @@ export default {
       }
 
       if (parts[0] === "stories" && parts[1] && parts.length === 2 && method === "DELETE") {
-        const owned = await sql`select id from stories where id = ${parts[1]} and owner_id = ${user.id} limit 1`;
+        const owned = await sql`select id from stories where id = ${parts[1]} and (owner_id = ${user.id} or owner_id is null) limit 1`;
         if (!owned.length) return json({ error: "Not found" }, 404);
         await sql`delete from stories where id = ${parts[1]}`;
         return empty();
       }
 
       if (parts[0] === "stories" && parts[2] === "items" && method === "POST") {
-        const owned = await sql`select id from stories where id = ${parts[1]} and owner_id = ${user.id} limit 1`;
+        const owned = await sql`select id from stories where id = ${parts[1]} and (owner_id = ${user.id} or owner_id is null) limit 1`;
         if (!owned.length) return json({ error: "Story not found" }, 404);
         const body = (await req.json()) as { id?: string; type?: string; content?: string };
         const itemId = body.id || id();
@@ -328,21 +328,21 @@ export default {
       }
 
       if (parts[0] === "stories" && parts[2] === "items" && method === "DELETE") {
-        const owned = await sql`select id from stories where id = ${parts[1]} and owner_id = ${user.id} limit 1`;
+        const owned = await sql`select id from stories where id = ${parts[1]} and (owner_id = ${user.id} or owner_id is null) limit 1`;
         if (!owned.length) return json({ error: "Story not found" }, 404);
         await sql`delete from story_items where id = ${parts[3]} and story_id = ${parts[1]}`;
         return empty();
       }
 
       if (parts[0] === "stories" && parts[2] === "drafts" && parts.length === 3 && method === "GET") {
-        const owned = await sql`select id from stories where id = ${parts[1]} and owner_id = ${user.id} limit 1`;
+        const owned = await sql`select id from stories where id = ${parts[1]} and (owner_id = ${user.id} or owner_id is null) limit 1`;
         if (!owned.length) return json({ error: "Not found" }, 404);
         const drafts = await sql`select * from drafts where story_id = ${parts[1]} order by updated_at desc`;
         return json(drafts);
       }
 
       if (parts[0] === "stories" && parts[2] === "drafts" && parts.length === 3 && method === "POST") {
-        const owned = await sql`select id from stories where id = ${parts[1]} and owner_id = ${user.id} limit 1`;
+        const owned = await sql`select id from stories where id = ${parts[1]} and (owner_id = ${user.id} or owner_id is null) limit 1`;
         if (!owned.length) return json({ error: "Story not found" }, 404);
         const body = (await req.json()) as { mode?: string; title?: string; content?: string };
         const draftId = id();

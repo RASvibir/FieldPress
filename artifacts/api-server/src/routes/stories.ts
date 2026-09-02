@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { storiesTable, storyItemsTable } from "@workspace/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -32,8 +32,8 @@ router.get("/stories", async (req: Request, res: Response) => {
   const statusFilter = parsed.data.status || undefined;
 
   const stories = statusFilter
-    ? await db.select().from(storiesTable).where(and(eq(storiesTable.ownerId, ownerId), eq(storiesTable.status, statusFilter))).orderBy(desc(storiesTable.updatedAt))
-    : await db.select().from(storiesTable).where(eq(storiesTable.ownerId, ownerId)).orderBy(desc(storiesTable.updatedAt));
+    ? await db.select().from(storiesTable).where(and(or(eq(storiesTable.ownerId, ownerId), isNull(storiesTable.ownerId)), eq(storiesTable.status, statusFilter))).orderBy(desc(storiesTable.updatedAt))
+    : await db.select().from(storiesTable).where(or(eq(storiesTable.ownerId, ownerId), isNull(storiesTable.ownerId))).orderBy(desc(storiesTable.updatedAt));
 
   const result = await Promise.all(
     stories.map(async (s) => {
