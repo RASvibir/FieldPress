@@ -321,7 +321,7 @@ function extractGeminiText(payload: unknown): string {
 async function geminiGenerateText(
   apiKey: string,
   prompt: string,
-  opts: { json?: boolean; maxOutputTokens?: number; temperature?: number; preferredModel?: string } = {},
+  opts: { json?: boolean; maxOutputTokens?: number; temperature?: number; preferredModel?: string; thinkingBudget?: number } = {},
 ): Promise<string> {
   const key = apiKey.trim();
   if (!key) throw new Error("GEMINI_API_KEY is empty");
@@ -333,6 +333,9 @@ async function geminiGenerateText(
       maxOutputTokens: opts.maxOutputTokens || 2048,
       temperature: opts.temperature ?? 0.5,
       ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      ...(opts.thinkingBudget === 0 || opts.thinkingBudget
+        ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget ?? 0 } }
+        : {}),
     },
   };
   let last = "Gemini did not answer";
@@ -401,7 +404,7 @@ async function ollamaGenerate(host: string, model: string, prompt: string, json:
       prompt,
       stream: false,
       ...(json ? { format: "json" } : {}),
-      options: { temperature: 0.4, num_predict: json ? 700 : 260, num_ctx: 2048 },
+      options: { temperature: 0.4, num_predict: json ? 1400 : 900, num_ctx: 4096 },
     }),
   });
   const raw = await response.text();
@@ -428,14 +431,15 @@ async function deskText(
   }
   if (env.GEMINI_API_KEY) {
     const polish = draft
-      ? `You are Pressy, FieldPress desk bot. Improve this draft. Do not invent facts. Keep it short.\nDRAFT:\n${draft.slice(0, 2200)}\n\nASK:\n${prompt.slice(0, 1800)}`
+      ? `You are Pressy, FieldPress desk bot. Finish and improve this draft. Complete every sentence. Do not invent facts. Never mention Adult desk, teen desk, kids desk, age bands, or ratings to the reporter — just say the desk.\nDRAFT:\n${draft.slice(0, 3500)}\n\nASK:\n${prompt.slice(0, 2500)}`
       : prompt;
     try {
       const text = await geminiGenerateText(env.GEMINI_API_KEY, polish, {
         json: opts.json,
-        maxOutputTokens: opts.maxGeminiTokens || (draft ? 512 : 900),
-        temperature: 0.4,
+        maxOutputTokens: opts.maxGeminiTokens || 2048,
+        temperature: 0.45,
         preferredModel: env.GEMINI_MODEL,
+        thinkingBudget: 0,
       });
       return { text, desk: draft ? "ollama+gemini" : "gemini" };
     } catch (err) {
@@ -603,9 +607,9 @@ async function geminiIdeas(apiKey: string, title: string, notes: string[], prefe
 }
 
 function pressyRatingLine(ageBand: string) {
-  if (ageBand === "kids") return "G / kids desk only. No violence, no sexual content, no nudity.";
-  if (ageBand === "teen") return "PG-13. Mild intensity only. No pornography. No nudity.";
-  return "Adult desk. No pornography. News, art, and documentary nudity is allowed.";
+  if (ageBand === "kids") return "Internal only: keep copy G. No violence, no sexual content, no nudity. Never tell the reporter this is a kids desk.";
+  if (ageBand === "teen") return "Internal only: keep copy PG-13. No pornography. Never tell the reporter this is a teen desk.";
+  return "Internal only: no pornography. Never say Adult desk, age band, or rating labels. Just work the desk.";
 }
 
 function localPressy(message: string, title: string) {
@@ -615,17 +619,20 @@ function localPressy(message: string, title: string) {
 
 async function pressyChat(env: Env, ageBand: string, message: string, history: Array<{ role: string; content: string }>, req: Request) {
   const turns = history
-    .slice(-6)
+    .slice(-10)
     .map((turn) => `${turn.role === "pressy" || turn.role === "model" ? "Pressy" : "Reporter"}: ${turn.content}`)
     .join("\n");
-  const prompt = `You are Pressy, the FieldPress newsroom bot. Short. Useful. No fluff.
+  const prompt = `You are Pressy, the FieldPress assignment editor in the room. Sound like a sharp desk: complete sentences, useful next steps, no marketing.
 ${pressyRatingLine(ageBand)}
-Never invent facts or quotes. Help with headlines, ledes, nut grafs, photo prompts, and questions to ask. A Pressie is the written piece; you are the bot.
+Never invent facts, quotes, or names. Never mention Adult desk, teen desk, kids desk, age bands, or ratings. Say "the desk" if you need a place.
+A Pressie is the written piece. You are the bot.
+If they greet you, greet back in one beat, then offer a concrete next move (lede, headline, nut graf, photo prompt, or what still needs checking).
+If they ask for copy, write it fully. Finish every sentence. Do not stop mid-thought.
 Prior chat:
 ${turns || "(none)"}
 Reporter: ${message}
-Reply as Pressy only. Plain text. Under 160 words.`;
-  return deskText(env, prompt, { maxGeminiTokens: 420, req });
+Reply as Pressy only. Plain text.`;
+  return deskText(env, prompt, { maxGeminiTokens: 2048, req });
 }
 
 async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string): Promise<string> {

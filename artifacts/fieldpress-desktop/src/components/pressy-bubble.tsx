@@ -53,7 +53,7 @@ export function PressyBubble() {
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-[9990] flex flex-col items-end gap-3">
       {open && (
-        <div className="pointer-events-auto w-[min(92vw,22rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
+        <div className="pointer-events-auto w-[min(94vw,28rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
           <div className="flex items-center justify-between border-b border-neon/20 px-3 py-2">
             <div>
               <p className="text-sm tracking-widest text-neon">PRESSY</p>
@@ -63,14 +63,14 @@ export function PressyBubble() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div ref={scroller} className="max-h-72 space-y-2 overflow-y-auto p-3">
+          <div ref={scroller} className="max-h-[min(28rem,55vh)] space-y-2 overflow-y-auto p-3">
             {turns.map((turn, i) => (
               <div
                 key={`${turn.role}-${i}`}
                 className={
                   turn.role === "user"
-                    ? "ml-8 rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                    : "mr-6 rounded-lg border border-neon/25 bg-card/80 px-3 py-2 text-sm text-foreground/90"
+                    ? "ml-8 rounded-lg border border-border bg-card px-3 py-2 text-sm whitespace-pre-wrap break-words"
+                    : "mr-4 rounded-lg border border-neon/25 bg-card/80 px-3 py-2 text-sm text-foreground/90 whitespace-pre-wrap break-words"
                 }
               >
                 {turn.content}
