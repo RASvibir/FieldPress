@@ -55,3 +55,8 @@ Thumbs.db
 .neon
 .vercel
 *.log
+
+api-server.stdout.log
+api-server.stderr.log
+
+lib/fieldpress-pro/node_modules/
