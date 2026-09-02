@@ -1,50 +1,65 @@
 # FieldPress
 
-Pocket newsroom for indie journalists. Capture in the field, then produce article, social, and podcast drafts with Gemini.
+Offline-aware field reporting and audio production for independent journalists. The product is a **responsive web app** at **https://fieldpress.studio**, with an optional Tauri desktop companion. Expo and React Native are not part of this stack.
 
 ## How to open it
 
-Go to **https://fieldpress-dusky.vercel.app**
-
-1. Tap **OPEN APP** to use it now
-2. Tap **INSTALL** / **DOWNLOAD TO PHONE** to put it on your home screen
-3. Or **COPY LINK** / scan the QR to open it on another device
-
-Locally: `pnpm start` then http://localhost:3000
+- Production: **https://fieldpress.studio**
+- Local: `pnpm start` then http://localhost:3000
 
 | What | Where |
 | --- | --- |
-| Newsroom editor | http://localhost:3000 |
+| Newsroom | http://localhost:3000 |
 | API health | http://localhost:3000/api/healthz |
 
-Click **NEW STORY**, add notes, then **AI PRODUCE**.
-
-### Field app (phone)
-
-```bash
-pnpm dev:mobile
-```
-
-Scan the QR code with Expo Go. Set `EXPO_PUBLIC_API_URL` in `.env` to your machine’s LAN IP (not `localhost`) if the phone is a real device, e.g. `http://192.168.1.10:3000`.
+Create a story, add notes, then produce drafts. On a phone, use the browser (or install the PWA). Do not use Expo Go.
 
 ## First-time setup
 
-Needs Node 24+ and pnpm. Postgres is already Neon (see `.env`).
+Needs Node 24+ and pnpm.
 
 ```bash
+corepack enable
 pnpm install
+cp .env.example .env
+docker compose up -d
 pnpm db:push
+pnpm dev
+```
+
+Postgres can be Docker (`heliumdb` on localhost:5432) or Neon (`DATABASE_URL` in `.env`).
+
+## Quality gates
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm audit:secrets
 ```
 
 ## Ship
 
-**Web newsroom (Docker):**
+**Web + API (Vercel):** project already builds `@workspace/fieldpress-desktop` and `@workspace/api-server`. Point the production domain **fieldpress.studio** at that deployment (Cloudflare DNS → Vercel). Preview URLs remain on Vercel until you cut over.
+
+**Docker:**
 
 ```bash
 docker build -t fieldpress .
 docker run --rm -p 3000:3000 --env-file .env fieldpress
 ```
 
-Then open http://localhost:3000. Point a host (Fly, Railway, Render) at this image and set `DATABASE_URL` + `GEMINI_API_KEY`.
+Long FFmpeg / transcription jobs stay out of serverless request handlers; run them in workers when that pipeline lands.
 
-**iOS / Android:** in `artifacts/fieldpress` run `npx eas-cli login`, then `npx eas-cli init`, then `npx eas-cli build --platform ios` or `android`.
+## Layout (current → target)
+
+| Role | Today | Target |
+| --- | --- | --- |
+| Web client | `artifacts/fieldpress-desktop` | `apps/web` |
+| API | `artifacts/api-server` | `apps/api` |
+| Tauri | `src-tauri` | `apps/desktop/src-tauri` |
+| Domain types | `packages/domain` | same |
+| Database | `lib/db` | `packages/database` |
+
+Shared packages already live under `packages/`. The Expo tree in `artifacts/fieldpress` is **retired** and is not a workspace package.

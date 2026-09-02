@@ -11,6 +11,18 @@
     },
     {
       "path": "./lib/api-zod"
+    },
+    {
+      "path": "./packages/domain"
+    },
+    {
+      "path": "./packages/config"
+    },
+    {
+      "path": "./packages/audio"
+    },
+    {
+      "path": "./packages/archive"
     }
   ]
 }

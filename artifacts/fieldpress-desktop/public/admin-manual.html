@@ -105,7 +105,7 @@
     <p class="kicker">FieldPress · private operator manual · 25 Aug 2026 · keep with your keys</p>
     <h1>FieldPress operator manual</h1>
     <p>This is the desk book for the person who owns FieldPress. It is not public help copy. Do not link it from the launch screen, social posts, or README. Print it, save the HTML, or save the Markdown and store it next to <span class="mono">.env</span>.</p>
-    <p>Live newsroom: <span class="mono">https://fieldpress-dusky.vercel.app</span></p>
+    <p>Live newsroom: <span class="mono">https://fieldpress.studio</span></p>
 
     <h2 id="contents">Contents</h2>
     <ol class="toc">
@@ -158,7 +158,7 @@
       <li><span class="mono">pnpm dev</span> for API + Vite, or <span class="mono">pnpm start</span> for a single port.</li>
       <li>Confirm <span class="mono">GET /api/healthz</span> and <span class="mono">GET /api/dashboard</span>.</li>
       <li>Install the PWA from the launch page so the phone opens the newsroom without browser chrome.</li>
-      <li>On Vercel, set the same env names on the <span class="mono">fieldpress</span> project, then redeploy. Production alias: <span class="mono">https://fieldpress-dusky.vercel.app</span>.</li>
+      <li>On Vercel, set the same env names on the <span class="mono">fieldpress</span> project, then redeploy. Production alias: <span class="mono">https://fieldpress.studio</span>.</li>
     </ol>
     <div class="note">
       Deploy from this machine: <span class="mono">vercel deploy --prod --yes --scope tuffputer</span>. A deploy without the team scope can fail with “Not authorized.”
@@ -301,7 +301,7 @@ pnpm dev:mobile   # Expo field app</pre>
     <pre>docker build -t fieldpress .
 docker run --rm -p 3000:3000 --env-file .env fieldpress</pre>
     <pre>vercel deploy --prod --yes --scope tuffputer</pre>
-    <p>Health after ship: <span class="mono">curl -sS https://fieldpress-dusky.vercel.app/api/healthz</span>. Manual file: <span class="mono">https://fieldpress-dusky.vercel.app/admin-manual.html</span> must be the paper page, not the React shell.</p>
+    <p>Health after ship: <span class="mono">curl -sS https://fieldpress.studio/api/healthz</span>. Manual file: <span class="mono">https://fieldpress.studio/admin-manual.html</span> must be the paper page, not the React shell.</p>
     <div class="ok">If produce is slow, that is normal. If it fails with 429, the Gemini project is out of quota — drafts will not generate until billing/rate limits recover. Leave trend search off.</div>
 
     <h2 id="break">13. When it breaks</h2>

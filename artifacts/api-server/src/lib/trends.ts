@@ -17,7 +17,7 @@ export type PublicTrendBrief = {
 };
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; FieldPress/1.0; +https://fieldpress-dusky.vercel.app)";
+  "Mozilla/5.0 (compatible; FieldPress/1.0; +https://fieldpress.studio)";
 
 const STOPWORDS = new Set([
   "a",

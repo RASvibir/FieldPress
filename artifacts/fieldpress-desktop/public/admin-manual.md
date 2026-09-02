@@ -4,7 +4,7 @@ Private desk book for the owner. Not public help copy. Do not link this from the
 
 Public user guide (reporters): `/guide` and `/user-manual.html`  
 This operator book (unlisted): `/admin`, `/admin-manual.html`, `/admin-manual.md`  
-Live newsroom: https://fieldpress-dusky.vercel.app
+Live newsroom: https://fieldpress.studio
 
 ## Contents
 

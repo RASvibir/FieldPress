@@ -58,5 +58,6 @@ Thumbs.db
 
 api-server.stdout.log
 api-server.stderr.log
+.fieldpress-backups/
 
 lib/fieldpress-pro/node_modules/
