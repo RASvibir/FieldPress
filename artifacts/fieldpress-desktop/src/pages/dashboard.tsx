@@ -101,7 +101,7 @@ export default function DashboardPage() {
   const [feedOpen, setFeedOpen] = useState(false);
   const [feedTitle, setFeedTitle] = useState("");
   const [feedBody, setFeedBody] = useState("");
-  const [feedPulse, setFeedPulse] = useState<InkId>("spark");
+  const [feedPulse, setFeedPulse] = useState<InkId>("cool");
   const [signedIn, setSignedIn] = useState(false);
   const [tab, setTab] = useState<Tab>("feed");
   const [query, setQuery] = useState("");
@@ -267,7 +267,7 @@ export default function DashboardPage() {
     setFeedOpen(false);
     setFeedTitle("");
     setFeedBody("");
-    setFeedPulse("spark");
+    setFeedPulse("cool");
     setFeedPhoto(null);
     setTab("feed");
     refresh();
@@ -335,7 +335,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                 <span>{new Date(story.createdAt).toLocaleDateString()}</span>
                 {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
-                {inkLabel(story.pulse) ? <span>Filed in {inkLabel(story.pulse)}</span> : null}
+                {inkLabel(story.pulse) ? <span>{inkLabel(story.pulse)}</span> : null}
               </div>
               {layout === "wall" && photos[0] ? (
                 <img src={photos[0]} alt="" className="w-full h-32 object-cover rounded border border-border mb-2" />
@@ -357,7 +357,7 @@ export default function DashboardPage() {
               ) : null}
               {layout === "feed" && (
                 <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-                  <p className="text-[10px] tracking-widest text-muted-foreground">INK IT</p>
+                  <p className="text-[10px] tracking-widest text-muted-foreground">REACT</p>
                   <InkPad
                     value={story.myInk || story.pulse}
                     counts={story.inkCounts}
@@ -397,7 +397,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-4xl text-neon text-glow-pulse tracking-wider">FIELDPRESS</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              The Pressie feed is the desk. Ink a post instead of liking it. Headlines still live on the wall.
+              The Pressie feed is the desk. React Cool, Love, LOL, Whoa, Iconic, Same, or Mad. Headlines still live on the wall.
               {" · "}
               <button type="button" className="underline hover:text-neon" onClick={() => navigate("/launch")}>
                 Install
@@ -447,7 +447,7 @@ export default function DashboardPage() {
                 </DialogHeader>
                 <p className="text-sm text-muted-foreground">
                   {signedIn
-                    ? "A Pressie is a share post with copy and a photo. Ink is how people score the feeling — not stars, not likes."
+                    ? "A Pressie is a share post with copy and a photo. React how it hits — Cool, Love, LOL, Whoa, Iconic, Same, or Mad."
                     : "Sign in to post a Pressie. Anyone can read them."}
                 </p>
                 <Input
@@ -480,7 +480,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] tracking-widest text-muted-foreground">FILE IT IN</p>
+                  <p className="text-[10px] tracking-widest text-muted-foreground">HOW IT HITS</p>
                   <InkPad value={feedPulse} onPick={setFeedPulse} />
                   <p className="text-xs text-muted-foreground">
                     {INKS.find((ink) => ink.id === feedPulse)?.hint}

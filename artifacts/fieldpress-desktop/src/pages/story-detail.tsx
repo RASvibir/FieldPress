@@ -163,7 +163,7 @@ export default function StoryDetailPage() {
         {(story as { lane?: string }).lane === "feed" && (
           <div className="space-y-2">
             <p className="text-[10px] tracking-widest text-muted-foreground">
-              INK THIS PRESSIE{inkLabel((story as { pulse?: string }).pulse) ? ` · filed in ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
+              REACT{inkLabel((story as { pulse?: string }).pulse) ? ` · ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
             </p>
             <InkPad
               value={(story as { myInk?: string | null }).myInk || (story as { pulse?: string }).pulse}

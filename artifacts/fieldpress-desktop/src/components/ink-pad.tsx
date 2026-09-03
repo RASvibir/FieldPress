@@ -30,8 +30,8 @@ export function InkPad({
             title={ink.hint}
             onClick={() => onPick?.(ink.id)}
             className={cn(
-              "rounded-sm border px-2 py-0.5 text-[10px] tracking-wider uppercase transition-colors",
-              selected ? "border-neon text-neon bg-neon/10" : "border-border text-muted-foreground hover:border-neon/40 hover:text-neon",
+              "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              selected ? "border-neon text-neon bg-neon/10" : "border-border text-foreground/80 hover:border-neon/40 hover:text-neon",
               disabled && "opacity-60 cursor-default",
             )}
           >

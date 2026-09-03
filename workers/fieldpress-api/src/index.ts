@@ -350,12 +350,30 @@ type StoryRow = {
   updatedAt: string;
 };
 
-const INK_IDS = ["gall", "heat", "salt", "spark", "lead", "hush"] as const;
+const INK_IDS = ["cool", "love", "lol", "whoa", "iconic", "same", "mad"] as const;
 type InkId = (typeof INK_IDS)[number];
+
+const INK_ALIASES: Record<string, InkId> = {
+  gall: "mad",
+  heat: "iconic",
+  salt: "same",
+  spark: "cool",
+  lead: "same",
+  hush: "love",
+  awesome: "iconic",
+  funny: "lol",
+  fire: "iconic",
+  lit: "iconic",
+  like: "cool",
+  wow: "whoa",
+  wait: "whoa",
+  wild: "whoa",
+};
 
 function parseInk(value: unknown): InkId | null {
   const id = String(value || "").trim().toLowerCase();
-  return (INK_IDS as readonly string[]).includes(id) ? (id as InkId) : null;
+  if ((INK_IDS as readonly string[]).includes(id)) return id as InkId;
+  return INK_ALIASES[id] || null;
 }
 
 async function inkPack(sql: Sql, storyId: string, userId: string | null) {
@@ -364,12 +382,14 @@ async function inkPack(sql: Sql, storyId: string, userId: string | null) {
   `;
   const inkCounts: Record<string, number> = {};
   for (const row of rows as { ink: string; n: number }[]) {
-    inkCounts[row.ink] = Number(row.n) || 0;
+    const id = parseInk(row.ink);
+    if (!id) continue;
+    inkCounts[id] = (inkCounts[id] || 0) + (Number(row.n) || 0);
   }
   let myInk: string | null = null;
   if (userId) {
     const mine = await sql`select ink from pressie_stamps where story_id = ${storyId} and user_id = ${userId} limit 1`;
-    myInk = (mine[0] as { ink?: string } | undefined)?.ink || null;
+    myInk = parseInk((mine[0] as { ink?: string } | undefined)?.ink) || null;
   }
   return { inkCounts, myInk };
 }
@@ -411,7 +431,7 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
       embargo_until as "embargoUntil",
       coalesce(desk_checks, '{}'::jsonb) as "deskChecks",
       coalesce(lane, 'wall') as lane,
-      coalesce(pulse, 'spark') as pulse,
+      coalesce(pulse, 'cool') as pulse,
       created_at as "createdAt", updated_at as "updatedAt"
     from stories
     where id = ${storyId}
@@ -427,7 +447,7 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
     order by created_at desc
   `;
   const stamps = await inkPack(sql, storyId, userId);
-  return { ...story, items, ...stamps };
+  return { ...story, pulse: parseInk(story.pulse) || "cool", items, ...stamps };
 }
 
 function localProduce(title: string, notes: string[]) {
@@ -1221,7 +1241,7 @@ export default {
         const storyId = id();
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'feed', 'spark')
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'feed', 'cool')
         `;
         if (extra) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${extra})`;
@@ -1293,7 +1313,7 @@ export default {
         if (!textAllowed(ageBand, blob)) return json({ error: PORN_BLOCK }, 400);
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall', 'spark')
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall', 'cool')
         `;
         for (const item of body.items || []) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, ${item.type || "note"}, ${item.content || ""})`;
@@ -1323,7 +1343,7 @@ export default {
         const visibility = body.private ? "private" : "public";
         const owner = userId;
         const lane = body.lane === "feed" ? "feed" : "wall";
-        const pulse = parseInk(body.pulse) || "spark";
+        const pulse = parseInk(body.pulse) || "cool";
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
           values (${storyId}, ${owner}, ${title}, ${body.status || "active"}, ${visibility}, 0, ${contentRating(`${title} ${body.note || ""}`)}, ${lane}, ${pulse})
@@ -1540,12 +1560,12 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
       }
 
       if (parts[0] === "stories" && parts[2] === "ink" && method === "POST") {
-        if (!userId) return json({ error: "Sign in to ink a Pressie" }, 401);
+        if (!userId) return json({ error: "Sign in to react" }, 401);
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Story not found" }, 404);
         const body = (await req.json()) as { ink?: string };
         const ink = parseInk(body.ink);
-        if (!ink) return json({ error: "Pick an ink: gall, heat, salt, spark, lead, or hush." }, 400);
+        if (!ink) return json({ error: "Pick Cool, Love, LOL, Whoa, Iconic, Same, or Mad." }, 400);
         await sql`
           insert into pressie_stamps (story_id, user_id, ink)
           values (${parts[1]}, ${userId}, ${ink})
