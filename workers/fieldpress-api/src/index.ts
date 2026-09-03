@@ -157,12 +157,27 @@ async function createSession(sql: Sql, userId: string) {
 const PORN_RE =
   /\b(xxx|porn|porno|pornography|pornhub|xvideos|onlyfans|sex tape|explicit sex|csam|child\s*porn|child\s*sexual)\b/i;
 
-function looksPorn(...parts: string[]): boolean {
+const CSAM_RE = /\b(csam|child\s*porn|child\s*sexual|underage\s*sex)\b/i;
+
+function looksCsam(...parts: string[]): boolean {
+  return CSAM_RE.test(parts.join(" "));
+}
+
+function looksPornCopy(...parts: string[]): boolean {
   const text = parts
     .join(" ")
     .replace(/\bno pornography\b/gi, "")
     .replace(/\bno porn\b/gi, "");
   return PORN_RE.test(text);
+}
+
+function textAllowed(ageBand: string, ...parts: string[]): boolean {
+  if (looksCsam(...parts)) return false;
+  if (ageBand === "adult") return true;
+  if (looksPornCopy(...parts)) return false;
+  const rating = contentRating(parts.join(" "));
+  if (ageBand === "kids") return rating === "g";
+  return rating !== "mature";
 }
 
 function publicPrompt(text: string) {
@@ -174,6 +189,20 @@ function publicPrompt(text: string) {
     .trim();
 }
 
+function stillDirective(scene: string, ageBand: string, conservative = false) {
+  if (ageBand === "kids") {
+    return `${scene}
+
+G / Kids still only. No violence, no sexual content, no nudity, no frightening injury. Gentle documentary.`;
+  }
+  const extra = conservative
+    ? " Implication only: street, courtroom, newsroom, signage, or clothed figures. No skin-focused framing."
+    : "";
+  return `${scene}
+
+PG-13 still only. No sexual acts, no genitals, no pornographic image. People clothed. Adult topics may be in the assignment; do not depict sex.${extra}`;
+}
+
 const PORN_BLOCK = "Couldn't use that take.";
 
 const PG13_RE =
@@ -182,7 +211,7 @@ const MATURE_RE =
   /\b(graphic violence|gore|torture|sexual assault|erotic|nude|nudity|explicit)\b/i;
 
 function contentRating(text: string): "g" | "pg13" | "mature" {
-  if (MATURE_RE.test(text)) return "mature";
+  if (looksCsam(text) || looksPornCopy(text) || MATURE_RE.test(text)) return "mature";
   if (PG13_RE.test(text)) return "pg13";
   return "g";
 }
@@ -699,7 +728,7 @@ async function searchImages(query: string, env: Env): Promise<ImageHit[]> {
     searchGoogleCse(query, env).catch(() => []),
   ]);
   const wikiHits: ImageHit[] = wiki.map((hit) => ({ ...hit, source: "wikimedia" }));
-  const merged = [...google, ...openverse, ...wikiHits].filter((hit) => hit.url && !looksPorn(hit.title));
+  const merged = [...google, ...openverse, ...wikiHits].filter((hit) => hit.url && !looksCsam(hit.title));
   const seen = new Set<string>();
   return merged.filter((hit) => {
     if (seen.has(hit.url)) return false;
@@ -746,9 +775,9 @@ async function geminiIdeas(apiKey: string, title: string, notes: string[], prefe
 }
 
 function pressyRatingLine(ageBand: string) {
-  if (ageBand === "kids") return "Internal only: keep copy G. No violence, no sexual content, no nudity. Never tell the reporter this is a kids desk.";
-  if (ageBand === "teen") return "Internal only: keep copy PG-13. No pornography. Never tell the reporter this is a teen desk.";
-  return "Internal only: no pornography. Never say Adult desk, age band, or rating labels. Just work the desk.";
+  if (ageBand === "kids") return "Internal only: G copy. No violence, no sexual content. Never tell the reporter this is a kids desk.";
+  if (ageBand === "teen") return "Internal only: PG-13 copy. No pornographic text. Never tell the reporter this is a teen desk.";
+  return "Internal only: text can cover adult topics. Never produce pornographic images. Never say Adult desk or ratings. Just work the desk.";
 }
 
 function localPressy(message: string, title: string) {
@@ -777,19 +806,13 @@ Reply as Pressy only. Plain text.`;
 async function geminiRenderImage(
   apiKey: string,
   prompt: string,
-  ageBand: string,
-  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId } = {},
+  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; conservative?: boolean; ageBand?: string } = {},
 ): Promise<string> {
-  const ratingLine =
-    ageBand === "kids"
-      ? "Keep this suitable for a general family audience."
-      : ageBand === "teen"
-        ? "Keep this suitable for a general audience."
-        : "Keep the image coherent and high quality.";
   const take = opts.variation ? ` ${opts.variation}` : "";
   const ar = opts.aspectRatio || "16:9";
   const style = IMAGE_STYLES[opts.style || "hd"];
   const craft = `Commit fully to this look: ${style.label}. ${style.craft} Masterpiece execution, coherent anatomy and perspective, no watermarks, no captions. Aspect ${ar}.${take}`;
+  const scene = stillDirective(prompt, opts.ageBand === "kids" ? "kids" : "teen", Boolean(opts.conservative));
   const key = apiKey.trim();
   const models = [
     "gemini-2.5-flash-image",
@@ -808,7 +831,7 @@ async function geminiRenderImage(
             method: "POST",
             headers: { "content-type": "application/json", "x-goog-api-key": key },
             body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: `${craft} ${ratingLine} Scene: ${prompt}` }] }],
+              contents: [{ role: "user", parts: [{ text: `${craft} Scene: ${scene}` }] }],
               generationConfig: withAspect
                 ? { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: ar } }
                 : { responseModalities: ["TEXT", "IMAGE"] },
@@ -1056,9 +1079,8 @@ export default {
         const body = (await req.json()) as { message?: string; history?: Array<{ role?: string; content?: string }> };
         const message = (body.message || "").trim().slice(0, 4000);
         if (!message) return json({ error: "Prompt Pressy with a question or headline." }, 400);
-        if (looksPorn(message, ...(body.history || []).map((t) => t.content || ""))) return json({ error: PORN_BLOCK }, 400);
-        if (!canSeeRating(contentRating(message), ageBand, false)) {
-          return json({ error: "That prompt is outside this desk’s rating." }, 403);
+        if (!textAllowed(ageBand, message, ...(body.history || []).map((t) => t.content || ""))) {
+          return json({ error: PORN_BLOCK }, 400);
         }
         const history = (body.history || [])
           .slice(-12)
@@ -1067,7 +1089,7 @@ export default {
         try {
           const { text: reply, desk } = await pressyChat(env, ageBand, message, history, req);
           if (!reply) return json({ error: "Pressy had nothing to say. Try again." }, 502);
-          if (looksPorn(reply)) return json({ error: PORN_BLOCK }, 400);
+          if (!textAllowed(ageBand, reply)) return json({ error: PORN_BLOCK }, 400);
           return json({ reply, name: "Pressy", desk });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "Desk AI failed";
@@ -1080,10 +1102,7 @@ export default {
         const title = (body.title || body.prompt || "").trim().slice(0, 255);
         const extra = (body.prompt || "").trim().slice(0, 4000);
         if (!title) return json({ error: "Give Pressy a headline to render a flow." }, 400);
-        if (looksPorn(title, extra)) return json({ error: PORN_BLOCK }, 400);
-        if (!canSeeRating(contentRating(`${title} ${extra}`), ageBand, false)) {
-          return json({ error: "That flow is outside this desk’s rating." }, 403);
-        }
+        if (!textAllowed(ageBand, title, extra)) return json({ error: PORN_BLOCK }, 400);
         const storyId = id();
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
@@ -1156,7 +1175,7 @@ export default {
         const storyId = id();
         const title = (body.title || "Imported Story").slice(0, 255);
         const blob = [title, ...(body.items || []).map((i) => i.content)].join(" ");
-        if (looksPorn(blob)) return json({ error: PORN_BLOCK }, 400);
+        if (!textAllowed(ageBand, blob)) return json({ error: PORN_BLOCK }, 400);
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
           values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall')
@@ -1172,7 +1191,7 @@ export default {
         if (body.private && !userId) return json({ error: "Sign in required to keep a story private" }, 401);
         const storyId = body.id || id();
         const title = (body.title || "Untitled").slice(0, 255);
-        if (looksPorn(title, body.note || "")) return json({ error: PORN_BLOCK }, 400);
+        if (!textAllowed(ageBand, title, body.note || "")) return json({ error: PORN_BLOCK }, 400);
         const visibility = body.private ? "private" : "public";
         const owner = userId;
         const lane = body.lane === "feed" ? "feed" : "wall";
@@ -1213,10 +1232,7 @@ export default {
         const body = (await req.json()) as { query?: string };
         const query = (body.query || "").trim();
         if (!query) return json({ error: "Query is required" }, 400);
-        if (looksPorn(query)) return json({ error: PORN_BLOCK }, 400);
-        if (!canSeeRating(contentRating(query), ageBand, false)) {
-          return json({ error: "That search is outside this desk’s rating." }, 403);
-        }
+        if (!textAllowed(ageBand, query)) return json({ error: PORN_BLOCK }, 400);
         return json(await searchImages(query, env));
       }
 
@@ -1245,9 +1261,12 @@ export default {
         };
         const styleId = parseImageStyle(body.style);
         const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "", styleId);
-        let prompt = publicPrompt((body.prompt || built.prompt).slice(0, 2000));
-        if (looksPorn(prompt, body.headline || "", body.fieldNotes || "")) {
-          prompt = publicPrompt(built.prompt);
+        const prompt = publicPrompt((body.prompt || built.prompt).slice(0, 2000));
+        if (looksCsam(prompt, body.headline || "", body.fieldNotes || "")) {
+          return json({ error: "That take failed. Try MAKE again.", ...quota }, 400);
+        }
+        if (ageBand !== "adult" && !textAllowed(ageBand, prompt, body.headline || "", body.fieldNotes || "")) {
+          return json({ error: "That take failed. Try MAKE again.", ...quota }, 400);
         }
         const wanted = Math.min(3, Math.max(1, Math.floor(Number(body.count) || 3)));
         const n = Math.min(wanted, quota.remaining);
@@ -1257,10 +1276,12 @@ export default {
           "Take C: unexpected angle or light, same style, different moment.",
         ];
         const renderOne = (i: number, attempt: number) =>
-          geminiRenderImage(env.GEMINI_API_KEY!, prompt, ageBand, {
+          geminiRenderImage(env.GEMINI_API_KEY!, prompt, {
             variation: `${angles[i] || `Take ${i + 1}.`} Pass ${attempt + 1}.`,
             aspectRatio: built.aspectRatio,
             style: styleId,
+            conservative: attempt > 0,
+            ageBand,
           });
         const firstPass = await Promise.allSettled(Array.from({ length: n }, (_, i) => renderOne(i, 0)));
         const dataUrls: string[] = [];
@@ -1291,6 +1312,12 @@ export default {
 
       if (parts[0] === "stories" && parts[1] && parts[2] === "images" && parts[3] === "generate-prompt" && method === "POST") {
         const body = (await req.json()) as { format?: string; headline?: string; fieldNotes?: string; style?: string };
+        if (looksCsam(body.headline || "", body.fieldNotes || "")) {
+          return json({ error: "That take failed. Try MAKE again." }, 400);
+        }
+        if (ageBand !== "adult" && !textAllowed(ageBand, body.headline || "", body.fieldNotes || "")) {
+          return json({ error: "That take failed. Try MAKE again." }, 400);
+        }
         const styleId = parseImageStyle(body.style);
         const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "", styleId);
         const style = IMAGE_STYLES[styleId];
@@ -1342,7 +1369,10 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
         if (itemType === "photo" && (body.content || "").startsWith("data:") && !userId) {
           return json({ error: "Sign in required to capture photos from this device" }, 401);
         }
-        if (looksPorn(body.content || "")) return json({ error: PORN_BLOCK }, 400);
+        if (itemType !== "photo" && itemType !== "audio" && !textAllowed(ageBand, body.content || "")) {
+          return json({ error: PORN_BLOCK }, 400);
+        }
+        if (looksCsam(body.content || "")) return json({ error: PORN_BLOCK }, 400);
         const itemId = body.id || id();
         await sql`insert into story_items (id, story_id, type, content) values (${itemId}, ${parts[1]}, ${itemType}, ${body.content || ""})`;
         await sql`update stories set updated_at = now() where id = ${parts[1]}`;
@@ -1409,7 +1439,7 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
         const body = (await req.json()) as { body?: string; fromName?: string };
         const text = (body.body || "").trim();
         if (!text) return json({ error: "Tip is empty" }, 400);
-        if (looksPorn(text)) return json({ error: PORN_BLOCK }, 400);
+        if (!textAllowed(ageBand, text)) return json({ error: PORN_BLOCK }, 400);
         const tipId = id();
         await sql`insert into desk_tips (id, story_id, body, from_name) values (${tipId}, ${parts[1]}, ${text.slice(0, 4000)}, ${(body.fromName || "Anonymous").slice(0, 200)})`;
         const rows = await sql`select id, story_id as "storyId", body, from_name as "fromName", created_at as "createdAt" from desk_tips where id = ${tipId}`;
@@ -1441,6 +1471,7 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
         const body = (await req.json()) as { body?: string; fromName?: string };
         const text = (body.body || "").trim();
         if (!text) return json({ error: "Note is empty" }, 400);
+        if (!textAllowed(ageBand, text)) return json({ error: PORN_BLOCK }, 400);
         const noteId = id();
         await sql`insert into desk_notes (id, story_id, body, from_name) values (${noteId}, ${parts[1]}, ${text.slice(0, 4000)}, ${(body.fromName || "Desk").slice(0, 200)})`;
         const rows = await sql`select id, story_id as "storyId", body, from_name as "fromName", created_at as "createdAt" from desk_notes where id = ${noteId}`;
