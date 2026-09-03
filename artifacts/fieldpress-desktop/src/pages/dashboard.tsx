@@ -13,9 +13,10 @@ import { PageShell } from "@/components/page-shell";
 import { PressyMark } from "@/components/pressy-mark";
 import { InkPad } from "@/components/ink-pad";
 import { DistributeDialog } from "@/components/distribute-dialog";
+import { CaptureBar } from "@/components/capture-bar";
+import { extractImageSrc } from "@/lib/item-media";
 import { INKS, type InkId, inkLabel } from "@/lib/ink";
 
-type Lane = "wall" | "feed";
 type Tab = "wall" | "feed" | "search";
 
 type StoryCard = {
@@ -102,13 +103,14 @@ export default function DashboardPage() {
   const [feedBody, setFeedBody] = useState("");
   const [feedPulse, setFeedPulse] = useState<InkId>("spark");
   const [signedIn, setSignedIn] = useState(false);
-  const [tab, setTab] = useState<Tab>("wall");
+  const [tab, setTab] = useState<Tab>("feed");
   const [query, setQuery] = useState("");
   const [postError, setPostError] = useState<string | null>(null);
   const [flowBusy, setFlowBusy] = useState(false);
   const [pressyPrompt, setPressyPrompt] = useState("");
   const [pressyBusy, setPressyBusy] = useState(false);
   const [pressyReply, setPressyReply] = useState<string | null>(null);
+  const [feedPhoto, setFeedPhoto] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: dashboard } = useGetDashboard();
@@ -123,6 +125,7 @@ export default function DashboardPage() {
   const allStories = (stories || []) as StoryCard[];
   const wallStories = allStories.filter((story) => (story.lane || "wall") !== "feed");
   const feedStories = allStories.filter((story) => story.lane === "feed");
+  const pressieRiver = [...feedStories, ...wallStories];
   const needle = query.trim().toLowerCase();
   const searched = useMemo(() => {
     if (!needle) return allStories;
@@ -208,7 +211,7 @@ export default function DashboardPage() {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: generateId(), title: articleTitle.trim(), lane: "wall" }),
+      body: JSON.stringify({ id: generateId(), title: articleTitle.trim(), lane: "feed" }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -218,6 +221,7 @@ export default function DashboardPage() {
     setArticleOpen(false);
     setArticleTitle("");
     refresh();
+    setTab("feed");
     navigate(`/story/${body.id}/news`);
   }
 
@@ -252,6 +256,7 @@ export default function DashboardPage() {
         lane: "feed",
         note: feedBody.trim(),
         pulse: feedPulse,
+        photo: feedPhoto || undefined,
       }),
     });
     const body = await res.json().catch(() => ({}));
@@ -263,6 +268,7 @@ export default function DashboardPage() {
     setFeedTitle("");
     setFeedBody("");
     setFeedPulse("spark");
+    setFeedPhoto(null);
     setTab("feed");
     refresh();
   }
@@ -285,19 +291,27 @@ export default function DashboardPage() {
       return (
         <Card className="border-border bg-card">
           <CardContent className="p-8 text-center text-muted-foreground">
-            {layout === "feed" ? "No Pressies yet." : "No headlines yet."}
+            {layout === "feed" ? "No Pressies yet. Post one — that’s the feed." : "No headlines yet."}
           </CardContent>
         </Card>
       );
     }
     return (
-      <div className={layout === "feed" ? "max-w-xl mx-auto space-y-4" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
-        {list.map((story) => (
+      <div className={layout === "feed" ? "max-w-xl mx-auto space-y-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
+        {list.map((story) => {
+          const photos = story.items
+            .map((item) => extractImageSrc(item.content, item.type))
+            .filter((src): src is string => Boolean(src));
+          const copy = story.items.filter((item) => !extractImageSrc(item.content, item.type));
+          return (
           <Card
             key={story.id}
-            className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group"
-            onClick={() => navigate(story.lane === "feed" ? `/story/${story.id}` : `/story/${story.id}`)}
+            className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group overflow-hidden"
+            onClick={() => navigate(`/story/${story.id}`)}
           >
+            {layout === "feed" && photos[0] ? (
+              <img src={photos[0]} alt="" className="w-full max-h-80 object-cover bg-black" />
+            ) : null}
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <CardTitle className="text-lg text-neon group-hover:text-glow pr-2 leading-snug flex items-start gap-2">
@@ -323,7 +337,10 @@ export default function DashboardPage() {
                 {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
                 {inkLabel(story.pulse) ? <span>Filed in {inkLabel(story.pulse)}</span> : null}
               </div>
-              {story.items.slice(0, layout === "feed" ? 4 : 2).map((item) => (
+              {layout === "wall" && photos[0] ? (
+                <img src={photos[0]} alt="" className="w-full h-32 object-cover rounded border border-border mb-2" />
+              ) : null}
+              {copy.slice(0, layout === "feed" ? 4 : 2).map((item) => (
                 <div key={item.id} className="flex items-start gap-2 text-sm mb-1">
                   {itemIcon(item.type)}
                   <span className={`text-muted-foreground ${layout === "feed" ? "whitespace-pre-wrap" : "truncate"} text-xs`}>
@@ -331,8 +348,15 @@ export default function DashboardPage() {
                   </span>
                 </div>
               ))}
+              {layout === "feed" && photos.length > 1 ? (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {photos.slice(1, 5).map((src) => (
+                    <img key={src.slice(-24)} src={src} alt="" className="w-full h-28 object-cover rounded border border-border" />
+                  ))}
+                </div>
+              ) : null}
               {layout === "feed" && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                   <p className="text-[10px] tracking-widest text-muted-foreground">INK IT</p>
                   <InkPad
                     value={story.myInk || story.pulse}
@@ -347,24 +371,22 @@ export default function DashboardPage() {
                       storyTitle: story.title,
                       mode: "social",
                       title: story.title,
-                      content: story.items
-                        .filter((item) => !item.content.startsWith("data:"))
-                        .map((item) => item.content)
-                        .join("\n\n"),
+                      content: copy.map((item) => item.content).join("\n\n"),
                     }}
                   />
                 </div>
               )}
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     );
   }
 
   const tabs: { id: Tab; label: string; Icon: typeof Newspaper }[] = [
+    { id: "feed", label: "Pressie feed", Icon: Newspaper },
     { id: "wall", label: "Headline wall", Icon: Newspaper },
-    { id: "feed", label: "Pressies", Icon: Newspaper },
     { id: "search", label: "Search", Icon: Search },
   ];
 
@@ -375,7 +397,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-4xl text-neon text-glow-pulse tracking-wider">FIELDPRESS</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Headlines on the wall. Shared posts are Pressies. Ink them instead of liking them.
+              The Pressie feed is the desk. Ink a post instead of liking it. Headlines still live on the wall.
               {" · "}
               <button type="button" className="underline hover:text-neon" onClick={() => navigate("/launch")}>
                 Install
@@ -425,7 +447,7 @@ export default function DashboardPage() {
                 </DialogHeader>
                 <p className="text-sm text-muted-foreground">
                   {signedIn
-                    ? "A Pressie is a share post. Ink is how people score the feeling — not stars, not likes."
+                    ? "A Pressie is a share post with copy and a photo. Ink is how people score the feeling — not stars, not likes."
                     : "Sign in to post a Pressie. Anyone can read them."}
                 </p>
                 <Input
@@ -440,6 +462,23 @@ export default function DashboardPage() {
                   placeholder="What happened — confirmed, short, fit for the desk rating"
                   className="min-h-[140px] bg-card border-border"
                 />
+                <div className="space-y-2">
+                  <p className="text-[10px] tracking-widest text-muted-foreground">PHOTO</p>
+                  {feedPhoto ? (
+                    <div className="space-y-2">
+                      <img src={feedPhoto} alt="" className="w-full max-h-48 object-cover rounded border border-border" />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setFeedPhoto(null)}>
+                        REMOVE PHOTO
+                      </Button>
+                    </div>
+                  ) : (
+                    <CaptureBar
+                      signedIn={signedIn}
+                      onNeedSignIn={() => navigate("/login?next=%2F")}
+                      onPhoto={(dataUrl) => setFeedPhoto(dataUrl)}
+                    />
+                  )}
+                </div>
                 <div className="space-y-1">
                   <p className="text-[10px] tracking-widest text-muted-foreground">FILE IT IN</p>
                   <InkPad value={feedPulse} onPick={setFeedPulse} />
@@ -493,7 +532,7 @@ export default function DashboardPage() {
 
         {dashboard && (
           <p className="text-xs text-muted-foreground tracking-widest">
-            {wallStories.length} on the wall · {feedStories.length} Pressies
+            {feedStories.length} Pressies · {wallStories.length} on the wall
           </p>
         )}
 
@@ -550,12 +589,12 @@ export default function DashboardPage() {
               {error instanceof Error ? error.message : "Could not load the wall."}
             </CardContent>
           </Card>
+        ) : tab === "feed" ? (
+          renderGrid(pressieRiver, "feed")
         ) : tab === "wall" ? (
           renderGrid(wallStories, "wall")
-        ) : tab === "feed" ? (
-          renderGrid(feedStories, "feed")
         ) : (
-          renderGrid(searched, searched.some((s) => s.lane === "feed") && !searched.some((s) => s.lane !== "feed") ? "feed" : "wall")
+          renderGrid(searched, "feed")
         )}
       </div>
     </PageShell>

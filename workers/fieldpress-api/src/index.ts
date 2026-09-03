@@ -921,7 +921,11 @@ async function geminiRenderImage(
   const ar = imagenAspect(opts.aspectRatio || "16:9");
   const brief = stillBrief(prompt, { ...opts, aspectRatio: ar });
   const key = apiKey.trim();
-  const models = ["gemini-3.1-flash-lite-image", "gemini-2.5-flash-image"];
+  const models = [
+    "gemini-3.1-flash-lite-image",
+    "gemini-2.5-flash-image",
+    "gemini-2.0-flash-preview-image-generation",
+  ];
   let last = "Gemini image failed";
   for (const model of models) {
     try {
@@ -1217,7 +1221,7 @@ export default {
         const storyId = id();
         await sql`
           insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'wall', 'spark')
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'feed', 'spark')
         `;
         if (extra) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${extra})`;
@@ -1298,8 +1302,21 @@ export default {
       }
 
       if (parts[0] === "stories" && parts.length === 1 && method === "POST") {
-        const body = (await req.json()) as { id?: string; title?: string; status?: string; private?: boolean; lane?: string; note?: string; pulse?: string };
+        const body = (await req.json()) as {
+          id?: string;
+          title?: string;
+          status?: string;
+          private?: boolean;
+          lane?: string;
+          note?: string;
+          pulse?: string;
+          photo?: string;
+        };
         if (body.private && !userId) return json({ error: "Sign in required to keep a story private" }, 401);
+        const photo = (body.photo || "").trim();
+        if (photo.startsWith("data:") && !userId) {
+          return json({ error: "Sign in required to attach a camera photo" }, 401);
+        }
         const storyId = body.id || id();
         const title = (body.title || "Untitled").slice(0, 255);
         if (!textAllowed(ageBand, title, body.note || "")) return json({ error: PORN_BLOCK }, 400);
@@ -1313,6 +1330,9 @@ export default {
         `;
         if (body.note?.trim()) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${body.note.trim().slice(0, 8000)})`;
+        }
+        if (photo.startsWith("data:image") || /^https?:\/\//i.test(photo)) {
+          await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'photo', ${photo.slice(0, 2_000_000)})`;
         }
         return json(await storyWithItems(sql, userId, storyId, ageBand), 201);
       }

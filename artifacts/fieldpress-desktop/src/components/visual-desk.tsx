@@ -193,6 +193,11 @@ export function VisualDesk({
       const urls = payload?.dataUrls?.filter(Boolean) || (payload?.dataUrl ? [payload.dataUrl] : []);
       if (!urls.length) throw new Error("No stills returned");
       setStills(urls);
+      if (onRendered) {
+        for (const src of urls) {
+          await onRendered(src);
+        }
+      }
     } catch (err) {
       setError(friendlyError(err instanceof Error ? err.message : undefined));
     } finally {
@@ -271,7 +276,7 @@ export function VisualDesk({
         )}
         {stills.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] tracking-widest text-neon-yellow">STILLS — tap to file</p>
+            <p className="text-[10px] tracking-widest text-neon-yellow">STILLS — filed on this story</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {stills.map((src, i) => (
                 <button

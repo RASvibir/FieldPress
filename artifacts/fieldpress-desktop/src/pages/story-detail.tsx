@@ -23,6 +23,7 @@ import { GenericPostDialog } from "@/components/generic-post";
 import { fetchMe, type SessionUser } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
 import { DeskBoard } from "@/components/desk-board";
+import { extractImageSrc } from "@/lib/item-media";
 
 const MODE_CONFIG = {
   article: { label: "PRESSIE", icon: Newspaper, color: "text-neon" },
@@ -251,10 +252,12 @@ export default function StoryDetailPage() {
                               {new Date(item.createdAt).toLocaleString()}
                             </span>
                           </div>
-                          {item.type === "photo" && (item.content.startsWith("data:image") || item.content.startsWith("http")) ? (
-                            <img src={item.content.split("\n").pop()} alt="" className="max-h-48 rounded border border-neon/20" />
-                          ) : item.type === "photo" && item.content.includes("http") ? (
-                            <img src={item.content.match(/https?:\/\/\S+/)?.[0]} alt="" className="max-h-48 rounded border border-neon/20" />
+                          {extractImageSrc(item.content, item.type) ? (
+                            <img
+                              src={extractImageSrc(item.content, item.type) || ""}
+                              alt=""
+                              className="max-h-64 w-full object-cover rounded border border-neon/20"
+                            />
                           ) : (
                             <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
                           )}
