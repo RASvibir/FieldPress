@@ -53,7 +53,7 @@ function App() {
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <div className="crt-scanlines min-h-screen">
-              <div className="pointer-events-auto fixed right-4 top-4 z-[10001]">
+              <div className="pointer-events-auto fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[10001]">
                 <SettingsMenu />
               </div>
               <ErrorBoundary>

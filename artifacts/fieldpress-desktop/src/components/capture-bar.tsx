@@ -23,6 +23,8 @@ export function CaptureBar({ signedIn, onNeedSignIn, onPhoto, busy }: Props) {
     void videoRef.current.play();
   }, [live]);
 
+  useEffect(() => () => stopLive(), []);
+
   function stopLive() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;

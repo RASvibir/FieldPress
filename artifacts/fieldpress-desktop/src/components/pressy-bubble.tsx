@@ -52,7 +52,7 @@ export function PressyBubble() {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[9990] flex flex-col items-end gap-3">
+    <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-[9990] flex flex-col items-start gap-3 sm:left-auto sm:right-[max(1rem,env(safe-area-inset-right))] sm:items-end">
       {open && (
         <div className="pointer-events-auto w-[min(94vw,28rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
           <div className="flex items-center justify-between border-b border-neon/20 px-3 py-2">

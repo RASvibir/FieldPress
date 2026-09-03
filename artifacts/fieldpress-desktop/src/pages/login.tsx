@@ -31,11 +31,13 @@ export default function LoginPage() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ email }),
         });
-        const body = await res.json();
+        const body = (await res.json()) as { resetUrl?: string; emailed?: boolean };
         setMessage(
           body.resetUrl
             ? `Dev reset link: ${body.resetUrl}`
-            : "If that email is on file, we sent a reset link. You can also use your desk word on the reset page.",
+            : body.emailed
+              ? "If that email is on file, we sent a reset link. You can also use your desk word on the reset page."
+              : "Email reset is not configured on this desk. Use Reset with desk word instead.",
         );
         return;
       }
@@ -151,7 +153,7 @@ export default function LoginPage() {
               )}
             </fieldset>
             <p className="text-xs text-muted-foreground">
-              The desk word is a private recovery passphrase. Store it offline. You can also reset via email link.
+              The desk word is a private recovery passphrase. Store it offline. Email reset works when the desk has mail configured.
             </p>
           </>
         )}
@@ -163,7 +165,7 @@ export default function LoginPage() {
             : mode === "register"
               ? "CREATE ACCOUNT"
               : mode === "forgot"
-                ? "SEND RESET LINK"
+                ? "REQUEST RESET"
                 : "SIGN IN"}
         </Button>
         <div className="flex flex-col gap-2 text-xs tracking-widest text-muted-foreground">

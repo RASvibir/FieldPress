@@ -74,7 +74,7 @@ export function SettingsMenu() {
         <SheetHeader className="text-left">
           <SheetTitle className="tracking-[0.18em]">SETTINGS</SheetTitle>
           <SheetDescription>
-            Theme, account, and outlet bookmarks. Share still opens in the other app unless you connect a push later.
+            Theme, account, and outlet bookmarks. Share opens compose with your copy; bookmarks are the profiles you paste into.
           </SheetDescription>
         </SheetHeader>
 

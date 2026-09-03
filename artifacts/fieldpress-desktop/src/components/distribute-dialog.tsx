@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Share2, Download, HardDrive, Copy, Check, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
   nativeShare,
   saveToDisk,
 } from "@/lib/distribute";
+import { fetchMe } from "@/lib/session";
 
 type DistributeDialogProps = {
   payload: DistributePayload | null;
@@ -40,6 +41,12 @@ export function DistributeDialog({
 }: DistributeDialogProps) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    fetchMe().then((user) => setBookmarks(user?.deskLinks || {}));
+  }, [open]);
 
   async function run(label: string, action: () => Promise<void> | void) {
     if (!payload) return;
@@ -115,6 +122,26 @@ export function DistributeDialog({
               ))}
             </div>
           </div>
+
+          {Object.entries(bookmarks).some(([, value]) => value.trim()) && (
+            <div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-2">YOUR BOOKMARKS</div>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(bookmarks)
+                  .filter(([, value]) => value.trim())
+                  .map(([key, value]) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      className="justify-start border-neon/20"
+                      onClick={() => window.open(value.startsWith("http") ? value : `https://${value}`, "_blank", "noopener,noreferrer")}
+                    >
+                      {key.toUpperCase()}
+                    </Button>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="text-[10px] tracking-widest text-muted-foreground mb-2">SAVE TO DRIVE / DISK</div>

@@ -9,6 +9,8 @@ type Env = {
   OLLAMA_MODEL?: string;
   GOOGLE_CSE_ID?: string;
   GOOGLE_CSE_KEY?: string;
+  RESEND_API_KEY?: string;
+  MAIL_FROM?: string;
 };
 
 const COOKIE = "fp_session";
@@ -199,10 +201,61 @@ async function ensureAgeSchema(sql: Sql) {
     await sql`alter table stories add column if not exists embargo_until timestamptz`;
     await sql`alter table stories add column if not exists desk_checks jsonb not null default '{}'::jsonb`;
     await sql`alter table stories add column if not exists lane text not null default 'wall'`;
+    await sql`
+      create table if not exists password_reset_tokens (
+        id text primary key,
+        user_id text not null,
+        token_hash text not null,
+        expires_at timestamptz not null,
+        used_at timestamptz,
+        created_at timestamptz not null default now()
+      )
+    `;
+    await sql`
+      create table if not exists desk_tips (
+        id text primary key,
+        story_id text,
+        body text not null,
+        from_name varchar(200) not null default '',
+        created_at timestamptz not null default now()
+      )
+    `;
+    await sql`
+      create table if not exists desk_notes (
+        id text primary key,
+        story_id text not null,
+        body text not null,
+        from_name varchar(200) not null default 'Desk',
+        created_at timestamptz not null default now()
+      )
+    `;
     schemaReady = true;
   } catch {
     schemaReady = true;
   }
+}
+
+function canMutateStory(story: { ownerId?: string | null }, user: { id: string; role?: string } | null) {
+  if (!user) return false;
+  if (user.role === "superadmin") return true;
+  return Boolean(story.ownerId && story.ownerId === user.id);
+}
+
+async function sendResetEmail(env: Env, to: string, resetUrl: string): Promise<boolean> {
+  const key = (env.RESEND_API_KEY || "").trim();
+  if (!key) return false;
+  const from = (env.MAIL_FROM || "FieldPress <noreply@fieldpress.studio>").trim();
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: "Reset your FieldPress password",
+      text: `Reset your FieldPress password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request it, ignore this email.`,
+    }),
+  });
+  return res.ok;
 }
 
 type StoryRow = {
@@ -645,6 +698,7 @@ async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string
   const key = apiKey.trim();
   const models = [
     "gemini-3.1-flash-image-preview",
+    "gemini-2.5-flash-image-preview",
     "gemini-2.5-flash-image",
     "gemini-3-pro-image-preview",
     "gemini-2.0-flash-preview-image-generation",
@@ -834,25 +888,59 @@ export default {
       }
 
       if (parts[0] === "auth" && parts[1] === "forgot-password" && method === "POST") {
-        return json({ ok: true });
+        const body = (await req.json()) as { email?: string };
+        const email = (body.email || "").trim().toLowerCase();
+        const mailConfigured = Boolean((env.RESEND_API_KEY || "").trim());
+        if (email.includes("@")) {
+          const rows = await sql`select id, email from users where email = ${email} limit 1`;
+          const found = rows[0] as { id: string; email: string } | undefined;
+          if (found && mailConfigured) {
+            const token = id() + id();
+            const tokenHash = await sha256(token);
+            const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+            await sql`
+              insert into password_reset_tokens (id, user_id, token_hash, expires_at)
+              values (${id()}, ${found.id}, ${tokenHash}, ${expires})
+            `;
+            const origin = "https://fieldpress.studio";
+            await sendResetEmail(env, found.email, `${origin}/reset-password?token=${encodeURIComponent(token)}`);
+          }
+        }
+        return json({ ok: true, emailed: mailConfigured });
       }
 
       if (parts[0] === "auth" && parts[1] === "reset-password" && method === "POST") {
         const body = (await req.json()) as { email?: string; resetWord?: string; password?: string; token?: string };
         if (!body.password || body.password.length < 10) return json({ error: "Password too short" }, 400);
+        if (body.token) {
+          const tokenHash = await sha256(body.token);
+          const rows = await sql`
+            select id, user_id as "userId", expires_at as "expiresAt", used_at as "usedAt"
+            from password_reset_tokens where token_hash = ${tokenHash} limit 1
+          `;
+          const row = rows[0] as { id: string; userId: string; expiresAt: string; usedAt: string | null } | undefined;
+          if (!row || row.usedAt || new Date(row.expiresAt).getTime() < Date.now()) {
+            return json({ error: "Reset link is invalid or expired" }, 400);
+          }
+          await sql`update users set password_hash = ${await hashSecret(body.password)} where id = ${row.userId}`;
+          await sql`update password_reset_tokens set used_at = now() where id = ${row.id}`;
+          await sql`delete from sessions where user_id = ${row.userId}`;
+          const session = await createSession(sql, row.userId);
+          return json({ ok: true }, 200, { "set-cookie": cookieHeader(session) });
+        }
         if (body.email && body.resetWord) {
           const email = body.email.trim().toLowerCase();
           const rows = await sql`select id, reset_word_hash as "resetWordHash" from users where email = ${email} limit 1`;
-          const user = rows[0] as { id: string; resetWordHash: string | null } | undefined;
-          if (!user?.resetWordHash || !(await verifySecret(body.resetWord, user.resetWordHash))) {
+          const found = rows[0] as { id: string; resetWordHash: string | null } | undefined;
+          if (!found?.resetWordHash || !(await verifySecret(body.resetWord, found.resetWordHash))) {
             return json({ error: "Email or desk word did not match" }, 401);
           }
-          await sql`update users set password_hash = ${await hashSecret(body.password)} where id = ${user.id}`;
-          await sql`delete from sessions where user_id = ${user.id}`;
-          const token = await createSession(sql, user.id);
-          return json({ ok: true }, 200, { "set-cookie": cookieHeader(token) });
+          await sql`update users set password_hash = ${await hashSecret(body.password)} where id = ${found.id}`;
+          await sql`delete from sessions where user_id = ${found.id}`;
+          const session = await createSession(sql, found.id);
+          return json({ ok: true }, 200, { "set-cookie": cookieHeader(session) });
         }
-        return json({ error: "Use desk word reset, or set RESEND later for email links" }, 400);
+        return json({ error: "Use a reset link or your desk word" }, 400);
       }
 
       const user = await userFromSession(sql, req);
@@ -1078,7 +1166,9 @@ export default {
         const rows = await sql`select owner_id as "ownerId" from stories where id = ${parts[1]} limit 1`;
         const row = rows[0] as { ownerId: string | null } | undefined;
         if (!row) return json({ error: "Not found" }, 404);
-        if (row.ownerId && row.ownerId !== userId) return json({ error: "Only the owner can delete this story" }, 403);
+        if (!canMutateStory(row, user)) {
+          return json({ error: userId ? "Only the owner can delete this story" : "Sign in required" }, userId ? 403 : 401);
+        }
         await sql`delete from stories where id = ${parts[1]}`;
         return empty();
       }
@@ -1105,6 +1195,9 @@ export default {
       if (parts[0] === "stories" && parts[2] === "items" && method === "DELETE") {
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Story not found" }, 404);
+        if (!canMutateStory(story as StoryRow, user)) {
+          return json({ error: "Only the owner can remove items" }, 403);
+        }
         await sql`delete from story_items where id = ${parts[3]} and story_id = ${parts[1]}`;
         return empty();
       }
@@ -1135,6 +1228,9 @@ export default {
       if (parts[0] === "stories" && parts[2] === "desk" && method === "PATCH") {
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Story not found" }, 404);
+        if (!canMutateStory(story as StoryRow, user)) {
+          return json({ error: "Only the owner can change embargo" }, 403);
+        }
         const body = (await req.json()) as { embargoUntil?: string | null; deskChecks?: Record<string, unknown> };
         const embargo = body.embargoUntil ? body.embargoUntil : null;
         const checks = JSON.stringify(body.deskChecks || {});
@@ -1181,6 +1277,9 @@ export default {
       if (parts[0] === "stories" && parts[2] === "notes" && method === "POST") {
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Story not found" }, 404);
+        if (!canMutateStory(story as StoryRow, user)) {
+          return json({ error: "Only the owner can add desk notes" }, 403);
+        }
         const body = (await req.json()) as { body?: string; fromName?: string };
         const text = (body.body || "").trim();
         if (!text) return json({ error: "Note is empty" }, 400);

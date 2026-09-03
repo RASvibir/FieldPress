@@ -17,8 +17,9 @@ import { VisualDesk } from "@/components/visual-desk";
 import { IdeaDesk } from "@/components/idea-desk";
 import { HeadlineCache } from "@/components/headline-cache";
 import { GenericPostDialog } from "@/components/generic-post";
-import { fetchMe } from "@/lib/session";
+import { fetchMe, type SessionUser } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
+import { DeskBoard } from "@/components/desk-board";
 
 const MODE_CONFIG = {
   article: { label: "PRESSIE", icon: Newspaper, color: "text-neon" },
@@ -28,7 +29,7 @@ const MODE_CONFIG = {
 
 export default function StoryDetailPage() {
   const params = useParams<{ storyId: string }>();
-  const storyId = params.storyId!;
+  const storyId = params.storyId || "";
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -36,11 +37,16 @@ export default function StoryDetailPage() {
   const { data: drafts } = useListDrafts(storyId);
   const addItemMutation = useAddStoryItem();
   const deleteMutation = useDeleteStory();
-  const [signedIn, setSignedIn] = useState(false);
+  const [me, setMe] = useState<SessionUser | null>(null);
   const [photoQuery, setPhotoQuery] = useState<string | undefined>(undefined);
+  const signedIn = Boolean(me);
+  const canEdit =
+    Boolean(me) &&
+    (me?.role === "superadmin" ||
+      Boolean((story as { ownerId?: string | null } | undefined)?.ownerId && (story as { ownerId?: string }).ownerId === me?.id));
 
   useEffect(() => {
-    fetchMe().then((user) => setSignedIn(Boolean(user)));
+    fetchMe().then(setMe);
   }, []);
 
   const packagePayload = useMemo<DistributePayload | null>(() => {
@@ -137,10 +143,12 @@ export default function StoryDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             <DistributeDialog payload={packagePayload} triggerLabel="SHARE" />
-            <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4 mr-1" />
-              DELETE
-            </Button>
+            {canEdit && (
+              <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
+                <Trash2 className="w-4 h-4 mr-1" />
+                DELETE
+              </Button>
+            )}
           </div>
         </div>
 
@@ -236,6 +244,13 @@ export default function StoryDetailPage() {
             </div>
             <div className="mb-4">
               <GenericPostDialog storyId={storyId} />
+            </div>
+            <div className="mb-4">
+              <DeskBoard
+                storyId={storyId}
+                canEdit={canEdit}
+                embargoUntil={(story as { embargoUntil?: string | null }).embargoUntil}
+              />
             </div>
             <div className="grid grid-cols-2 gap-2 mb-4">
               <Button

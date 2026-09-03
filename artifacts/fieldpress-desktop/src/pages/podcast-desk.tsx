@@ -34,10 +34,10 @@ function joinShow(fields: {
 
 export default function PodcastDeskPage() {
   const params = useParams<{ storyId: string }>();
-  const storyId = params.storyId!;
+  const storyId = params.storyId || "";
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const { data: story } = useGetStory(storyId);
+  const { data: story, isLoading, isError } = useGetStory(storyId);
   const { data: drafts } = useListDrafts(storyId);
   const createDraft = useCreateDraft();
   const updateDraft = useUpdateDraft();
@@ -86,11 +86,38 @@ export default function PodcastDeskPage() {
     );
   }
 
+  function goBack() {
+    if (storyId) navigate(`/story/${storyId}`);
+    else navigate("/");
+  }
+
+  if (!storyId || isError) {
+    return (
+      <PageShell center>
+        <div className="text-center space-y-4">
+          <p className="text-neon-red">Podcast studio could not load this file.</p>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to the wall
+          </Button>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (isLoading && !story) {
+    return (
+      <PageShell center>
+        <div className="text-neon text-glow-pulse">Opening podcast studio…</div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate(`/story/${storyId}`)}>
+          <Button variant="ghost" onClick={goBack}>
             <ArrowLeft className="w-4 h-4 mr-1" />
             BACK
           </Button>
