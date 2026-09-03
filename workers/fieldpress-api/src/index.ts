@@ -1021,7 +1021,20 @@ export default {
         if (!canSeeRating(contentRating(`${body.headline || ""} ${body.fieldNotes || ""}`), ageBand, false)) {
           return json({ error: "That prompt is outside this desk’s rating." }, 403);
         }
-        return json(photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || ""));
+        const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "");
+        if (env.GEMINI_API_KEY) {
+          try {
+            const { text } = await deskText(
+              env,
+              `Write one editorial still prompt for a news photo. No logos, no celebrities, no pornography. Aspect ${built.aspectRatio}. Headline: ${body.headline || "(none)"}\nNotes: ${body.fieldNotes || "(none)"}\nReturn only the prompt.`,
+              { maxGeminiTokens: 280, req },
+            );
+            if (text.trim()) return json({ ...built, prompt: text.trim().slice(0, 1200) });
+          } catch {
+            /* keep template */
+          }
+        }
+        return json(built);
       }
 
       if (parts[0] === "stories" && parts[1] && parts.length === 2 && method === "GET") {

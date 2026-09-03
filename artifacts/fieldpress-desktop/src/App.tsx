@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsMenu } from "@/components/settings-menu";
 import { PressyBubble } from "@/components/pressy-bubble";
+import { ErrorBoundary } from "@/components/error-boundary";
 import DashboardPage from "@/pages/dashboard";
 import StoryDetailPage from "@/pages/story-detail";
 import EditorPage from "@/pages/editor";
@@ -55,7 +56,9 @@ function App() {
               <div className="pointer-events-auto fixed right-4 top-4 z-[10001]">
                 <SettingsMenu />
               </div>
-              <Router />
+              <ErrorBoundary>
+                <Router />
+              </ErrorBoundary>
               <PressyBubble />
             </div>
           </WouterRouter>

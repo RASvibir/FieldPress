@@ -3,6 +3,7 @@ import { useCreateDraft, useGetStory, useListDrafts, useUpdateDraft } from "@wor
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Save } from "lucide-react";
 import { DistributeDialog } from "@/components/distribute-dialog";
@@ -34,10 +35,10 @@ function joinArticle(fields: {
 
 export default function NewsDeskPage() {
   const params = useParams<{ storyId: string }>();
-  const storyId = params.storyId!;
+  const storyId = params.storyId || "";
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const { data: story } = useGetStory(storyId);
+  const { data: story, isLoading, isError } = useGetStory(storyId);
   const { data: drafts } = useListDrafts(storyId);
   const createDraft = useCreateDraft();
   const updateDraft = useUpdateDraft();
@@ -82,11 +83,38 @@ export default function NewsDeskPage() {
     );
   }
 
+  function goBack() {
+    if (storyId) navigate(`/story/${storyId}`);
+    else navigate("/");
+  }
+
+  if (!storyId || isError) {
+    return (
+      <PageShell center>
+        <div className="text-center space-y-4">
+          <p className="text-neon-red">Pressie desk could not load this file.</p>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to the wall
+          </Button>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (isLoading && !story) {
+    return (
+      <PageShell center>
+        <div className="text-neon text-glow-pulse">Opening Pressie desk…</div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate(`/story/${storyId}`)}>
+          <Button variant="ghost" onClick={goBack}>
             <ArrowLeft className="w-4 h-4 mr-1" />
             BACK
           </Button>

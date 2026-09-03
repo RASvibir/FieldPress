@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { PressyMark } from "@/components/pressy-mark";
 
 type Turn = { role: "user" | "pressy"; content: string };
 
@@ -104,7 +105,7 @@ export function PressyBubble() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Open Pressy"
       >
-        <Sparkles className="h-6 w-6" />
+        <PressyMark busy={busy || open} className="h-8 w-8" />
       </button>
     </div>
   );

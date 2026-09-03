@@ -45,6 +45,7 @@ export function VisualDesk({
   const [format, setFormat] = useState<(typeof FORMATS)[number]["id"]>("article_hero");
   const [hits, setHits] = useState<Hit[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [promptOpen, setPromptOpen] = useState(false);
   const [busy, setBusy] = useState<"search" | "prompt" | "render" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -82,7 +83,16 @@ export function VisualDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedQuery]);
 
+  function localPrompt() {
+    const ar = format === "social_feed" ? "4:5" : format === "podcast_square" ? "1:1" : "16:9";
+    const scene = [headline.trim(), notes.trim().slice(0, 400)].filter(Boolean).join(". ");
+    return `${scene ? scene + ". " : ""}Cinematic editorial photojournalism, documentary still, natural light, no logos, no celebrities --ar ${ar}`.trim();
+  }
+
   async function makePrompt() {
+    const fallback = localPrompt();
+    setPromptOpen(true);
+    setPrompt(fallback);
     setBusy("prompt");
     setError(null);
     try {
@@ -94,9 +104,10 @@ export function VisualDesk({
       });
       const payload = (await res.json().catch(() => null)) as { prompt?: string; error?: string } | null;
       if (!res.ok) throw new Error(payload?.error || "Could not write a photo prompt");
-      setPrompt(payload?.prompt || "");
+      if (payload?.prompt?.trim()) setPrompt(payload.prompt.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not write a photo prompt");
+      setPrompt(fallback);
     } finally {
       setBusy(null);
     }
@@ -195,9 +206,14 @@ export function VisualDesk({
             {busy === "render" ? "RENDERING…" : signedIn ? "RENDER PRESSY AI FLOW" : "SIGN IN TO RENDER"}
           </Button>
         </div>
-        {prompt && (
+        {(promptOpen || prompt) && (
           <div className="space-y-2">
-            <p className="text-xs text-foreground/80 whitespace-pre-wrap break-words">{prompt}</p>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="w-full min-h-[110px] text-xs bg-card border border-neon/20 rounded-md p-2 text-foreground/90 whitespace-pre-wrap"
+              placeholder="Photo prompt appears here"
+            />
             <Button variant="ghost" size="sm" onClick={() => void copyPrompt()}>
               <Copy className="w-3 h-3 mr-1" />
               {copied ? "COPIED" : "COPY PROMPT"}

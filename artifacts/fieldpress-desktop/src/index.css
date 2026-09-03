@@ -390,3 +390,36 @@ html:not(.dark) .border-glow {
     inset: -1px;
   }
 }
+
+@keyframes pressy-stamp {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(3px); }
+}
+
+@keyframes pressy-ink {
+  0%, 100% { opacity: 0.45; }
+  45% { opacity: 1; }
+}
+
+@keyframes pressy-turn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(180deg); }
+}
+
+.pressy-platen {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pressy-stamp 1.15s ease-in-out infinite;
+}
+
+.pressy-block {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pressy-ink 1.15s ease-in-out infinite;
+}
+
+.pressy-screw {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pressy-turn 1.15s linear infinite;
+}
