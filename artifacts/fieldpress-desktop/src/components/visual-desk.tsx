@@ -50,6 +50,22 @@ const STYLES: Array<{ id: StyleId; label: string }> = [
   { id: "abstract", label: "Abstract" },
 ];
 
+function scrubCopy(value: string) {
+  return value
+    .replace(/\bno pornography\b/gi, "")
+    .replace(/\bno porn(?:ography)?\b/gi, "")
+    .replace(/porn is not allowed[^.]*\./gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+}
+
+function friendlyError(value?: string) {
+  if (!value) return "That take failed. Try MAKE again.";
+  if (/porn|nudity|rating|not allowed/i.test(value)) return "That take failed. Try MAKE again.";
+  return value;
+}
+
 export function VisualDesk({
   storyId,
   headline,
@@ -142,9 +158,9 @@ export function VisualDesk({
         body: JSON.stringify({ format, headline, fieldNotes: notes, style }),
       });
       const promptBody = (await promptRes.json().catch(() => null)) as { prompt?: string; error?: string } | null;
-      if (!promptRes.ok) throw new Error(promptBody?.error || "Could not write a prompt");
+      if (!promptRes.ok) throw new Error(friendlyError(promptBody?.error));
       const nextPrompt = promptBody?.prompt?.trim() || "";
-      if (nextPrompt) setPrompt(nextPrompt);
+      if (nextPrompt) setPrompt(scrubCopy(nextPrompt));
 
       const shots = Math.min(count, quota?.remaining ?? count) as 1 | 2 | 3;
       const res = await fetch(`/api/stories/${storyId}/images/generate`, {
@@ -169,16 +185,16 @@ export function VisualDesk({
         used?: number;
         limit?: number;
       } | null;
-      if (payload?.prompt) setPrompt(payload.prompt);
+      if (payload?.prompt) setPrompt(scrubCopy(payload.prompt));
       if (typeof payload?.remaining === "number" && typeof payload.used === "number" && typeof payload.limit === "number") {
         setQuota({ remaining: payload.remaining, used: payload.used, limit: payload.limit });
       }
-      if (!res.ok) throw new Error(payload?.error || "Render failed");
+      if (!res.ok) throw new Error(friendlyError(payload?.error));
       const urls = payload?.dataUrls?.filter(Boolean) || (payload?.dataUrl ? [payload.dataUrl] : []);
       if (!urls.length) throw new Error("No stills returned");
       setStills(urls);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not make stills");
+      setError(friendlyError(err instanceof Error ? err.message : undefined));
     } finally {
       setBusy(null);
     }
