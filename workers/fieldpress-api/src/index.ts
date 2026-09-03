@@ -229,10 +229,32 @@ async function ensureAgeSchema(sql: Sql) {
         created_at timestamptz not null default now()
       )
     `;
+    await sql`
+      create table if not exists image_generation_log (
+        id text primary key,
+        user_id text not null,
+        story_id text,
+        created_at timestamptz not null default now()
+      )
+    `;
     schemaReady = true;
   } catch {
     schemaReady = true;
   }
+}
+
+const PHOTO_DAY_LIMIT = 13;
+
+async function photoQuota(sql: Sql, userId: string) {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const startIso = start.toISOString();
+  const rows = await sql`
+    select count(*)::int as n from image_generation_log
+    where user_id = ${userId} and created_at >= ${startIso}
+  `;
+  const used = Number((rows[0] as { n?: number } | undefined)?.n || 0);
+  return { used, remaining: Math.max(0, PHOTO_DAY_LIMIT - used), limit: PHOTO_DAY_LIMIT };
 }
 
 function canMutateStory(story: { ownerId?: string | null }, user: { id: string; role?: string } | null) {
@@ -546,15 +568,66 @@ async function searchCommons(query: string) {
   });
 }
 
-function photoPrompt(format: string, headline: string, fieldNotes: string) {
+const IMAGE_STYLES = {
+  polaroid: {
+    id: "polaroid",
+    label: "Old Polaroid",
+    craft:
+      "Instant Polaroid photograph from the late 1970s: square-ish frame with thick white border baked into the image, faded dyes, warm yellow-green cast, soft flash, light leaks, chemical stains at the edges, slightly underexposed shadows, analog grain, imperfect focus. Not a digital filter, not a Polaroid overlay on a modern photo.",
+  },
+  hd: {
+    id: "hd",
+    label: "HD photo-realism",
+    craft:
+      "Ultra-sharp contemporary photojournalism. Magnum / World Press Photo caliber. Shot on 35mm or medium format, physically plausible light, rich color science, tactile grain, tack-sharp subject, no plastic skin, no warped hands, no extra limbs, no CGI.",
+  },
+  toon: {
+    id: "toon",
+    label: "Toons",
+    craft:
+      "Bold editorial cartoon / graphic novel still. Clean inked contours, flat or cel-shaded color, expressive faces, readable silhouettes, print-ready. Not photoreal, not 3D render, not anime-screenshot mush.",
+  },
+  fantasy: {
+    id: "fantasy",
+    label: "Fantasy",
+    craft:
+      "Painterly high-fantasy illustration: mythic light, weather and atmosphere, rich costume and landscape detail, oil-and-digital hybrid, cinematic depth. Storybook-epic, not a video-game screenshot, not AI-gloss.",
+  },
+  sketch: {
+    id: "sketch",
+    label: "Sketch",
+    craft:
+      "Observational pencil and ink reportage sketch on newsprint: visible construction lines, cross-hatching, graphite smudge, selective watercolor wash. Looks drawn by a court or war artist, not a filtered photo.",
+  },
+  abstract: {
+    id: "abstract",
+    label: "Abstract",
+    craft:
+      "Non-figurative or barely-figurative fine-art still: shape, color field, texture, rhythm. Suggest the story through composition, not a literal scene. Gallery print, not a screensaver.",
+  },
+} as const;
+
+type ImageStyleId = keyof typeof IMAGE_STYLES;
+
+function parseImageStyle(value: unknown): ImageStyleId {
+  const raw = String(value || "").toLowerCase();
+  if (raw === "polaroid" || raw === "hd" || raw === "toon" || raw === "toons" || raw === "fantasy" || raw === "sketch" || raw === "abstract") {
+    return raw === "toons" ? "toon" : (raw as ImageStyleId);
+  }
+  return "hd";
+}
+
+function photoPrompt(format: string, headline: string, fieldNotes: string, styleId: ImageStyleId = "hd") {
   const map: Record<string, string> = {
     article_hero: "16:9",
     social_feed: "4:5",
     podcast_square: "1:1",
   };
   const ar = map[format] || "16:9";
-  const prompt = `${headline ? headline + ". " : ""}${fieldNotes ? fieldNotes + ". " : ""}Cinematic editorial photojournalism, documentary style, natural light --ar ${ar}`.trim();
-  return { format, headline, prompt, aspectRatio: ar, tier: "prompt" as const };
+  const style = IMAGE_STYLES[styleId];
+  const scene = [headline.trim(), fieldNotes.trim().slice(0, 500)].filter(Boolean).join(". ");
+  const prompt = `${scene ? scene + ". " : ""}Style: ${style.label}. ${style.craft} No logos, no celebrities, no text captions, no pornography. Aspect ${ar}.`.trim();
+  return { format, headline, prompt, aspectRatio: ar, style: styleId, tier: "prompt" as const };
 }
 
 type ImageHit = {
@@ -688,19 +761,28 @@ Reply as Pressy only. Plain text.`;
   return deskText(env, prompt, { maxGeminiTokens: 2048, req });
 }
 
-async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string): Promise<string> {
+async function geminiRenderImage(
+  apiKey: string,
+  prompt: string,
+  ageBand: string,
+  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId } = {},
+): Promise<string> {
   const ratingLine =
     ageBand === "kids"
       ? "G / Kids rated only. No violence, no sexual content, no nudity."
       : ageBand === "teen"
         ? "PG-13. Mild intensity only. No pornography. No nudity."
         : "Do not generate pornography or XXX sexual content. Documentary or artistic nudity is allowed.";
+  const take = opts.variation ? ` ${opts.variation}` : "";
+  const ar = opts.aspectRatio || "16:9";
+  const style = IMAGE_STYLES[opts.style || "hd"];
+  const craft = `Commit fully to this look: ${style.label}. ${style.craft} Masterpiece execution, coherent anatomy and perspective, no watermarks, no captions. Aspect ${ar}.${take}`;
   const key = apiKey.trim();
   const models = [
+    "gemini-3-pro-image-preview",
     "gemini-3.1-flash-image-preview",
     "gemini-2.5-flash-image-preview",
     "gemini-2.5-flash-image",
-    "gemini-3-pro-image-preview",
     "gemini-2.0-flash-preview-image-generation",
   ];
   let last = "Gemini image failed";
@@ -712,8 +794,11 @@ async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string
           method: "POST",
           headers: { "content-type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: `Editorial still. ${ratingLine} No logos, no celebrities. ${prompt}` }] }],
-            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            contents: [{ role: "user", parts: [{ text: `${craft} ${ratingLine} Scene: ${prompt}` }] }],
+            generationConfig: {
+              responseModalities: ["TEXT", "IMAGE"],
+              imageConfig: { aspectRatio: ar },
+            },
           }),
         },
       );
@@ -1115,39 +1200,89 @@ export default {
         return json(await searchImages(query, env));
       }
 
+      if (parts[0] === "images" && parts[1] === "quota" && method === "GET") {
+        if (!userId) return json({ error: "Sign in required" }, 401);
+        return json(await photoQuota(sql, userId));
+      }
+
       if (parts[0] === "stories" && parts[1] && parts[2] === "images" && parts[3] === "generate" && method === "POST") {
         if (!userId) return json({ error: "Sign in required for image rendering" }, 401);
         if (!env.GEMINI_API_KEY) return json({ error: "Image rendering is not configured" }, 503);
-        const body = (await req.json()) as { prompt?: string; format?: string; headline?: string; fieldNotes?: string };
-        const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "");
-        const prompt = (body.prompt || built.prompt).slice(0, 1200);
+        const quota = await photoQuota(sql, userId);
+        if (quota.remaining < 1) {
+          return json(
+            { error: `Daily still limit reached (${PHOTO_DAY_LIMIT}). Back tomorrow.`, ...quota },
+            429,
+          );
+        }
+        const body = (await req.json()) as {
+          prompt?: string;
+          format?: string;
+          headline?: string;
+          fieldNotes?: string;
+          count?: number;
+          style?: string;
+        };
+        const styleId = parseImageStyle(body.style);
+        const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "", styleId);
+        const prompt = (body.prompt || built.prompt).slice(0, 2000);
         if (looksPorn(prompt, body.headline || "", body.fieldNotes || "")) return json({ error: PORN_BLOCK }, 400);
         if (!canSeeRating(contentRating(prompt), ageBand, false)) {
           return json({ error: "That render is outside this desk’s rating." }, 403);
         }
-        try {
-          const dataUrl = await geminiRenderImage(env.GEMINI_API_KEY, prompt, ageBand);
-          return json({ dataUrl, prompt, tier: "registered" });
-        } catch (err) {
-          return json({ error: err instanceof Error ? err.message : "Render failed", prompt, tier: "registered" }, 502);
+        const wanted = Math.min(3, Math.max(1, Math.floor(Number(body.count) || 3)));
+        const n = Math.min(wanted, quota.remaining);
+        const angles = [
+          "Take A: wide establishing, layered foreground.",
+          "Take B: intimate medium on the detail that carries the story.",
+          "Take C: unexpected angle or light, same style, different moment.",
+        ];
+        const settled = await Promise.allSettled(
+          Array.from({ length: n }, (_, i) =>
+            geminiRenderImage(env.GEMINI_API_KEY!, prompt, ageBand, {
+              variation: angles[i] || `Take ${i + 1}.`,
+              aspectRatio: built.aspectRatio,
+              style: styleId,
+            }),
+          ),
+        );
+        const dataUrls = settled.filter((item): item is PromiseFulfilledResult<string> => item.status === "fulfilled").map((item) => item.value);
+        if (!dataUrls.length) {
+          const first = settled.find((item): item is PromiseRejectedResult => item.status === "rejected");
+          const detail = first?.reason instanceof Error ? first.reason.message : "Render failed";
+          return json({ error: detail, prompt, tier: "registered", ...quota }, 502);
         }
+        for (let i = 0; i < dataUrls.length; i += 1) {
+          await sql`
+            insert into image_generation_log (id, user_id, story_id)
+            values (${id()}, ${userId}, ${parts[1]})
+          `;
+        }
+        const next = await photoQuota(sql, userId);
+        return json({ dataUrl: dataUrls[0], dataUrls, prompt, style: styleId, tier: "registered", ...next });
       }
 
       if (parts[0] === "stories" && parts[1] && parts[2] === "images" && parts[3] === "generate-prompt" && method === "POST") {
-        const body = (await req.json()) as { format?: string; headline?: string; fieldNotes?: string };
+        const body = (await req.json()) as { format?: string; headline?: string; fieldNotes?: string; style?: string };
         if (looksPorn(body.headline || "", body.fieldNotes || "")) return json({ error: PORN_BLOCK }, 400);
         if (!canSeeRating(contentRating(`${body.headline || ""} ${body.fieldNotes || ""}`), ageBand, false)) {
           return json({ error: "That prompt is outside this desk’s rating." }, 403);
         }
-        const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "");
+        const styleId = parseImageStyle(body.style);
+        const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "", styleId);
+        const style = IMAGE_STYLES[styleId];
         if (env.GEMINI_API_KEY) {
           try {
             const { text } = await deskText(
               env,
-              `Write one editorial still prompt for a news photo. No logos, no celebrities, no pornography. Aspect ${built.aspectRatio}. Headline: ${body.headline || "(none)"}\nNotes: ${body.fieldNotes || "(none)"}\nReturn only the prompt.`,
-              { maxGeminiTokens: 280, req },
+              `You write image briefs. Commit fully to this style: ${style.label}. ${style.craft}
+Write ONE dense still brief (80–160 words): subject, place, time, light, materials, composition. Aspect ${built.aspectRatio}.
+Headline: ${body.headline || "(none)"}
+Notes: ${body.fieldNotes || "(none)"}
+No celebrities, no logos, no on-image text, no pornography. Return only the prompt.`,
+              { maxGeminiTokens: 420, req },
             );
-            if (text.trim()) return json({ ...built, prompt: text.trim().slice(0, 1200) });
+            if (text.trim()) return json({ ...built, prompt: text.trim().slice(0, 2000) });
           } catch {
             /* keep template */
           }
