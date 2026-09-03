@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { storyItemsTable, storiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { AddStoryItemBody } from "@workspace/api-zod";
-import { getOwnedStory } from "../lib/auth";
+import { getAccessibleStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -13,7 +13,7 @@ function generateId(): string {
 
 router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Story not found" });
     return;
@@ -24,6 +24,18 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
     return;
   }
   const data = parsed.data;
+  if (data.type === "audio" && !req.user) {
+    res.status(401).json({ error: "Sign in required to capture audio from this device" });
+    return;
+  }
+  if (data.type === "photo" && data.content.startsWith("data:") && !req.user) {
+    res.status(401).json({ error: "Sign in required to capture photos from this device" });
+    return;
+  }
+  if (/\b(xxx|porn|porno|pornography|pornhub|xvideos|onlyfans|sex tape|explicit sex|csam|child\s*porn)\b/i.test(data.content)) {
+    res.status(400).json({ error: "Porn is not allowed. News, art, and documentary work that includes nudity is fine." });
+    return;
+  }
   const id = data.id || generateId();
   const now = data.createdAt ? new Date(String(data.createdAt)) : new Date();
 
@@ -44,7 +56,7 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
 router.delete("/stories/:storyId/items/:itemId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const itemId = req.params.itemId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Story not found" });
     return;

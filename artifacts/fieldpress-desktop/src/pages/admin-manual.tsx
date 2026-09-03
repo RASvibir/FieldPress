@@ -60,7 +60,7 @@ export default function AdminManualPage() {
         ref={frameRef}
         title="FieldPress operator manual"
         src="/admin-manual.html"
-        className="w-full border-0 bg-black"
+        className="w-full border-0 bg-card"
         style={{ minHeight: "calc(100vh - 56px)" }}
       />
     </div>

@@ -24,6 +24,7 @@ const registerBody = z.object({
   password: z.string().min(10).max(200),
   displayName: z.string().trim().min(1).max(200).optional(),
   resetWord: z.string().min(8).max(200).optional(),
+  ageBand: z.enum(["kids", "teen", "adult", "under13", "teenager", "over18"]),
 });
 
 const loginBody = z.object({
@@ -55,7 +56,13 @@ function publicOrigin(): string {
 }
 
 function publicUser(user: AuthUser) {
-  return { id: user.id, email: user.email, displayName: user.displayName };
+  return { id: user.id, email: user.email, displayName: user.displayName, ageBand: user.ageBand || "teen" };
+}
+
+function parseAgeBand(value: string): "kids" | "teen" | "adult" {
+  if (value === "kids" || value === "under13") return "kids";
+  if (value === "adult" || value === "over18") return "adult";
+  return "teen";
 }
 
 async function createSession(res: Response, userId: string) {
@@ -91,9 +98,10 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     status: "active",
     passwordHash: await hashSecret(parsed.data.password),
     resetWordHash: parsed.data.resetWord ? await hashSecret(parsed.data.resetWord) : null,
+    ageBand: parseAgeBand(parsed.data.ageBand),
   });
   await createSession(res, id);
-  res.status(201).json({ user: { id, email, displayName } });
+  res.status(201).json({ user: { id, email, displayName, ageBand: parseAgeBand(parsed.data.ageBand) } });
 });
 
 router.post("/auth/login", async (req: Request, res: Response) => {
@@ -114,7 +122,7 @@ router.post("/auth/login", async (req: Request, res: Response) => {
     return;
   }
   await createSession(res, user.id);
-  res.json({ user: { id: user.id, email: user.email, displayName: user.displayName } });
+  res.json({ user: { id: user.id, email: user.email, displayName: user.displayName, ageBand: user.ageBand || "teen" } });
 });
 
 router.post("/auth/logout", async (req: Request, res: Response) => {

@@ -9,7 +9,7 @@ export default function UserManualPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-neon/20 bg-background/95 px-4 py-3">
+      <div className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-3 pr-16">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="w-4 h-4 mr-1" />
           HOME
@@ -36,7 +36,7 @@ export default function UserManualPage() {
         ref={frameRef}
         title="FieldPress user guide"
         src="/user-manual.html"
-        className="w-full border-0 bg-black"
+        className="w-full border-0 bg-card"
         style={{ minHeight: "calc(100vh - 56px)" }}
       />
     </div>

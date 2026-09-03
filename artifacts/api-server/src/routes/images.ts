@@ -1,11 +1,8 @@
 import express, { Router, Request, Response } from 'express';
 import { searchArchivalMedia, synthesizePhotoPrompt } from '../lib/images';
-import { requireAuth } from '../lib/auth';
-
 export const imagesRouter = Router();
 
 imagesRouter.use(express.json());
-imagesRouter.use(requireAuth);
 
 // Validate UUID vs preview slug
 const isUuid = (id: string) =>
