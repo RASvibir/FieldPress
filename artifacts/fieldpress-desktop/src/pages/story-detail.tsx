@@ -265,8 +265,9 @@ export default function StoryDetailPage() {
             ) : (
               <div className="space-y-2">
                 {drafts.map((draft) => {
-                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG];
+                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG] || MODE_CONFIG.article;
                   const Icon = config.icon;
+                  const updated = draft.updatedAt ? new Date(draft.updatedAt) : null;
                   return (
                     <Card
                       key={draft.id}
@@ -292,7 +293,7 @@ export default function StoryDetailPage() {
                               </span>
                             </div>
                             <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Updated {new Date(draft.updatedAt).toLocaleString()}
+                              Updated {updated && !Number.isNaN(updated.getTime()) ? updated.toLocaleString() : "just now"}
                             </div>
                           </div>
                           <DistributeDialog

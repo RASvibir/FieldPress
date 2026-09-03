@@ -642,22 +642,52 @@ async function geminiRenderImage(apiKey: string, prompt: string, ageBand: string
       : ageBand === "teen"
         ? "PG-13. Mild intensity only. No pornography. No nudity."
         : "Do not generate pornography or XXX sexual content. Documentary or artistic nudity is allowed.";
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: `Editorial still. ${ratingLine} No logos, no celebrities. ${prompt}` }] }],
-      generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
-    }),
-    signal: AbortSignal.timeout(28000),
-  });
-  if (!response.ok) throw new Error(`Gemini image ${response.status}`);
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }>;
-  };
-  const part = payload.candidates?.[0]?.content?.parts?.find((item) => item.inlineData?.data);
-  if (!part?.inlineData?.data) throw new Error("No image returned");
-  return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+  const key = apiKey.trim();
+  const models = [
+    "gemini-3.1-flash-image-preview",
+    "gemini-2.5-flash-image",
+    "gemini-3-pro-image-preview",
+    "gemini-2.0-flash-preview-image-generation",
+  ];
+  let last = "Gemini image failed";
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `Editorial still. ${ratingLine} No logos, no celebrities. ${prompt}` }] }],
+            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+          }),
+        },
+      );
+      const raw = await response.text();
+      if (!response.ok) {
+        last = `Gemini image ${response.status} (${model})`;
+        continue;
+      }
+      const payload = JSON.parse(raw) as {
+        candidates?: Array<{
+          content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string }; inline_data?: { mimeType?: string; mime_type?: string; data?: string } }> };
+        }>;
+      };
+      const parts = payload.candidates?.[0]?.content?.parts || [];
+      const blob = parts
+        .map((item) => item.inlineData || item.inline_data)
+        .find((item) => item?.data);
+      if (!blob?.data) {
+        last = `Gemini image returned no pixels (${model})`;
+        continue;
+      }
+      const mime = blob.mimeType || blob.mime_type || "image/png";
+      return `data:${mime};base64,${blob.data}`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : last;
+    }
+  }
+  throw new Error(last);
 }
 
 export default {
@@ -1082,7 +1112,10 @@ export default {
       if (parts[0] === "stories" && parts[2] === "drafts" && parts.length === 3 && method === "GET") {
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Not found" }, 404);
-        const drafts = await sql`select * from drafts where story_id = ${parts[1]} order by updated_at desc`;
+        const drafts = await sql`
+          select id, story_id as "storyId", mode, title, content, created_at as "createdAt", updated_at as "updatedAt"
+          from drafts where story_id = ${parts[1]} order by updated_at desc
+        `;
         return json(drafts);
       }
 
