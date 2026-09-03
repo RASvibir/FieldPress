@@ -11,6 +11,9 @@ type Env = {
   GOOGLE_CSE_KEY?: string;
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
+  AI?: {
+    run: (model: string, input: Record<string, unknown>) => Promise<{ image?: string } | ArrayBuffer | ReadableStream | null>;
+  };
 };
 
 const COOKIE = "fp_session";
@@ -839,71 +842,144 @@ Reply as Pressy only. Plain text.`;
   return deskText(env, prompt, { maxGeminiTokens: 2048, req });
 }
 
+function imagenAspect(ar: string) {
+  if (ar === "1:1" || ar === "16:9" || ar === "9:16" || ar === "4:3" || ar === "3:4") return ar;
+  if (ar === "4:5") return "3:4";
+  return "16:9";
+}
+
+function fluxSize(ar: string) {
+  if (ar === "16:9") return { width: 1024, height: 576 };
+  if (ar === "9:16") return { width: 576, height: 1024 };
+  if (ar === "4:5" || ar === "3:4") return { width: 768, height: 1024 };
+  if (ar === "4:3") return { width: 1024, height: 768 };
+  return { width: 1024, height: 1024 };
+}
+
+function findInlineImage(node: unknown, depth = 0): { mime: string; data: string } | null {
+  if (!node || depth > 10) return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findInlineImage(item, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof node !== "object") return null;
+  const row = node as Record<string, unknown>;
+  const data = row.data || row.bytesBase64Encoded || row.b64_json || row.image;
+  const mime = String(row.mimeType || row.mime_type || "image/png");
+  if (typeof data === "string" && data.length > 800) {
+    const looksImage = /image\//.test(mime) || data.length > 4000;
+    if (looksImage) return { mime: /image\//.test(mime) ? mime : "image/png", data };
+  }
+  for (const value of Object.values(row)) {
+    const hit = findInlineImage(value, depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function stillBrief(prompt: string, opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; ageBand?: string }) {
+  const ar = opts.aspectRatio || "16:9";
+  const style = IMAGE_STYLES[opts.style || "hd"];
+  const scene = publicPrompt(prompt).slice(0, 700);
+  const kids = opts.ageBand === "kids" ? " Gentle daylight, clothed people." : " Clothed documentary still.";
+  return `${style.label}. ${scene}.${kids} No captions, no logos. Aspect ${ar}.${opts.variation ? ` ${opts.variation}` : ""}`.trim();
+}
+
+async function fluxRender(env: Env, prompt: string, ar: string): Promise<string | null> {
+  if (!env.AI) return null;
+  const size = fluxSize(ar);
+  try {
+    const result = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", {
+      prompt: prompt.slice(0, 1800),
+      steps: 4,
+      ...size,
+    });
+    if (!result) return null;
+    if (typeof result === "string" && result.length > 800) return `data:image/jpeg;base64,${result}`;
+    if (result instanceof ArrayBuffer && result.byteLength > 800) {
+      const bytes = new Uint8Array(result);
+      let bin = "";
+      for (const byte of bytes) bin += String.fromCharCode(byte);
+      return `data:image/jpeg;base64,${btoa(bin)}`;
+    }
+    const blob = findInlineImage(result);
+    if (blob) return `data:${blob.mime === "image/png" && blob.data.startsWith("/9j/") ? "image/jpeg" : blob.mime};base64,${blob.data}`;
+  } catch (err) {
+    console.warn("flux still failed", err instanceof Error ? err.message.slice(0, 180) : "flux");
+  }
+  return null;
+}
+
 async function geminiRenderImage(
   apiKey: string,
   prompt: string,
   opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; conservative?: boolean; ageBand?: string } = {},
 ): Promise<string> {
-  const take = opts.variation ? ` ${opts.variation}` : "";
-  const ar = opts.aspectRatio || "16:9";
-  const style = IMAGE_STYLES[opts.style || "hd"];
-  const craft = `${style.label}. ${style.craft} Coherent anatomy and perspective, no watermarks, no captions. Aspect ${ar}.${take}`;
-  const scene = stillDirective(prompt, opts.ageBand === "kids" ? "kids" : "teen", Boolean(opts.conservative));
+  const ar = imagenAspect(opts.aspectRatio || "16:9");
+  const brief = stillBrief(prompt, { ...opts, aspectRatio: ar });
   const key = apiKey.trim();
-  const models = ["gemini-2.5-flash-image", "gemini-3.1-flash-image"];
-  const configs = [
-    { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: ar } },
-    { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: ar } },
-    { responseModalities: ["TEXT", "IMAGE"] },
-  ];
+  const models = ["gemini-3.1-flash-lite-image", "gemini-2.5-flash-image"];
   let last = "Gemini image failed";
   for (const model of models) {
-    for (const generationConfig of configs) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json", "x-goog-api-key": key },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: `${craft}\n\n${scene}` }] }],
-              generationConfig,
-            }),
-          },
-        );
-        const raw = await response.text();
-        if (!response.ok) {
-          last = `Gemini image ${response.status} (${model}) ${scrubGemini(raw)}`;
-          continue;
-        }
-        const payload = JSON.parse(raw) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string }; inline_data?: { mimeType?: string; mime_type?: string; data?: string } }> };
-            finishReason?: string;
-          }>;
-        };
-        const reason = payload.candidates?.[0]?.finishReason || "";
-        if (/SAFETY|BLOCK|RECITATION/i.test(reason)) {
-          last = "quality";
-          continue;
-        }
-        const parts = payload.candidates?.[0]?.content?.parts || [];
-        const blob = parts
-          .map((item) => item.inlineData || item.inline_data)
-          .find((item) => item?.data);
-        if (!blob?.data) {
-          last = `Gemini image returned no pixels (${model})`;
-          continue;
-        }
-        const mime = blob.mimeType || blob.mime_type || "image/png";
-        return `data:${mime};base64,${blob.data}`;
-      } catch (err) {
-        last = err instanceof Error ? err.message : last;
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: brief }] }],
+            generationConfig: {
+              responseModalities: ["IMAGE"],
+              imageConfig: { aspectRatio: ar, imageSize: "1K" },
+            },
+          }),
+        },
+      );
+      const raw = await response.text();
+      if (response.status === 429) {
+        last = "quota";
+        break;
       }
+      if (!response.ok) {
+        last = `Gemini image ${response.status} (${model}) ${scrubGemini(raw)}`;
+        continue;
+      }
+      const payload = JSON.parse(raw) as { candidates?: Array<{ finishReason?: string }>; promptFeedback?: { blockReason?: string } };
+      const reason = payload.candidates?.[0]?.finishReason || payload.promptFeedback?.blockReason || "";
+      if (/SAFETY|BLOCK|RECITATION/i.test(reason)) {
+        last = "quality";
+        continue;
+      }
+      const blob = findInlineImage(payload);
+      if (!blob) {
+        last = `Gemini image returned no pixels (${model})`;
+        continue;
+      }
+      return `data:${blob.mime};base64,${blob.data}`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : last;
     }
   }
-  console.warn("still render failed", last.slice(0, 240));
-  throw new Error(last === "quality" ? "quality" : last);
+  throw new Error(last);
+}
+
+async function renderStill(
+  env: Env,
+  prompt: string,
+  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; conservative?: boolean; ageBand?: string } = {},
+): Promise<string> {
+  const ar = opts.aspectRatio || "16:9";
+  const brief = stillBrief(prompt, opts);
+  const flux = await fluxRender(env, brief, ar);
+  if (flux) return flux;
+  if (env.GEMINI_API_KEY) {
+    return geminiRenderImage(env.GEMINI_API_KEY, prompt, opts);
+  }
+  throw new Error("still failed");
 }
 
 export default {
@@ -1279,7 +1355,7 @@ export default {
 
       if (parts[0] === "stories" && parts[1] && parts[2] === "images" && parts[3] === "generate" && method === "POST") {
         if (!userId) return json({ error: "Sign in required for image rendering" }, 401);
-        if (!env.GEMINI_API_KEY) return json({ error: "Image rendering is not configured" }, 503);
+        if (!env.GEMINI_API_KEY && !env.AI) return json({ error: "Image rendering is not configured" }, 503);
         const quota = await photoQuota(sql, userId);
         if (quota.remaining < 1) {
           return json(
@@ -1304,7 +1380,7 @@ export default {
         if (ageBand !== "adult" && !textAllowed(ageBand, prompt, body.headline || "", body.fieldNotes || "")) {
           return json({ error: "That take failed. Try MAKE again.", ...quota }, 400);
         }
-        const wanted = Math.min(3, Math.max(1, Math.floor(Number(body.count) || 3)));
+        const wanted = Math.min(3, Math.max(1, Math.floor(Number(body.count) || 1)));
         const n = Math.min(wanted, quota.remaining);
         const angles = [
           "Take A: wide establishing, layered foreground.",
@@ -1312,7 +1388,7 @@ export default {
           "Take C: unexpected angle or light, same style, different moment.",
         ];
         const renderOne = (i: number, attempt: number) =>
-          geminiRenderImage(env.GEMINI_API_KEY!, prompt, {
+          renderStill(env, prompt, {
             variation: `${angles[i] || `Take ${i + 1}.`} Pass ${attempt + 1}.`,
             aspectRatio: built.aspectRatio,
             style: styleId,
@@ -1324,11 +1400,7 @@ export default {
           try {
             dataUrls.push(await renderOne(i, 0));
           } catch {
-            try {
-              dataUrls.push(await renderOne(i, 1));
-            } catch {
-              /* skip this take */
-            }
+            /* skip this take */
           }
         }
         if (!dataUrls.length) {

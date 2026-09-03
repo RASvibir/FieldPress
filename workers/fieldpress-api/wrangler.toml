@@ -10,6 +10,9 @@ OLLAMA_MODEL = "llama3.2"
 [observability]
 enabled = true
 
+[ai]
+binding = "AI"
+
 [[routes]]
 pattern = "fieldpress.studio/api*"
 zone_name = "fieldpress.studio"
@@ -23,15 +26,15 @@ pattern = "app.fieldpress.studio/api*"
 zone_name = "fieldpress.studio"
 
 [[routes]]
-pattern = "fieldpress.studio/s*"
+pattern = "fieldpress.studio/s/*"
 zone_name = "fieldpress.studio"
 
 [[routes]]
-pattern = "www.fieldpress.studio/s*"
+pattern = "www.fieldpress.studio/s/*"
 zone_name = "fieldpress.studio"
 
 [[routes]]
-pattern = "app.fieldpress.studio/s*"
+pattern = "app.fieldpress.studio/s/*"
 zone_name = "fieldpress.studio"
 
 [[routes]]

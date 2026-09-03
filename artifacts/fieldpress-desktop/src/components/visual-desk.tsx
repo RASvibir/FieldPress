@@ -83,7 +83,7 @@ export function VisualDesk({
   const [stills, setStills] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [style, setStyle] = useState<StyleId>("hd");
-  const [count, setCount] = useState<1 | 2 | 3>(3);
+  const [count, setCount] = useState<1 | 2 | 3>(1);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [busy, setBusy] = useState<"search" | "make" | null>(null);
   const [error, setError] = useState<string | null>(null);
