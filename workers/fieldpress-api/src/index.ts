@@ -7,12 +7,14 @@ type Env = {
   GEMINI_MODEL?: string;
   OLLAMA_HOST?: string;
   OLLAMA_MODEL?: string;
+  OLLAMA_API_KEY?: string;
+  GROQ_API_KEY?: string;
   GOOGLE_CSE_ID?: string;
   GOOGLE_CSE_KEY?: string;
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
   AI?: {
-    run: (model: string, input: Record<string, unknown>) => Promise<{ image?: string } | ArrayBuffer | ReadableStream | null>;
+    run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
   };
 };
 
@@ -470,10 +472,39 @@ function localProduce(title: string, notes: string[]) {
 
 const GEMINI_TEXT_MODELS = [
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
-  "gemini-3.6-flash",
-  "gemini-2.0-flash",
   "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+];
+
+const WORKERS_TEXT_MODELS = [
+  "@cf/meta/llama-3.1-8b-instruct-fast",
+  "@cf/openai/gpt-oss-20b",
+  "@cf/meta/llama-3.2-3b-instruct",
+  "@cf/meta/llama-3.1-8b-instruct",
+  "@cf/google/gemma-3-12b-it",
+];
+
+const WORKERS_IMAGE_MODELS = [
+  { id: "@cf/black-forest-labs/flux-1-schnell", kind: "flux" as const },
+  { id: "@cf/bytedance/stable-diffusion-xl-lightning", kind: "prompt" as const },
+  { id: "@cf/lykon/dreamshaper-8-lcm", kind: "prompt" as const },
+  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", kind: "prompt" as const },
+];
+
+const OLLAMA_PREFERRED = [
+  "llama3.3",
+  "llama3.2",
+  "llama3.1",
+  "qwen2.5",
+  "qwen3",
+  "mistral",
+  "gemma3",
+  "gemma2",
+  "phi4",
+  "mixtral",
+  "llama3",
 ];
 
 function scrubGemini(text: string) {
@@ -563,32 +594,171 @@ async function geminiGenerateText(
 
 function ollamaUsable(host: string | undefined, req?: Request) {
   if (!host) return false;
-  const local = /127\.0\.0\.1|localhost/i.test(host);
+  const local = /127\.0\.0\.1|localhost|host\.docker\.internal/i.test(host);
   if (!local) return true;
   if (!req) return false;
   const hostname = new URL(req.url).hostname;
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
-async function ollamaGenerate(host: string, model: string, prompt: string, json: boolean): Promise<string> {
+function ollamaHosts(env: Env): string[] {
+  const raw = (env.OLLAMA_HOST || "").trim().replace(/^["']|["']$/g, "");
+  return raw
+    .split(",")
+    .map((item) => item.trim().replace(/\/$/, "").replace(/\/v1$/i, ""))
+    .filter(Boolean);
+}
+
+function pickOllamaModel(names: string[], preferred?: string): string {
+  const list = names.filter(Boolean);
+  if (preferred) {
+    const hit = list.find((name) => name === preferred || name.toLowerCase().startsWith(preferred.toLowerCase()));
+    if (hit) return hit;
+  }
+  for (const want of OLLAMA_PREFERRED) {
+    const hit = list.find((name) => name.toLowerCase() === want || name.toLowerCase().startsWith(`${want}:`) || name.toLowerCase().startsWith(`${want}-`));
+    if (hit) return hit;
+  }
+  return list[0] || preferred || "llama3.2";
+}
+
+async function resolveOllamaModel(base: string, preferred: string | undefined, headers: HeadersInit): Promise<string> {
+  try {
+    const response = await fetch(`${base}/api/tags`, { headers, signal: AbortSignal.timeout(4000) });
+    if (!response.ok) return preferred || "llama3.2";
+    const data = (await response.json()) as { models?: Array<{ name?: string; model?: string }> };
+    const names = (data.models || []).map((row) => row.name || row.model || "").filter(Boolean);
+    return pickOllamaModel(names, preferred);
+  } catch {
+    return preferred || "llama3.2";
+  }
+}
+
+function ollamaMessageText(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const row = payload as { response?: string; message?: { content?: string }; choices?: Array<{ message?: { content?: string } }> };
+  return String(row.message?.content || row.response || row.choices?.[0]?.message?.content || "").trim();
+}
+
+async function ollamaGenerate(host: string, preferred: string | undefined, prompt: string, json: boolean, apiKey?: string): Promise<string> {
   const base = host.replace(/\/$/, "").replace(/\/v1$/i, "");
+  const headers: HeadersInit = { "content-type": "application/json" };
+  if (apiKey) (headers as Record<string, string>).authorization = `Bearer ${apiKey}`;
+  const model = await resolveOllamaModel(base, preferred, headers);
+  const options = { temperature: 0.4, num_predict: json ? 1400 : 900, num_ctx: 4096 };
+  const chat = await fetch(`${base}/api/chat`, {
+    method: "POST",
+    headers,
+    signal: AbortSignal.timeout(28000),
+    body: JSON.stringify({
+      model,
+      stream: false,
+      ...(json ? { format: "json" } : {}),
+      messages: [{ role: "user", content: prompt }],
+      options,
+    }),
+  });
+  if (chat.ok) {
+    const text = ollamaMessageText(await chat.json());
+    if (text) return text;
+  }
   const response = await fetch(`${base}/api/generate`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
+    signal: AbortSignal.timeout(28000),
     body: JSON.stringify({
       model,
       prompt,
       stream: false,
       ...(json ? { format: "json" } : {}),
-      options: { temperature: 0.4, num_predict: json ? 1400 : 900, num_ctx: 4096 },
+      options,
     }),
   });
   const raw = await response.text();
   if (!response.ok) throw new Error(`Ollama ${response.status}: ${raw.slice(0, 200)}`);
-  const data = JSON.parse(raw) as { response?: string };
-  const text = (data.response || "").trim();
+  const text = ollamaMessageText(JSON.parse(raw) as unknown);
   if (!text) throw new Error("Ollama returned an empty reply");
   return text;
+}
+
+async function groqText(apiKey: string, prompt: string, json: boolean): Promise<string> {
+  const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  let last = "Groq failed";
+  for (const model of models) {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(20000),
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        messages: [{ role: "user", content: prompt.slice(0, 8000) }],
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+    const raw = await response.text();
+    if (!response.ok) {
+      last = `Groq ${response.status}`;
+      continue;
+    }
+    const data = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = (data.choices?.[0]?.message?.content || "").trim();
+    if (text) return text;
+  }
+  throw new Error(last);
+}
+
+function workersAiText(payload: unknown): string {
+  if (!payload) return "";
+  if (typeof payload === "string") return payload.trim();
+  if (typeof payload !== "object") return "";
+  const row = payload as { response?: string; result?: { response?: string }; output_text?: string };
+  return String(row.response || row.result?.response || row.output_text || "").trim();
+}
+
+async function datacenterText(env: Env, prompt: string): Promise<string> {
+  if (!env.AI) throw new Error("Workers AI is not bound");
+  let last = "Workers AI text failed";
+  for (const model of WORKERS_TEXT_MODELS) {
+    try {
+      const raw = await env.AI.run(model, {
+        messages: [
+          { role: "system", content: "You are Pressy, the FieldPress desk bot. Complete sentences. Do not invent facts." },
+          { role: "user", content: prompt.slice(0, 6000) },
+        ],
+        max_tokens: 700,
+        temperature: 0.4,
+      });
+      const text = workersAiText(raw);
+      if (text) return text;
+      last = `${model} empty`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : last;
+    }
+  }
+  throw new Error(last);
+}
+
+async function pollinationsText(prompt: string): Promise<string> {
+  const response = await fetch("https://text.pollinations.ai/openai", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    signal: AbortSignal.timeout(25000),
+    body: JSON.stringify({
+      model: "openai",
+      messages: [{ role: "user", content: prompt.slice(0, 4000) }],
+    }),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`Pollinations text ${response.status}`);
+  try {
+    const data = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = (data.choices?.[0]?.message?.content || "").trim();
+    if (text) return text;
+  } catch {
+    if (raw.trim()) return raw.trim();
+  }
+  throw new Error("Pollinations text empty");
 }
 
 async function deskText(
@@ -596,35 +766,71 @@ async function deskText(
   prompt: string,
   opts: { json?: boolean; maxGeminiTokens?: number; req?: Request } = {},
 ): Promise<{ text: string; desk: string }> {
-  let draft = "";
-  const host = env.OLLAMA_HOST?.trim().replace(/^["']|["']$/g, "");
-  if (host && ollamaUsable(host, opts.req)) {
+  const clipped = prompt.slice(0, 8000);
+  const errors: string[] = [];
+
+  for (const host of ollamaHosts(env)) {
+    if (!ollamaUsable(host, opts.req)) continue;
     try {
-      draft = await ollamaGenerate(host, env.OLLAMA_MODEL || "llama3.2", prompt.slice(0, 5000), Boolean(opts.json));
-    } catch {
-      draft = "";
+      const text = await ollamaGenerate(host, env.OLLAMA_MODEL, clipped, Boolean(opts.json), env.OLLAMA_API_KEY);
+      return { text, desk: "ollama" };
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "ollama");
     }
   }
-  if (env.GEMINI_API_KEY) {
-    const polish = draft
-      ? `You are Pressy, FieldPress desk bot. Finish and improve this draft. Complete every sentence. Do not invent facts. Never mention Adult desk, teen desk, kids desk, age bands, or ratings to the reporter — just say the desk.\nDRAFT:\n${draft.slice(0, 3500)}\n\nASK:\n${prompt.slice(0, 2500)}`
-      : prompt;
+
+  if (env.OLLAMA_API_KEY) {
     try {
-      const text = await geminiGenerateText(env.GEMINI_API_KEY, polish, {
+      const text = await ollamaGenerate("https://ollama.com", env.OLLAMA_MODEL, clipped, Boolean(opts.json), env.OLLAMA_API_KEY);
+      return { text, desk: "ollama-cloud" };
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "ollama-cloud");
+    }
+  }
+
+  if (env.GROQ_API_KEY) {
+    try {
+      const text = await groqText(env.GROQ_API_KEY, clipped, Boolean(opts.json));
+      return { text, desk: "groq" };
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "groq");
+    }
+  }
+
+  if (env.GEMINI_API_KEY) {
+    try {
+      const text = await geminiGenerateText(env.GEMINI_API_KEY, clipped, {
         json: opts.json,
         maxOutputTokens: opts.maxGeminiTokens || 2048,
         temperature: 0.45,
         preferredModel: env.GEMINI_MODEL,
         thinkingBudget: 0,
       });
-      return { text, desk: draft ? "ollama+gemini" : "gemini" };
+      return { text, desk: "gemini" };
     } catch (err) {
-      if (draft) return { text: draft, desk: "ollama" };
-      throw err;
+      errors.push(err instanceof Error ? err.message : "gemini");
     }
   }
-  if (draft) return { text: draft, desk: "ollama" };
-  throw new Error("Desk AI is not configured. Add Gemini, or a public Ollama host.");
+
+  if (env.AI) {
+    try {
+      const text = await datacenterText(env, opts.json ? `${clipped}\n\nReturn JSON only.` : clipped);
+      return { text, desk: "workers-ai" };
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "workers-ai");
+    }
+  }
+
+  if (!opts.json) {
+    try {
+      const text = await pollinationsText(clipped);
+      return { text, desk: "pollinations" };
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "pollinations");
+    }
+  }
+
+  throw new Error(errors[0] || "Desk AI is not configured. Run Ollama locally, bind Workers AI, or add Gemini.");
 }
 
 async function geminiProduce(apiKey: string, title: string, notes: string[]) {
@@ -868,14 +1074,6 @@ function imagenAspect(ar: string) {
   return "16:9";
 }
 
-function fluxSize(ar: string) {
-  if (ar === "16:9") return { width: 1024, height: 576 };
-  if (ar === "9:16") return { width: 576, height: 1024 };
-  if (ar === "4:5" || ar === "3:4") return { width: 768, height: 1024 };
-  if (ar === "4:3") return { width: 1024, height: 768 };
-  return { width: 1024, height: 1024 };
-}
-
 function findInlineImage(node: unknown, depth = 0): { mime: string; data: string } | null {
   if (!node || depth > 10) return null;
   if (Array.isArray(node)) {
@@ -908,29 +1106,125 @@ function stillBrief(prompt: string, opts: { variation?: string; aspectRatio?: st
   return `${style.label}. ${scene}.${kids} No captions, no logos. Aspect ${ar}.${opts.variation ? ` ${opts.variation}` : ""}`.trim();
 }
 
-async function fluxRender(env: Env, prompt: string, ar: string): Promise<string | null> {
+function aspectSize(ar: string): { w: number; h: number } {
+  if (ar === "1:1") return { w: 1024, h: 1024 };
+  if (ar === "4:5" || ar === "3:4") return { w: 768, h: 1024 };
+  if (ar === "9:16") return { w: 576, h: 1024 };
+  if (ar === "4:3") return { w: 1024, h: 768 };
+  return { w: 1024, h: 576 };
+}
+
+function bytesToDataUrl(buf: ArrayBuffer, mime = "image/jpeg"): string {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return `data:${mime};base64,${btoa(bin)}`;
+}
+
+async function stillFromUnknown(raw: unknown): Promise<string | null> {
+  if (!raw) return null;
+  if (raw instanceof ArrayBuffer && raw.byteLength > 800) return bytesToDataUrl(raw);
+  if (raw instanceof Uint8Array && raw.byteLength > 800) return bytesToDataUrl(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+  if (typeof ReadableStream !== "undefined" && raw instanceof ReadableStream) {
+    const buf = await new Response(raw).arrayBuffer();
+    if (buf.byteLength > 800) return bytesToDataUrl(buf);
+  }
+  const inline = findInlineImage(raw);
+  if (inline) return `data:${/image\//.test(inline.mime) ? inline.mime : "image/jpeg"};base64,${inline.data}`;
+  return null;
+}
+
+async function kleinStill(env: Env, prompt: string, ar: string): Promise<string | null> {
   if (!env.AI) return null;
-  const size = fluxSize(ar);
+  const { w, h } = aspectSize(ar);
   try {
-    const result = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", {
-      prompt: prompt.slice(0, 1800),
-      steps: 4,
-      ...size,
+    const form = new FormData();
+    form.append("prompt", prompt.slice(0, 2048));
+    form.append("width", String(w));
+    form.append("height", String(h));
+    const packed = new Response(form);
+    const raw = await env.AI.run("@cf/black-forest-labs/flux-2-klein-4b", {
+      multipart: {
+        body: packed.body,
+        contentType: packed.headers.get("content-type"),
+      },
     });
-    if (!result) return null;
-    if (typeof result === "string" && result.length > 800) return `data:image/jpeg;base64,${result}`;
-    if (result instanceof ArrayBuffer && result.byteLength > 800) {
-      const bytes = new Uint8Array(result);
-      let bin = "";
-      for (const byte of bytes) bin += String.fromCharCode(byte);
-      return `data:image/jpeg;base64,${btoa(bin)}`;
-    }
-    const blob = findInlineImage(result);
-    if (blob) return `data:${blob.mime === "image/png" && blob.data.startsWith("/9j/") ? "image/jpeg" : blob.mime};base64,${blob.data}`;
+    return stillFromUnknown(raw);
   } catch (err) {
-    console.warn("flux still failed", err instanceof Error ? err.message.slice(0, 180) : "flux");
+    console.warn("klein still failed", err instanceof Error ? err.message.slice(0, 180) : "klein");
+    return null;
+  }
+}
+
+async function datacenterStill(env: Env, prompt: string, ar: string): Promise<string | null> {
+  if (!env.AI) return null;
+  const brief = prompt.slice(0, 2048);
+  const seed = Math.floor(Math.random() * 1_000_000_000);
+  for (const model of WORKERS_IMAGE_MODELS) {
+    try {
+      const input =
+        model.kind === "flux"
+          ? { prompt: brief, steps: 4, seed }
+          : { prompt: brief };
+      const raw = await env.AI.run(model.id, input);
+      const hit = await stillFromUnknown(raw);
+      if (hit) return hit;
+      const row = raw as { image?: string } | null;
+      if (typeof row?.image === "string" && row.image.length > 100) {
+        return `data:image/jpeg;base64,${row.image}`;
+      }
+    } catch (err) {
+      console.warn("still model failed", model.id, err instanceof Error ? err.message.slice(0, 160) : "ai");
+    }
+  }
+  const klein = await kleinStill(env, brief, ar);
+  if (klein) return klein;
+  return null;
+}
+
+async function pollinationsStill(prompt: string, ar: string): Promise<string | null> {
+  const { w, h } = aspectSize(ar);
+  const seed = Math.floor(Math.random() * 1e9);
+  const scene = encodeURIComponent(prompt.slice(0, 400));
+  for (const model of ["flux", "turbo"]) {
+    try {
+      const url = `https://image.pollinations.ai/prompt/${scene}?nologo=true&private=true&model=${model}&width=${w}&height=${h}&seed=${seed}`;
+      const response = await fetch(url, {
+        headers: { accept: "image/*,application/octet-stream", "user-agent": "FieldPress/1.0" },
+        signal: AbortSignal.timeout(28000),
+      });
+      if (!response.ok) continue;
+      const buf = await response.arrayBuffer();
+      if (buf.byteLength > 800) {
+        const mime = (response.headers.get("content-type") || "").includes("png") ? "image/png" : "image/jpeg";
+        return bytesToDataUrl(buf, mime);
+      }
+    } catch {
+      /* next free renderer */
+    }
   }
   return null;
+}
+
+async function renderStill(
+  env: Env,
+  prompt: string,
+  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; conservative?: boolean; ageBand?: string } = {},
+): Promise<string> {
+  const ar = opts.aspectRatio || "16:9";
+  const brief = stillBrief(prompt, opts);
+  const datacenter = await datacenterStill(env, brief, ar);
+  if (datacenter) return datacenter;
+  const pollinations = await pollinationsStill(brief, ar);
+  if (pollinations) return pollinations;
+  if (env.GEMINI_API_KEY) {
+    try {
+      return await geminiRenderImage(env.GEMINI_API_KEY, prompt, opts);
+    } catch (err) {
+      console.warn("gemini still failed", err instanceof Error ? err.message.slice(0, 180) : "gemini");
+    }
+  }
+  throw new Error("No free still renderer returned pixels");
 }
 
 async function geminiRenderImage(
@@ -991,21 +1285,6 @@ async function geminiRenderImage(
   throw new Error(last);
 }
 
-async function renderStill(
-  env: Env,
-  prompt: string,
-  opts: { variation?: string; aspectRatio?: string; style?: ImageStyleId; conservative?: boolean; ageBand?: string } = {},
-): Promise<string> {
-  const ar = opts.aspectRatio || "16:9";
-  const brief = stillBrief(prompt, opts);
-  const flux = await fluxRender(env, brief, ar);
-  if (flux) return flux;
-  if (env.GEMINI_API_KEY) {
-    return geminiRenderImage(env.GEMINI_API_KEY, prompt, opts);
-  }
-  throw new Error("still failed");
-}
-
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     if (req.method === "OPTIONS") {
@@ -1019,7 +1298,16 @@ export default {
 
     try {
       if (parts[0] === "healthz" && method === "GET") {
-        return json({ status: "ok" });
+        return json({
+          status: "ok",
+          desks: {
+            ollama: ollamaHosts(env).length > 0 || Boolean(env.OLLAMA_API_KEY),
+            groq: Boolean(env.GROQ_API_KEY),
+            gemini: Boolean(env.GEMINI_API_KEY),
+            workersAi: Boolean(env.AI),
+            pollinations: true,
+          },
+        });
       }
 
       if (parts[0] === "s" && parts[1] && method === "GET") {
@@ -1248,9 +1536,16 @@ export default {
         }
         const notes = extra ? [extra] : [];
         let ideas = localIdeas(title, notes);
-        if (env.GEMINI_API_KEY) {
+        try {
+          ideas = await geminiIdeas(env.GEMINI_API_KEY || "", title, notes, env.GEMINI_MODEL);
+        } catch {
           try {
-            ideas = await geminiIdeas(env.GEMINI_API_KEY, title, notes, env.GEMINI_MODEL);
+            const { text } = await deskText(
+              env,
+              `You are a newsroom idea editor. Return JSON keys: searchQueries (string[3]), spiffs (array of {headline, visual, hook}), articleIdeas (string[3]), socialIdeas (string[3]), podcastIdeas (string[3]). Headline: ${title}\nNotes:\n${notes.join("\n") || "(none)"}`,
+              { json: true, maxGeminiTokens: 900, req },
+            );
+            ideas = { ...localIdeas(title, notes), ...(JSON.parse(text) as object) };
           } catch {
             ideas = localIdeas(title, notes);
           }
@@ -1364,9 +1659,16 @@ export default {
           .filter((item) => item.type === "note" || item.type === "text")
           .map((item) => item.content);
         let ideas = localIdeas(story.title, notes);
-        if (env.GEMINI_API_KEY) {
+        try {
+          ideas = await geminiIdeas(env.GEMINI_API_KEY || "", story.title, notes);
+        } catch {
           try {
-            ideas = await geminiIdeas(env.GEMINI_API_KEY, story.title, notes);
+            const { text } = await deskText(
+              env,
+              `You are a newsroom idea editor. Return JSON keys: searchQueries (string[3]), spiffs (array of {headline, visual, hook}), articleIdeas (string[3]), socialIdeas (string[3]), podcastIdeas (string[3]). Headline: ${story.title}\nNotes:\n${notes.join("\n") || "(none)"}`,
+              { json: true, maxGeminiTokens: 900, req },
+            );
+            ideas = { ...localIdeas(story.title, notes), ...(JSON.parse(text) as object) };
           } catch {
             ideas = localIdeas(story.title, notes);
           }
@@ -1395,7 +1697,6 @@ export default {
 
       if (parts[0] === "stories" && parts[1] && parts[2] === "images" && parts[3] === "generate" && method === "POST") {
         if (!userId) return json({ error: "Sign in required for image rendering" }, 401);
-        if (!env.GEMINI_API_KEY && !env.AI) return json({ error: "Image rendering is not configured" }, 503);
         const quota = await photoQuota(sql, userId);
         if (quota.remaining < 1) {
           return json(
@@ -1467,21 +1768,19 @@ export default {
         const styleId = parseImageStyle(body.style);
         const built = photoPrompt(body.format || "article_hero", body.headline || "", body.fieldNotes || "", styleId);
         const style = IMAGE_STYLES[styleId];
-        if (env.GEMINI_API_KEY) {
-          try {
-            const { text } = await deskText(
-              env,
-              `You write image briefs. Commit fully to this style: ${style.label}. ${style.craft}
+        try {
+          const { text } = await deskText(
+            env,
+            `You write image briefs. Commit fully to this style: ${style.label}. ${style.craft}
 Write ONE dense still brief (80–160 words): subject, place, time, light, materials, composition. Aspect ${built.aspectRatio}.
 Headline: ${body.headline || "(none)"}
 Notes: ${body.fieldNotes || "(none)"}
 No celebrities, no logos, no on-image text. Return only the prompt.`,
-              { maxGeminiTokens: 420, req },
-            );
-            if (text.trim()) return json({ ...built, prompt: publicPrompt(text.trim()).slice(0, 2000) });
-          } catch {
-            /* keep template */
-          }
+            { maxGeminiTokens: 420, req },
+          );
+          if (text.trim()) return json({ ...built, prompt: publicPrompt(text.trim()).slice(0, 2000) });
+        } catch {
+          /* keep template */
         }
         return json({ ...built, prompt: publicPrompt(built.prompt) });
       }

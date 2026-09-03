@@ -16,6 +16,7 @@ import { DistributeDialog } from "@/components/distribute-dialog";
 import { CaptureBar } from "@/components/capture-bar";
 import { extractImageSrc } from "@/lib/item-media";
 import { INKS, type InkId, inkLabel } from "@/lib/ink";
+import { askPressy } from "@/lib/desk";
 
 type Tab = "wall" | "feed" | "search";
 
@@ -146,18 +147,10 @@ export default function DashboardPage() {
     setPressyBusy(true);
     setPostError(null);
     try {
-      const res = await fetch("/api/pressy", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setPostError(typeof body.error === "string" ? body.error : "Pressy could not answer");
-        return;
-      }
-      setPressyReply(typeof body.reply === "string" ? body.reply : "");
+      const body = await askPressy(message);
+      setPressyReply(body.reply);
+    } catch (err) {
+      setPostError(err instanceof Error ? err.message : "Pressy could not answer");
     } finally {
       setPressyBusy(false);
     }

@@ -1,0 +1,5 @@
+# Used by `wrangler dev` only. Never deploy localhost as a production var.
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.2
+# GROQ_API_KEY=
+# OLLAMA_API_KEY=

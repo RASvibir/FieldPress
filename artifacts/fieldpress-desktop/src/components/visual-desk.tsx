@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { askLocalDesk } from "@/lib/desk";
 
 type Hit = {
   id: number | string;
@@ -151,15 +152,23 @@ export function VisualDesk({
     setBusy("make");
     setError(null);
     try {
-      const promptRes = await fetch(`/api/stories/${storyId}/images/generate-prompt`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ format, headline, fieldNotes: notes, style }),
-      });
-      const promptBody = (await promptRes.json().catch(() => null)) as { prompt?: string; error?: string } | null;
-      if (!promptRes.ok) throw new Error(friendlyError(promptBody?.error));
-      const nextPrompt = promptBody?.prompt?.trim() || "";
+      let nextPrompt = "";
+      const localBrief = await askLocalDesk(
+        `Write ONE dense documentary still brief (80–160 words). Style ${style}. Headline: ${headline || "(none)"}. Notes: ${notes || "(none)"}. No celebrities, no logos, no on-image text. Return only the prompt.`,
+      );
+      if (localBrief?.text) {
+        nextPrompt = localBrief.text.trim();
+      } else {
+        const promptRes = await fetch(`/api/stories/${storyId}/images/generate-prompt`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ format, headline, fieldNotes: notes, style }),
+        });
+        const promptBody = (await promptRes.json().catch(() => null)) as { prompt?: string; error?: string } | null;
+        if (!promptRes.ok) throw new Error(friendlyError(promptBody?.error));
+        nextPrompt = promptBody?.prompt?.trim() || "";
+      }
       if (nextPrompt) setPrompt(scrubCopy(nextPrompt));
 
       const shots = Math.min(count, quota?.remaining ?? count) as 1 | 2 | 3;

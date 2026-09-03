@@ -3,6 +3,7 @@ import { Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PressyMark } from "@/components/pressy-mark";
+import { askPressy } from "@/lib/desk";
 
 type Turn = { role: "user" | "pressy"; content: string };
 
@@ -32,17 +33,10 @@ export function PressyBubble() {
     setTurns(history);
     setBusy(true);
     try {
-      const res = await fetch("/api/pressy", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message,
-          history: history.slice(0, -1).map((turn) => ({ role: turn.role, content: turn.content })),
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { reply?: string; error?: string };
-      if (!res.ok) throw new Error(body.error || "Pressy could not answer");
+      const body = await askPressy(
+        message,
+        history.slice(0, -1).map((turn) => ({ role: turn.role, content: turn.content })),
+      );
       setTurns((prev) => [...prev, { role: "pressy", content: body.reply || "…" }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pressy could not answer");
