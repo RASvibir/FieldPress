@@ -155,7 +155,7 @@ async function createSession(sql: Sql, userId: string) {
 }
 
 const PORN_RE =
-  /\b(xxx|porn|porno|pornography|pornhub|xvideos|onlyfans|sex tape|explicit sex|csam|child\s*porn|child\s*sexual)\b/i;
+  /\b(xxx|porno|porn|pornography|pornhub|xvideos|onlyfans|sex tape|explicit sex|csam|child porn|child sexual)\b/i;
 
 const CSAM_RE = /\b(csam|child\s*porn|child\s*sexual|underage\s*sex)\b/i;
 
@@ -164,11 +164,7 @@ function looksCsam(...parts: string[]): boolean {
 }
 
 function looksPornCopy(...parts: string[]): boolean {
-  const text = parts
-    .join(" ")
-    .replace(/\bno pornography\b/gi, "")
-    .replace(/\bno porn\b/gi, "");
-  return PORN_RE.test(text);
+  return PORN_RE.test(publicPrompt(parts.join(" ")));
 }
 
 function textAllowed(ageBand: string, ...parts: string[]): boolean {
@@ -183,24 +179,27 @@ function textAllowed(ageBand: string, ...parts: string[]): boolean {
 function publicPrompt(text: string) {
   return text
     .replace(/\bno pornography\b/gi, "")
-    .replace(/\bno porn(?:ography)?\b/gi, "")
+    .replace(/\bno porn(?:ography|ographic)?\b/gi, "")
+    .replace(/\bpornograph(?:y|ic)\b/gi, "")
+    .replace(/porn is not allowed[^.]*\./gi, "")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+\./g, ".")
     .trim();
 }
 
 function stillDirective(scene: string, ageBand: string, conservative = false) {
+  const clean = publicPrompt(scene);
   if (ageBand === "kids") {
-    return `${scene}
+    return `${clean}
 
-G / Kids still only. No violence, no sexual content, no nudity, no frightening injury. Gentle documentary.`;
+Gentle documentary still. Daylight, clothed people, no injury close-ups.`;
   }
   const extra = conservative
-    ? " Implication only: street, courtroom, newsroom, signage, or clothed figures. No skin-focused framing."
+    ? " Prefer street, courtroom, newsroom, or signage. Clothed figures, medium or wide."
     : "";
-  return `${scene}
+  return `${clean}
 
-PG-13 still only. No sexual acts, no genitals, no pornographic image. People clothed. Adult topics may be in the assignment; do not depict sex.${extra}`;
+News still. Clothed people. PG-13 documentary framing.${extra}`;
 }
 
 const PORN_BLOCK = "Couldn't use that take.";
@@ -848,19 +847,18 @@ async function geminiRenderImage(
   const take = opts.variation ? ` ${opts.variation}` : "";
   const ar = opts.aspectRatio || "16:9";
   const style = IMAGE_STYLES[opts.style || "hd"];
-  const craft = `Commit fully to this look: ${style.label}. ${style.craft} Masterpiece execution, coherent anatomy and perspective, no watermarks, no captions. Aspect ${ar}.${take}`;
+  const craft = `${style.label}. ${style.craft} Coherent anatomy and perspective, no watermarks, no captions. Aspect ${ar}.${take}`;
   const scene = stillDirective(prompt, opts.ageBand === "kids" ? "kids" : "teen", Boolean(opts.conservative));
   const key = apiKey.trim();
-  const models = [
-    "gemini-2.5-flash-image",
-    "gemini-2.5-flash-image-preview",
-    "gemini-3.1-flash-image-preview",
-    "gemini-3-pro-image-preview",
-    "gemini-2.0-flash-preview-image-generation",
+  const models = ["gemini-2.5-flash-image", "gemini-3.1-flash-image"];
+  const configs = [
+    { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: ar } },
+    { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: ar } },
+    { responseModalities: ["TEXT", "IMAGE"] },
   ];
   let last = "Gemini image failed";
-  for (const withAspect of [false, true]) {
-    for (const model of models) {
+  for (const model of models) {
+    for (const generationConfig of configs) {
       try {
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -868,16 +866,14 @@ async function geminiRenderImage(
             method: "POST",
             headers: { "content-type": "application/json", "x-goog-api-key": key },
             body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: `${craft} Scene: ${scene}` }] }],
-              generationConfig: withAspect
-                ? { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: ar } }
-                : { responseModalities: ["TEXT", "IMAGE"] },
+              contents: [{ role: "user", parts: [{ text: `${craft}\n\n${scene}` }] }],
+              generationConfig,
             }),
           },
         );
         const raw = await response.text();
         if (!response.ok) {
-          last = `Gemini image ${response.status} (${model})`;
+          last = `Gemini image ${response.status} (${model}) ${scrubGemini(raw)}`;
           continue;
         }
         const payload = JSON.parse(raw) as {
@@ -906,6 +902,7 @@ async function geminiRenderImage(
       }
     }
   }
+  console.warn("still render failed", last.slice(0, 240));
   throw new Error(last === "quality" ? "quality" : last);
 }
 
@@ -1322,18 +1319,16 @@ export default {
             conservative: attempt > 0,
             ageBand,
           });
-        const firstPass = await Promise.allSettled(Array.from({ length: n }, (_, i) => renderOne(i, 0)));
         const dataUrls: string[] = [];
         for (let i = 0; i < n; i += 1) {
-          const row = firstPass[i];
-          if (row.status === "fulfilled") {
-            dataUrls.push(row.value);
-            continue;
-          }
           try {
-            dataUrls.push(await renderOne(i, 1));
+            dataUrls.push(await renderOne(i, 0));
           } catch {
-            /* skip this take */
+            try {
+              dataUrls.push(await renderOne(i, 1));
+            } catch {
+              /* skip this take */
+            }
           }
         }
         if (!dataUrls.length) {
