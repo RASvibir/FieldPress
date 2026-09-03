@@ -5,13 +5,7 @@ export type DistributePayload = {
   mode: DraftMode | "package";
   title: string;
   content: string;
-};
-
-const MODE_HEADING: Record<DraftMode | "package", string> = {
-  article: "Pressie",
-  social: "Social",
-  podcast: "Podcast",
-  package: "Dispatch",
+  storyId?: string;
 };
 
 export function slugify(value: string) {
@@ -26,12 +20,17 @@ export function slugify(value: string) {
 
 export function buildPlainText(payload: DistributePayload) {
   const heading = payload.title.trim() || payload.storyTitle;
-  return [heading, payload.content.trim()].filter(Boolean).join("\n\n");
+  const core = [heading, payload.content.trim()].filter(Boolean).join("\n\n");
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const mark = payload.storyId ? `\n\n— Pressie · FieldPress\n${origin}/s/${payload.storyId}` : "\n\n— Pressie · FieldPress";
+  return `${core}${mark}`;
 }
 
 export function buildMarkdown(payload: DistributePayload) {
   const heading = payload.title.trim() || payload.storyTitle;
-  return `# ${heading}\n\n_${MODE_HEADING[payload.mode]} · FieldPress_\n\n${payload.content.trim()}\n`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const link = payload.storyId ? `\n\n[Pressie](${origin}/s/${payload.storyId})` : "";
+  return `# ${heading}\n\n_Pressie · FieldPress_\n\n${payload.content.trim()}${link}\n`;
 }
 
 export function filenameFor(payload: DistributePayload, ext: "md" | "txt") {
@@ -131,7 +130,8 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
   const full = buildPlainText(payload);
   const short = firstShareChunk(full);
   const subject = payload.title.trim() || payload.storyTitle;
-  const pageUrl = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : "https://fieldpress.studio";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const pageUrl = payload.storyId ? `${origin}/s/${payload.storyId}` : `${origin}${typeof window !== "undefined" ? window.location.pathname : ""}`;
   switch (target) {
     case "x":
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}`;

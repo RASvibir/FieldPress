@@ -92,7 +92,7 @@ export function DistributeDialog({
         <DialogHeader>
           <DialogTitle className="tracking-widest">DISTRIBUTE</DialogTitle>
           <DialogDescription>
-            Prefill or copy, then you post. Connected outlets live in Settings.
+            Share this Pressie. The Pressy mark travels with the link so people can tell it came from FieldPress.
           </DialogDescription>
         </DialogHeader>
 

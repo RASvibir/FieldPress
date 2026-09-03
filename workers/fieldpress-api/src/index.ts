@@ -243,6 +243,16 @@ async function ensureAgeSchema(sql: Sql) {
     await sql`alter table stories add column if not exists embargo_until timestamptz`;
     await sql`alter table stories add column if not exists desk_checks jsonb not null default '{}'::jsonb`;
     await sql`alter table stories add column if not exists lane text not null default 'wall'`;
+    await sql`alter table stories add column if not exists pulse text not null default 'spark'`;
+    await sql`
+      create table if not exists pressie_stamps (
+        story_id text not null,
+        user_id text not null,
+        ink text not null,
+        created_at timestamptz not null default now(),
+        primary key (story_id, user_id)
+      )
+    `;
     await sql`
       create table if not exists password_reset_tokens (
         id text primary key,
@@ -333,9 +343,34 @@ type StoryRow = {
   embargoUntil?: string | null;
   deskChecks?: Record<string, unknown>;
   lane?: string;
+  pulse?: string;
   createdAt: string;
   updatedAt: string;
 };
+
+const INK_IDS = ["gall", "heat", "salt", "spark", "lead", "hush"] as const;
+type InkId = (typeof INK_IDS)[number];
+
+function parseInk(value: unknown): InkId | null {
+  const id = String(value || "").trim().toLowerCase();
+  return (INK_IDS as readonly string[]).includes(id) ? (id as InkId) : null;
+}
+
+async function inkPack(sql: Sql, storyId: string, userId: string | null) {
+  const rows = await sql`
+    select ink, count(*)::int as n from pressie_stamps where story_id = ${storyId} group by ink
+  `;
+  const inkCounts: Record<string, number> = {};
+  for (const row of rows as { ink: string; n: number }[]) {
+    inkCounts[row.ink] = Number(row.n) || 0;
+  }
+  let myInk: string | null = null;
+  if (userId) {
+    const mine = await sql`select ink from pressie_stamps where story_id = ${storyId} and user_id = ${userId} limit 1`;
+    myInk = (mine[0] as { ink?: string } | undefined)?.ink || null;
+  }
+  return { inkCounts, myInk };
+}
 
 function embargoOpen(story: { embargoUntil?: string | null; ownerId?: string | null }, userId: string | null) {
   if (!story.embargoUntil) return true;
@@ -374,6 +409,7 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
       embargo_until as "embargoUntil",
       coalesce(desk_checks, '{}'::jsonb) as "deskChecks",
       coalesce(lane, 'wall') as lane,
+      coalesce(pulse, 'spark') as pulse,
       created_at as "createdAt", updated_at as "updatedAt"
     from stories
     where id = ${storyId}
@@ -388,7 +424,8 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
     from story_items where story_id = ${storyId}
     order by created_at desc
   `;
-  return { ...story, items };
+  const stamps = await inkPack(sql, storyId, userId);
+  return { ...story, items, ...stamps };
 }
 
 function localProduce(title: string, notes: string[]) {
@@ -905,17 +942,18 @@ export default {
         const open = `${origin}/story/${story.id}`;
         const title = escapeHtml(story.title);
         const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
-<title>${title} — FieldPress</title>
+<title>${title} — Pressie</title>
+<link rel="icon" href="${origin}/pressie.svg" type="image/svg+xml"/>
 <meta property="og:type" content="article"/>
 <meta property="og:title" content="${title}"/>
-<meta property="og:description" content="Field assignment on FieldPress. Copy this link for the desk."/>
+<meta property="og:description" content="A Pressie from FieldPress. Shared from the desk."/>
 <meta property="og:url" content="${share}"/>
-<meta property="og:image" content="${origin}/icon-192.png"/>
+<meta property="og:image" content="${origin}/pressie.svg"/>
 <meta name="twitter:card" content="summary"/>
 <link rel="canonical" href="${open}"/>
 <meta http-equiv="refresh" content="0;url=${open}"/>
 </head><body style="background:#000;color:#39ff14;font-family:sans-serif;padding:2rem">
-<p>Assignment: <a href="${open}" style="color:#39ff14">${title}</a></p>
+<p>Pressie: <a href="${open}" style="color:#39ff14">${title}</a></p>
 </body></html>`;
         return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
       }
@@ -1105,8 +1143,8 @@ export default {
         if (!textAllowed(ageBand, title, extra)) return json({ error: PORN_BLOCK }, 400);
         const storyId = id();
         await sql`
-          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'wall')
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(`${title} ${extra}`)}, 'wall', 'spark')
         `;
         if (extra) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${extra})`;
@@ -1177,8 +1215,8 @@ export default {
         const blob = [title, ...(body.items || []).map((i) => i.content)].join(" ");
         if (!textAllowed(ageBand, blob)) return json({ error: PORN_BLOCK }, 400);
         await sql`
-          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
-          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall')
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
+          values (${storyId}, ${userId}, ${title}, 'active', 'public', 0, ${contentRating(blob)}, 'wall', 'spark')
         `;
         for (const item of body.items || []) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, ${item.type || "note"}, ${item.content || ""})`;
@@ -1187,7 +1225,7 @@ export default {
       }
 
       if (parts[0] === "stories" && parts.length === 1 && method === "POST") {
-        const body = (await req.json()) as { id?: string; title?: string; status?: string; private?: boolean; lane?: string; note?: string };
+        const body = (await req.json()) as { id?: string; title?: string; status?: string; private?: boolean; lane?: string; note?: string; pulse?: string };
         if (body.private && !userId) return json({ error: "Sign in required to keep a story private" }, 401);
         const storyId = body.id || id();
         const title = (body.title || "Untitled").slice(0, 255);
@@ -1195,9 +1233,10 @@ export default {
         const visibility = body.private ? "private" : "public";
         const owner = userId;
         const lane = body.lane === "feed" ? "feed" : "wall";
+        const pulse = parseInk(body.pulse) || "spark";
         await sql`
-          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane)
-          values (${storyId}, ${owner}, ${title}, ${body.status || "active"}, ${visibility}, 0, ${contentRating(`${title} ${body.note || ""}`)}, ${lane})
+          insert into stories (id, owner_id, title, status, visibility, nsfw, content_rating, lane, pulse)
+          values (${storyId}, ${owner}, ${title}, ${body.status || "active"}, ${visibility}, 0, ${contentRating(`${title} ${body.note || ""}`)}, ${lane}, ${pulse})
         `;
         if (body.note?.trim()) {
           await sql`insert into story_items (id, story_id, type, content) values (${id()}, ${storyId}, 'note', ${body.note.trim().slice(0, 8000)})`;
@@ -1413,16 +1452,40 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
         return json(draft[0], 201);
       }
 
+      if (parts[0] === "stories" && parts[2] === "ink" && method === "POST") {
+        if (!userId) return json({ error: "Sign in to ink a Pressie" }, 401);
+        const story = await storyWithItems(sql, userId, parts[1], ageBand);
+        if (!story) return json({ error: "Story not found" }, 404);
+        const body = (await req.json()) as { ink?: string };
+        const ink = parseInk(body.ink);
+        if (!ink) return json({ error: "Pick an ink: gall, heat, salt, spark, lead, or hush." }, 400);
+        await sql`
+          insert into pressie_stamps (story_id, user_id, ink)
+          values (${parts[1]}, ${userId}, ${ink})
+          on conflict (story_id, user_id) do update set ink = excluded.ink, created_at = now()
+        `;
+        return json(await storyWithItems(sql, userId, parts[1], ageBand));
+      }
+
       if (parts[0] === "stories" && parts[2] === "desk" && method === "PATCH") {
         const story = await storyWithItems(sql, userId, parts[1], ageBand);
         if (!story) return json({ error: "Story not found" }, 404);
         if (!canMutateStory(story as StoryRow, user)) {
           return json({ error: "Only the owner can change embargo" }, 403);
         }
-        const body = (await req.json()) as { embargoUntil?: string | null; deskChecks?: Record<string, unknown> };
+        const body = (await req.json()) as { embargoUntil?: string | null; deskChecks?: Record<string, unknown>; pulse?: string };
+        const pulse = parseInk(body.pulse);
+        if (pulse && body.embargoUntil === undefined && body.deskChecks === undefined) {
+          await sql`update stories set pulse = ${pulse}, updated_at = now() where id = ${parts[1]}`;
+          return json(await storyWithItems(sql, userId, parts[1], ageBand));
+        }
         const embargo = body.embargoUntil ? body.embargoUntil : null;
         const checks = JSON.stringify(body.deskChecks || {});
-        await sql`update stories set embargo_until = ${embargo}, desk_checks = ${checks}::jsonb, updated_at = now() where id = ${parts[1]}`;
+        if (pulse) {
+          await sql`update stories set embargo_until = ${embargo}, desk_checks = ${checks}::jsonb, pulse = ${pulse}, updated_at = now() where id = ${parts[1]}`;
+        } else {
+          await sql`update stories set embargo_until = ${embargo}, desk_checks = ${checks}::jsonb, updated_at = now() where id = ${parts[1]}`;
+        }
         return json(await storyWithItems(sql, userId, parts[1], ageBand));
       }
 

@@ -13,6 +13,9 @@ import { useMemo, useState, useEffect } from "react";
 import { DistributeDialog } from "@/components/distribute-dialog";
 import type { DistributePayload } from "@/lib/distribute";
 import { CaptureBar } from "@/components/capture-bar";
+import { PressyMark } from "@/components/pressy-mark";
+import { InkPad } from "@/components/ink-pad";
+import { inkLabel, type InkId } from "@/lib/ink";
 import { VisualDesk } from "@/components/visual-desk";
 import { IdeaDesk } from "@/components/idea-desk";
 import { HeadlineCache } from "@/components/headline-cache";
@@ -63,6 +66,7 @@ export default function StoryDetailPage() {
       sections.push("", `## ${draft.mode.toUpperCase()}: ${draft.title || "Untitled"}`, "", draft.content || "_Empty draft._");
     }
     return {
+      storyId,
       storyTitle: story.title,
       mode: "package",
       title: story.title,
@@ -124,10 +128,13 @@ export default function StoryDetailPage() {
               BACK
             </Button>
             <div>
-              <h1 className="text-3xl text-neon text-glow tracking-wider">{story.title}</h1>
+              <h1 className="text-3xl text-neon text-glow tracking-wider flex items-center gap-2">
+                {(story as { lane?: string }).lane === "feed" ? <PressyMark className="h-8 w-8 shrink-0" /> : null}
+                {story.title}
+              </h1>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                 <Badge variant="outline" className="border-neon/30 text-neon text-xs">
-                  {story.status.toUpperCase()}
+                  {(story as { lane?: string }).lane === "feed" ? "PRESSIE" : story.status.toUpperCase()}
                 </Badge>
                 <Badge variant="outline" className="border-neon/30 text-xs">
                   {(story as { contentRating?: string }).contentRating === "g"
@@ -151,6 +158,32 @@ export default function StoryDetailPage() {
             )}
           </div>
         </div>
+
+        {(story as { lane?: string }).lane === "feed" && (
+          <div className="space-y-2">
+            <p className="text-[10px] tracking-widest text-muted-foreground">
+              INK THIS PRESSIE{inkLabel((story as { pulse?: string }).pulse) ? ` · filed in ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
+            </p>
+            <InkPad
+              value={(story as { myInk?: string | null }).myInk || (story as { pulse?: string }).pulse}
+              counts={(story as { inkCounts?: Partial<Record<InkId, number>> }).inkCounts}
+              onPick={async (ink) => {
+                if (!signedIn) {
+                  navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`);
+                  return;
+                }
+                await fetch(`/api/stories/${storyId}/ink`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ ink }),
+                });
+                queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+                queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+              }}
+            />
+          </div>
+        )}
 
         <Separator className="bg-neon/10" />
 

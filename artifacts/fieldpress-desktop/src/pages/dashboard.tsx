@@ -4,12 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Mic, Camera, Plus, Upload, Trash2, Newspaper, Rss, Search, Sparkles } from "lucide-react";
+import { FileText, Mic, Camera, Plus, Upload, Trash2, Newspaper, Search, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchMe } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
+import { PressyMark } from "@/components/pressy-mark";
+import { InkPad } from "@/components/ink-pad";
+import { DistributeDialog } from "@/components/distribute-dialog";
+import { INKS, type InkId, inkLabel } from "@/lib/ink";
 
 type Lane = "wall" | "feed";
 type Tab = "wall" | "feed" | "search";
@@ -19,6 +23,9 @@ type StoryCard = {
   title: string;
   createdAt: string;
   lane?: string;
+  pulse?: string;
+  inkCounts?: Partial<Record<InkId, number>>;
+  myInk?: string | null;
   items: Array<{ id: string; type: string; content: string }>;
 };
 
@@ -93,6 +100,7 @@ export default function DashboardPage() {
   const [feedOpen, setFeedOpen] = useState(false);
   const [feedTitle, setFeedTitle] = useState("");
   const [feedBody, setFeedBody] = useState("");
+  const [feedPulse, setFeedPulse] = useState<InkId>("spark");
   const [signedIn, setSignedIn] = useState(false);
   const [tab, setTab] = useState<Tab>("wall");
   const [query, setQuery] = useState("");
@@ -213,6 +221,20 @@ export default function DashboardPage() {
     navigate(`/story/${body.id}/news`);
   }
 
+  async function stampInk(storyId: string, ink: InkId) {
+    if (!signedIn) {
+      navigate("/login?next=%2F");
+      return;
+    }
+    const res = await fetch(`/api/stories/${storyId}/ink`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ink }),
+    });
+    if (res.ok) refresh();
+  }
+
   async function postToFeed() {
     if (!feedTitle.trim()) return;
     setPostError(null);
@@ -224,16 +246,23 @@ export default function DashboardPage() {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: generateId(), title: feedTitle.trim(), lane: "feed", note: feedBody.trim() }),
+      body: JSON.stringify({
+        id: generateId(),
+        title: feedTitle.trim(),
+        lane: "feed",
+        note: feedBody.trim(),
+        pulse: feedPulse,
+      }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setPostError(typeof body.error === "string" ? body.error : "Could not post");
+      setPostError(typeof body.error === "string" ? body.error : "Could not post Pressie");
       return;
     }
     setFeedOpen(false);
     setFeedTitle("");
     setFeedBody("");
+    setFeedPulse("spark");
     setTab("feed");
     refresh();
   }
@@ -256,7 +285,7 @@ export default function DashboardPage() {
       return (
         <Card className="border-border bg-card">
           <CardContent className="p-8 text-center text-muted-foreground">
-            {layout === "feed" ? "No feed posts yet." : "No headlines yet."}
+            {layout === "feed" ? "No Pressies yet." : "No headlines yet."}
           </CardContent>
         </Card>
       );
@@ -271,7 +300,8 @@ export default function DashboardPage() {
           >
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
-                <CardTitle className="text-lg text-neon group-hover:text-glow pr-2 leading-snug">
+                <CardTitle className="text-lg text-neon group-hover:text-glow pr-2 leading-snug flex items-start gap-2">
+                  {layout === "feed" ? <PressyMark className="h-5 w-5 shrink-0 mt-0.5 text-neon" /> : null}
                   {story.title}
                 </CardTitle>
                 <Button
@@ -290,7 +320,8 @@ export default function DashboardPage() {
             <CardContent className="pt-0">
               <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                 <span>{new Date(story.createdAt).toLocaleDateString()}</span>
-                {story.lane === "feed" ? <span>Feed</span> : <span>Wall</span>}
+                {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
+                {inkLabel(story.pulse) ? <span>Filed in {inkLabel(story.pulse)}</span> : null}
               </div>
               {story.items.slice(0, layout === "feed" ? 4 : 2).map((item) => (
                 <div key={item.id} className="flex items-start gap-2 text-sm mb-1">
@@ -300,6 +331,30 @@ export default function DashboardPage() {
                   </span>
                 </div>
               ))}
+              {layout === "feed" && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] tracking-widest text-muted-foreground">INK IT</p>
+                  <InkPad
+                    value={story.myInk || story.pulse}
+                    counts={story.inkCounts}
+                    onPick={(ink) => void stampInk(story.id, ink)}
+                  />
+                  <DistributeDialog
+                    compact
+                    triggerLabel="SHARE PRESSIE"
+                    payload={{
+                      storyId: story.id,
+                      storyTitle: story.title,
+                      mode: "social",
+                      title: story.title,
+                      content: story.items
+                        .filter((item) => !item.content.startsWith("data:"))
+                        .map((item) => item.content)
+                        .join("\n\n"),
+                    }}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -309,7 +364,7 @@ export default function DashboardPage() {
 
   const tabs: { id: Tab; label: string; Icon: typeof Newspaper }[] = [
     { id: "wall", label: "Headline wall", Icon: Newspaper },
-    { id: "feed", label: "Feed", Icon: Rss },
+    { id: "feed", label: "Pressies", Icon: Newspaper },
     { id: "search", label: "Search", Icon: Search },
   ];
 
@@ -320,7 +375,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-4xl text-neon text-glow-pulse tracking-wider">FIELDPRESS</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Headlines on the wall. Posts on the feed. Write Pressies from here.
+              Headlines on the wall. Shared posts are Pressies. Ink them instead of liking them.
               {" · "}
               <button type="button" className="underline hover:text-neon" onClick={() => navigate("/launch")}>
                 Install
@@ -360,16 +415,18 @@ export default function DashboardPage() {
             <Dialog open={feedOpen} onOpenChange={setFeedOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <Rss className="w-4 h-4 mr-2" />
-                  POST TO FEED
+                  <PressyMark className="h-4 w-4 mr-2" />
+                  POST PRESSIE
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-terminal border-border">
                 <DialogHeader>
-                  <DialogTitle>Post to feed</DialogTitle>
+                  <DialogTitle>Share a Pressie</DialogTitle>
                 </DialogHeader>
                 <p className="text-sm text-muted-foreground">
-                  {signedIn ? "Public post on the FieldPress feed." : "Sign in to post. Anyone can read the feed."}
+                  {signedIn
+                    ? "A Pressie is a share post. Ink is how people score the feeling — not stars, not likes."
+                    : "Sign in to post a Pressie. Anyone can read them."}
                 </p>
                 <Input
                   value={feedTitle}
@@ -383,13 +440,20 @@ export default function DashboardPage() {
                   placeholder="What happened — confirmed, short, fit for the desk rating"
                   className="min-h-[140px] bg-card border-border"
                 />
+                <div className="space-y-1">
+                  <p className="text-[10px] tracking-widest text-muted-foreground">FILE IT IN</p>
+                  <InkPad value={feedPulse} onPick={setFeedPulse} />
+                  <p className="text-xs text-muted-foreground">
+                    {INKS.find((ink) => ink.id === feedPulse)?.hint}
+                  </p>
+                </div>
                 {postError && <p className="text-sm text-neon-red">{postError}</p>}
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button variant="ghost">CANCEL</Button>
                   </DialogClose>
                   <Button onClick={() => void postToFeed()} disabled={!feedTitle.trim()}>
-                    {signedIn ? "POST" : "SIGN IN TO POST"}
+                    {signedIn ? "POST PRESSIE" : "SIGN IN TO POST"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -429,7 +493,7 @@ export default function DashboardPage() {
 
         {dashboard && (
           <p className="text-xs text-muted-foreground tracking-widest">
-            {wallStories.length} on the wall · {feedStories.length} in the feed
+            {wallStories.length} on the wall · {feedStories.length} Pressies
           </p>
         )}
 
