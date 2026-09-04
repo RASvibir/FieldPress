@@ -352,6 +352,14 @@ type StoryRow = {
   updatedAt: string;
 };
 
+type StoryItemRow = {
+  id: string;
+  storyId: string;
+  type: string;
+  content: string;
+  createdAt: string;
+};
+
 const INK_IDS = ["cool", "love", "lol", "whoa", "iconic", "same", "mad"] as const;
 type InkId = (typeof INK_IDS)[number];
 
@@ -450,6 +458,71 @@ async function storyWithItems(sql: Sql, userId: string | null, storyId: string, 
   `;
   const stamps = await inkPack(sql, storyId, userId);
   return { ...story, pulse: parseInk(story.pulse) || "cool", items, ...stamps };
+}
+
+async function storiesWithItems(
+  sql: Sql,
+  userId: string | null,
+  stories: StoryRow[],
+  ageBand: string,
+) {
+  const visibleStories = stories.filter((story) => {
+    if (!canAccessStory(story, userId)) return false;
+
+    const isOwner = Boolean(userId && story.ownerId === userId);
+    if (!canSeeRating(story.contentRating, ageBand, isOwner)) return false;
+
+    return embargoOpen(story, userId);
+  });
+
+  if (!visibleStories.length) return [];
+
+  const storyIds = visibleStories.map((story) => story.id);
+
+  const [items, stampRows] = await Promise.all([
+    sql`
+      select id, story_id as "storyId", type, content, created_at as "createdAt"
+      from story_items
+      where story_id = any(${storyIds}::text[])
+      order by created_at desc
+    `,
+    sql`
+      select story_id as "storyId", user_id as "userId", ink
+      from pressie_stamps
+      where story_id = any(${storyIds}::text[])
+    `,
+  ]);
+
+  const itemsByStory = new Map<string, StoryItemRow[]>();
+  for (const item of items as StoryItemRow[]) {
+    const current = itemsByStory.get(item.storyId) ?? [];
+    current.push(item);
+    itemsByStory.set(item.storyId, current);
+  }
+
+  const inkCountsByStory = new Map<string, Record<string, number>>();
+  const myInkByStory = new Map<string, string | null>();
+
+  for (const stamp of stampRows as Array<{ storyId: string; userId: string; ink: string }>) {
+    const ink = parseInk(stamp.ink);
+    if (!ink) continue;
+
+    const counts = inkCountsByStory.get(stamp.storyId) ?? {};
+    counts[ink] = (counts[ink] || 0) + 1;
+    inkCountsByStory.set(stamp.storyId, counts);
+
+    if (userId && stamp.userId === userId) {
+      myInkByStory.set(stamp.storyId, ink);
+    }
+  }
+
+  return visibleStories.map((story) => ({
+    ...story,
+    pulse: parseInk(story.pulse) || "cool",
+    items: itemsByStory.get(story.id) ?? [],
+    inkCounts: inkCountsByStory.get(story.id) ?? {},
+    myInk: myInkByStory.get(story.id) ?? null,
+  }));
 }
 
 function localProduce(title: string, notes: string[]) {
@@ -1290,9 +1363,22 @@ export default {
     if (req.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders(req) });
     }
-    if (!env.DATABASE_URL) return json({ error: "DATABASE_URL missing" }, 500);
+    if (!env.DATABASE_URL) {
+      console.error("worker.database.not_configured");
+      return json(
+        {
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "FieldPress is regrouping. Try again in a moment.",
+            retryable: true,
+          },
+        },
+        503,
+        { "cache-control": "no-store" },
+        req,
+      );
+    }
     const sql = neon(env.DATABASE_URL);
-    await ensureAgeSchema(sql);
     const { parts } = pathOf(req);
     const method = req.method.toUpperCase();
 
@@ -1575,29 +1661,85 @@ export default {
       }
 
       if (parts[0] === "stories" && parts.length === 1 && method === "GET") {
-        const url = new URL(req.url);
-        const status = url.searchParams.get("status");
-        const stories = status
-          ? await sql`
-              select id, title, status, owner_id as "ownerId", coalesce(visibility, 'public') as visibility, coalesce(nsfw, 0) as nsfw,
-                embargo_until as "embargoUntil", coalesce(lane, 'wall') as lane, created_at as "createdAt", updated_at as "updatedAt"
-              from stories
-              where (coalesce(visibility, 'public') <> 'private' or owner_id = ${userId}) and status = ${status}
-              order by updated_at desc
-            `
-          : await sql`
-              select id, title, status, owner_id as "ownerId", coalesce(visibility, 'public') as visibility, coalesce(nsfw, 0) as nsfw,
-                embargo_until as "embargoUntil", coalesce(lane, 'wall') as lane, created_at as "createdAt", updated_at as "updatedAt"
-              from stories
-              where coalesce(visibility, 'public') <> 'private' or owner_id = ${userId}
-              order by updated_at desc
-            `;
-        const result = [];
-        for (const s of stories as StoryRow[]) {
-          const packed = await storyWithItems(sql, userId, s.id, ageBand);
-          if (packed && embargoOpen(packed as StoryRow, userId)) result.push(packed);
+        try {
+          const url = new URL(req.url);
+          const status = url.searchParams.get("status");
+          const requestedLimit = Number(url.searchParams.get("limit") || "20");
+          const limit = Number.isFinite(requestedLimit)
+            ? Math.min(Math.max(Math.floor(requestedLimit), 1), 20)
+            : 20;
+
+          const stories = status
+            ? await sql`
+                select
+                  id,
+                  title,
+                  status,
+                  owner_id as "ownerId",
+                  coalesce(visibility, 'public') as visibility,
+                  coalesce(nsfw, 0) as nsfw,
+                  coalesce(content_rating, 'pg13') as "contentRating",
+                  embargo_until as "embargoUntil",
+                  coalesce(desk_checks, '{}'::jsonb) as "deskChecks",
+                  coalesce(lane, 'wall') as lane,
+                  coalesce(pulse, 'cool') as pulse,
+                  created_at as "createdAt",
+                  updated_at as "updatedAt"
+                from stories
+                where (coalesce(visibility, 'public') <> 'private' or owner_id = ${userId})
+                  and status = ${status}
+                order by updated_at desc
+                limit ${limit}
+              `
+            : await sql`
+                select
+                  id,
+                  title,
+                  status,
+                  owner_id as "ownerId",
+                  coalesce(visibility, 'public') as visibility,
+                  coalesce(nsfw, 0) as nsfw,
+                  coalesce(content_rating, 'pg13') as "contentRating",
+                  embargo_until as "embargoUntil",
+                  coalesce(desk_checks, '{}'::jsonb) as "deskChecks",
+                  coalesce(lane, 'wall') as lane,
+                  coalesce(pulse, 'cool') as pulse,
+                  created_at as "createdAt",
+                  updated_at as "updatedAt"
+                from stories
+                where coalesce(visibility, 'public') <> 'private'
+                  or owner_id = ${userId}
+                order by updated_at desc
+                limit ${limit}
+              `;
+
+          const result = await storiesWithItems(
+            sql,
+            userId,
+            stories as StoryRow[],
+            ageBand,
+          );
+
+          return json(result, 200, { "cache-control": "no-store" }, req);
+        } catch (error) {
+          console.error("feed.list.failed", {
+            route: "/api/stories",
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          });
+
+          return json(
+            {
+              error: {
+                code: "FEED_UNAVAILABLE",
+                message: "The Pressie feed is regrouping.",
+                retryable: true,
+              },
+            },
+            503,
+            { "cache-control": "no-store" },
+            req,
+          );
         }
-        return json(result);
       }
 
       if (parts[0] === "stories" && parts[1] === "import" && method === "POST") {
