@@ -13,6 +13,7 @@ import { PageShell } from "@/components/page-shell";
 import { PressyMark } from "@/components/pressy-mark";
 import { InkPad } from "@/components/ink-pad";
 import { DistributeDialog } from "@/components/distribute-dialog";
+import { PressieMedia } from "@/components/pressie-media";
 import { CaptureBar } from "@/components/capture-bar";
 import { extractImageSrc } from "@/lib/item-media";
 import { INKS, type InkId, inkLabel } from "@/lib/ink";
@@ -302,8 +303,13 @@ export default function DashboardPage() {
             className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group overflow-hidden"
             onClick={() => navigate(`/story/${story.id}`)}
           >
-            {layout === "feed" && photos[0] ? (
-              <img src={photos[0]} alt="" className="w-full max-h-80 object-cover bg-black" />
+            {photos[0] ? (
+              <PressieMedia
+                src={photos[0]}
+                alt={story.title}
+                variant={layout === "feed" ? "feed" : "wall"}
+                className="rounded-none border-x-0 border-t-0"
+              />
             ) : null}
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">

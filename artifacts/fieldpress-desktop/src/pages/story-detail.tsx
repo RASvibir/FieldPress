@@ -23,6 +23,7 @@ import { GenericPostDialog } from "@/components/generic-post";
 import { fetchMe, type SessionUser } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
 import { DeskBoard } from "@/components/desk-board";
+import { PressieMedia } from "@/components/pressie-media";
 import { extractImageSrc } from "@/lib/item-media";
 
 const MODE_CONFIG = {
@@ -253,10 +254,11 @@ export default function StoryDetailPage() {
                             </span>
                           </div>
                           {extractImageSrc(item.content, item.type) ? (
-                            <img
+                            <PressieMedia
                               src={extractImageSrc(item.content, item.type) || ""}
-                              alt=""
-                              className="max-h-64 w-full object-cover rounded border border-neon/20"
+                              alt={`${story.title} — ${item.type}`}
+                              variant="detail"
+                              className="w-full border-neon/20"
                             />
                           ) : (
                             <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
