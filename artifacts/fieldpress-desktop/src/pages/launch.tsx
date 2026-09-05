@@ -1,32 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useTheme } from "next-themes";
 import { Download, Share, Check, Copy, Smartphone, Monitor, ArrowRight, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isStandaloneApp, useInstallApp } from "@/hooks/use-install";
+import { PageShell } from "@/components/page-shell";
 
 export default function LaunchPage() {
   const [, navigate] = useLocation();
   const { device, browser, installed, canNativeInstall, busy, install, safari } = useInstallApp();
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const paper = resolvedTheme === "light";
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const qrSrc = useMemo(
     () =>
-      `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=39FF14&bgcolor=000000&margin=8&data=${encodeURIComponent(origin)}`,
-    [origin],
+      `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=${paper ? "1c1917" : "39FF14"}&bgcolor=${paper ? "f4efe6" : "000000"}&margin=8&data=${encodeURIComponent(origin)}`,
+    [origin, paper],
   );
   const safariMac = safari && device === "desktop";
   const installLabel =
     busy ? "INSTALLING…" : device === "ios" ? "ADD TO HOME SCREEN" : safariMac ? "ADD TO DOCK" : "INSTALL ON THIS DEVICE";
 
   useEffect(() => {
-    if (isStandaloneApp()) navigate("/app");
+    if (isStandaloneApp()) navigate("/");
   }, [navigate]);
 
   async function handleInstall() {
     const ok = await install();
     if (ok) {
-      navigate("/app");
+      navigate("/");
       return;
     }
     setShowHelp(true);
@@ -39,14 +43,13 @@ export default function LaunchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-neon flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-5 sm:p-8">
-        <div className="w-full max-w-md space-y-8">
+    <PageShell className="flex flex-col" center>
+      <div className="w-full max-w-md space-y-8">
           <div className="text-center space-y-3">
             <img
               src="/icon-192.png"
               alt="FieldPress"
-              className="w-24 h-24 mx-auto rounded-[22%] border border-neon/40 shadow-[0_0_28px_rgba(57,255,20,0.35)]"
+              className="masthead-mark w-24 h-24 mx-auto rounded-[22%] border border-neon/40"
             />
             <h1 className="text-5xl sm:text-6xl tracking-[0.18em] text-glow-pulse">FIELDPRESS</h1>
             <p className="text-muted-foreground text-lg">Pocket newsroom. One tap to open.</p>
@@ -55,10 +58,17 @@ export default function LaunchPage() {
           <div className="space-y-3">
             <Button
               className="w-full min-h-14 text-xl tracking-[0.2em]"
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/")}
+            >
+            OPEN NEWSROOM
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full min-h-12 text-lg tracking-[0.14em] border-neon/40"
+              onClick={() => navigate("/login?next=%2F")}
             >
             SIGN IN
-              <ArrowRight className="w-5 h-5" />
             </Button>
 
             {!installed && (
@@ -212,7 +222,6 @@ export default function LaunchPage() {
             </span>
           </div>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }

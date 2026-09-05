@@ -5,13 +5,7 @@ export type DistributePayload = {
   mode: DraftMode | "package";
   title: string;
   content: string;
-};
-
-const MODE_HEADING: Record<DraftMode | "package", string> = {
-  article: "Article",
-  social: "Social",
-  podcast: "Podcast",
-  package: "Dispatch",
+  storyId?: string;
 };
 
 export function slugify(value: string) {
@@ -26,17 +20,22 @@ export function slugify(value: string) {
 
 export function buildPlainText(payload: DistributePayload) {
   const heading = payload.title.trim() || payload.storyTitle;
-  return [heading, payload.content.trim()].filter(Boolean).join("\n\n");
+  const core = [heading, payload.content.trim()].filter(Boolean).join("\n\n");
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const mark = payload.storyId ? `\n\n— Pressie · FieldPress\n${origin}/s/${payload.storyId}` : "\n\n— Pressie · FieldPress";
+  return `${core}${mark}`;
 }
 
 export function buildMarkdown(payload: DistributePayload) {
   const heading = payload.title.trim() || payload.storyTitle;
-  return `# ${heading}\n\n_${MODE_HEADING[payload.mode]} · FieldPress_\n\n${payload.content.trim()}\n`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const link = payload.storyId ? `\n\n[Pressie](${origin}/s/${payload.storyId})` : "";
+  return `# ${heading}\n\n_Pressie · FieldPress_\n\n${payload.content.trim()}${link}\n`;
 }
 
 export function filenameFor(payload: DistributePayload, ext: "md" | "txt") {
   const base = slugify(payload.title || payload.storyTitle);
-  const kind = payload.mode === "package" ? "dispatch" : payload.mode;
+  const kind = payload.mode === "package" ? "dispatch" : payload.mode === "article" ? "pressie" : payload.mode;
   return `${base}-${kind}.${ext}`;
 }
 
@@ -119,6 +118,7 @@ export const COMPOSE_TARGETS = [
   { id: "bluesky", label: "Bluesky", color: "text-cyan-300" },
   { id: "linkedin", label: "LinkedIn", color: "text-neon" },
   { id: "facebook", label: "Facebook", color: "text-neon-yellow" },
+  { id: "reddit", label: "Reddit", color: "text-neon-red" },
   { id: "instagram", label: "Instagram", color: "text-neon-red" },
   { id: "whatsapp", label: "WhatsApp", color: "text-neon" },
   { id: "email", label: "Email", color: "text-neon-yellow" },
@@ -130,6 +130,8 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
   const full = buildPlainText(payload);
   const short = firstShareChunk(full);
   const subject = payload.title.trim() || payload.storyTitle;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  const pageUrl = payload.storyId ? `${origin}/s/${payload.storyId}` : `${origin}${typeof window !== "undefined" ? window.location.pathname : ""}`;
   switch (target) {
     case "x":
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}`;
@@ -140,7 +142,9 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
     case "linkedin":
       return `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(full.slice(0, 3000))}`;
     case "facebook":
-      return "https://www.facebook.com/";
+      return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}&quote=${encodeURIComponent(short)}`;
+    case "reddit":
+      return `https://www.reddit.com/submit?title=${encodeURIComponent(subject.slice(0, 300))}&text=${encodeURIComponent(full.slice(0, 40000))}`;
     case "instagram":
       return "https://www.instagram.com/";
     case "whatsapp":

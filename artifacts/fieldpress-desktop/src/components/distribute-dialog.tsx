@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Share2, Download, HardDrive, Copy, Check, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
   nativeShare,
   saveToDisk,
 } from "@/lib/distribute";
+import { fetchMe } from "@/lib/session";
 
 type DistributeDialogProps = {
   payload: DistributePayload | null;
@@ -40,6 +41,12 @@ export function DistributeDialog({
 }: DistributeDialogProps) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    fetchMe().then((user) => setBookmarks(user?.deskLinks || {}));
+  }, [open]);
 
   async function run(label: string, action: () => Promise<void> | void) {
     if (!payload) return;
@@ -59,7 +66,10 @@ export function DistributeDialog({
     const url = composeUrl(target, payload);
     if (target === "facebook" || target === "instagram") {
       void copyText(buildPlainText(payload));
-      setStatus(`Caption copied — paste into ${target === "instagram" ? "Instagram" : "Facebook"}`);
+      setStatus(`Caption copied — paste into ${target === "instagram" ? "Instagram" : "Facebook"} if the share box is empty`);
+    }
+    if (target === "reddit") {
+      setStatus("Reddit opens a text post with your title and body. You still hit Post.");
     }
     window.open(url, "_blank", "noopener,noreferrer");
   }
@@ -80,9 +90,9 @@ export function DistributeDialog({
       </DialogTrigger>
       <DialogContent className="bg-terminal border-neon/30 max-w-lg" onClick={(event) => event.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle className="text-neon text-glow tracking-widest">DISTRIBUTE</DialogTitle>
+          <DialogTitle className="tracking-widest">DISTRIBUTE</DialogTitle>
           <DialogDescription>
-            Send this {payload?.mode === "package" ? "dispatch" : payload?.mode ?? "draft"} to social apps, email, or a drive folder.
+            Share this Pressie. The Pressy mark travels with the link so people can tell it came from FieldPress.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,6 +122,26 @@ export function DistributeDialog({
               ))}
             </div>
           </div>
+
+          {Object.entries(bookmarks).some(([, value]) => value.trim()) && (
+            <div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-2">YOUR BOOKMARKS</div>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(bookmarks)
+                  .filter(([, value]) => value.trim())
+                  .map(([key, value]) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      className="justify-start border-neon/20"
+                      onClick={() => window.open(value.startsWith("http") ? value : `https://${value}`, "_blank", "noopener,noreferrer")}
+                    >
+                      {key.toUpperCase()}
+                    </Button>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="text-[10px] tracking-widest text-muted-foreground mb-2">SAVE TO DRIVE / DISK</div>

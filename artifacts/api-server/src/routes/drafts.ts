@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { CreateDraftBody, UpdateDraftBody } from "@workspace/api-zod";
-import { getOwnedStory } from "../lib/auth";
+import { getAccessibleStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -13,7 +13,7 @@ function generateId(): string {
 
 router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -32,7 +32,7 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
     return;
   }
 
-  const storyExists = await getOwnedStory(req.user!.id, storyId);
+  const storyExists = await getAccessibleStory(req.user?.id, storyId);
   if (!storyExists) {
     res.status(404).json({ error: "Story not found" });
     return;
@@ -59,7 +59,7 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -77,7 +77,7 @@ router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -108,7 +108,7 @@ router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 router.delete("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const draftId = req.params.draftId as string;
-  const owned = await getOwnedStory(req.user!.id, storyId);
+  const owned = await getAccessibleStory(req.user?.id, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
