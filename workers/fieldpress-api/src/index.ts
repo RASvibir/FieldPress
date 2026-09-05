@@ -1397,36 +1397,99 @@ export default {
       }
 
       if (parts[0] === "s" && parts[1] && method === "GET") {
-        const rows = await sql`
-          select id, title, coalesce(visibility, 'public') as visibility, embargo_until as "embargoUntil"
-          from stories where id = ${parts[1]} limit 1
-        `;
-        const story = rows[0] as { id: string; title: string; visibility: string; embargoUntil: string | null } | undefined;
-        if (!story || story.visibility === "private") {
-          return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
-        }
-        if (story.embargoUntil && new Date(story.embargoUntil).getTime() > Date.now()) {
-          return new Response("Embargoed", { status: 403, headers: { "content-type": "text/plain" } });
-        }
         const origin = "https://fieldpress.studio";
-        const share = `${origin}/s/${story.id}`;
-        const open = `${origin}/story/${story.id}`;
-        const title = escapeHtml(story.title);
+        const storyId = parts[1];
+
+        const unavailable = () =>
+          new Response(
+            `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<title>Pressie unavailable — FieldPress</title>
+<meta name="robots" content="noindex, nofollow"/>
+<meta property="og:title" content="Pressie unavailable — FieldPress"/>
+<meta property="og:description" content="This Pressie is unavailable."/>
+<meta property="og:image" content="${origin}/opengraph.jpg"/>
+</head><body><p>This Pressie is unavailable.</p></body></html>`,
+            {
+              status: 404,
+              headers: {
+                "content-type": "text/html; charset=utf-8",
+                "cache-control": "no-store",
+              },
+            },
+          );
+
+        const rows = await sql`
+          select id, title
+          from stories
+          where id = ${storyId}
+            and status = 'active'
+            and coalesce(visibility, 'public') = 'public'
+            and (embargo_until is null or embargo_until <= now())
+          limit 1
+        `;
+        const story = rows[0] as { id: string; title: string } | undefined;
+        if (!story) return unavailable();
+
+        const items = await sql`
+          select type, content
+          from story_items
+          where story_id = ${story.id}
+          order by created_at asc
+          limit 12
+        `;
+
+        const cleanText = (value: unknown) =>
+          String(value || "")
+            .replace(/https?:\/\/\S+/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const shareItems = items as Array<{ type?: string; content?: string }>;
+        const textTypes = new Set(["text", "body", "note", "caption", "quote", "markdown"]);
+        const imageTypes = new Set(["image", "photo", "hero", "media"]);
+
+        const firstText =
+          shareItems
+            .filter((item) => textTypes.has(String(item.type || "").toLowerCase()))
+            .map((item) => cleanText(item.content))
+            .find(Boolean) || "";
+
+        const firstImage = shareItems
+          .filter((item) => imageTypes.has(String(item.type || "").toLowerCase()))
+          .map((item) => String(item.content || "").trim())
+          .find((value) => /^https:\/\/[^\s]+$/i.test(value) && /\.(avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i.test(value));
+
+        const title = escapeHtml(story.title.slice(0, 160) || "FieldPress Pressie");
+        const description = escapeHtml((firstText || "A public Pressie from FieldPress.").slice(0, 280));
+        const share = `${origin}/s/${encodeURIComponent(story.id)}`;
+        const open = `${origin}/story/${encodeURIComponent(story.id)}`;
+        const image = escapeHtml(firstImage || `${origin}/opengraph.jpg`);
         const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
-<title>${title} — Pressie</title>
-<link rel="icon" href="${origin}/pressie.svg" type="image/svg+xml"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${title} — FieldPress</title>
+<meta name="description" content="${description}"/>
 <meta property="og:type" content="article"/>
+<meta property="og:site_name" content="FieldPress"/>
 <meta property="og:title" content="${title}"/>
-<meta property="og:description" content="A Pressie from FieldPress. Shared from the desk."/>
+<meta property="og:description" content="${description}"/>
 <meta property="og:url" content="${share}"/>
-<meta property="og:image" content="${origin}/pressie.svg"/>
-<meta name="twitter:card" content="summary"/>
+<meta property="og:image" content="${image}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${title}"/>
+<meta name="twitter:description" content="${description}"/>
+<meta name="twitter:image" content="${image}"/>
 <link rel="canonical" href="${open}"/>
-<meta http-equiv="refresh" content="0;url=${open}"/>
-</head><body style="background:#000;color:#39ff14;font-family:sans-serif;padding:2rem">
-<p>Pressie: <a href="${open}" style="color:#39ff14">${title}</a></p>
+<meta http-equiv="refresh" content="2;url=${open}"/>
+</head><body style="background:#000;color:#f5f5f5;font-family:system-ui,sans-serif;padding:2rem">
+<main><p>Opening Pressie…</p><h1>${title}</h1><p>${description}</p><p><a href="${open}" style="color:#39ff14">Open this Pressie in FieldPress</a></p></main>
 </body></html>`;
-        return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+        return new Response(html, {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "public, max-age=300, s-maxage=300",
+          },
+        });
       }
 
       if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
