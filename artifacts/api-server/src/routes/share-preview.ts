@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, storiesTable, storyItemsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -76,11 +76,6 @@ const renderSharePreview = async (req: Request, res: Response) => {
         and(
           eq(storiesTable.id, storyId),
           eq(storiesTable.status, "active"),
-          eq(storiesTable.visibility, "public"),
-          or(
-            isNull(storiesTable.embargoUntil),
-            lte(storiesTable.embargoUntil, new Date()),
-          ),
         ),
       )
       .limit(1);
