@@ -57,7 +57,7 @@ function unavailable(res: Response): void {
 </head><body><p>This Pressie is unavailable.</p></body></html>`);
 }
 
-router.get("/share/:id", async (req: Request, res: Response) => {
+const renderSharePreview = async (req: Request, res: Response) => {
   const storyId = String(req.params.id || "").trim();
 
   if (!storyId || storyId.length > 255) {
@@ -144,6 +144,10 @@ router.get("/share/:id", async (req: Request, res: Response) => {
   } catch {
     unavailable(res);
   }
-});
+};
+
+router.get("/s/:id", renderSharePreview);
+router.get("/share/:id", renderSharePreview);
+router.get("/api/share/:id", renderSharePreview);
 
 export default router;

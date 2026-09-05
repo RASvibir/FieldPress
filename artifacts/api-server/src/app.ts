@@ -57,7 +57,7 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", sharePreviewRouter);
+app.use(sharePreviewRouter);
 app.use("/api", imagesRouter);
 app.use("/api", router);
 
