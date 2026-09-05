@@ -1448,11 +1448,21 @@ export default {
         const textTypes = new Set(["text", "body", "note", "caption", "quote", "markdown"]);
         const imageTypes = new Set(["image", "photo", "hero", "media"]);
 
+        const isSafeShareExcerpt = (value: string) => {
+          const text = value.trim();
+          if (!text) return false;
+
+          return !(
+            /^(?:\/Users\/|\/tmp\/|file:|https?:\/\/)/i.test(text) ||
+            text.includes("WKFileShare-")
+          );
+        };
+
         const firstText =
           shareItems
             .filter((item) => textTypes.has(String(item.type || "").toLowerCase()))
             .map((item) => cleanText(item.content))
-            .find(Boolean) || "";
+            .find((text) => isSafeShareExcerpt(text)) || "";
 
         const firstImage = shareItems
           .filter((item) => imageTypes.has(String(item.type || "").toLowerCase()))
@@ -1460,7 +1470,7 @@ export default {
           .find((value) => /^https:\/\/[^\s]+$/i.test(value) && /\.(avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i.test(value));
 
         const title = escapeHtml(story.title.slice(0, 160) || "FieldPress Pressie");
-        const description = escapeHtml((firstText || "A public Pressie from FieldPress.").slice(0, 280));
+        const description = escapeHtml((firstText || "Read this Pressie on FieldPress.").slice(0, 280));
         const share = `${origin}/s/${encodeURIComponent(story.id)}`;
         const open = `${origin}/story/${encodeURIComponent(story.id)}`;
         const image = escapeHtml(firstImage || `${origin}/opengraph.jpg`);
