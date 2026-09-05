@@ -257,11 +257,6 @@ export async function generateProducerDraft(input: {
   notes: string[];
   audioCount?: number;
 }): Promise<ProducerResult> {
-  const useOllama =
-    process.env.AI_PROVIDER === "ollama" ||
-    process.env.OPENAI_API_KEY === "ollama" ||
-    !process.env.GEMINI_API_KEY;
-
   const notes =
     input.notes.length > 0
       ? input.notes.map((note, i) => `${i + 1}. ${note}`).join("\n")
@@ -314,32 +309,40 @@ LIVE PUBLIC HEADLINES:
 ${headlineBrief}`;
 
   let parsed: GeminiJson;
-
-  if (useOllama) {
-    const ollamaHost = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-    const ollamaModel = process.env.AI_MODEL || "llama3.2";
-    logger.info({ provider: "ollama", host: ollamaHost, model: ollamaModel }, "generating producer draft via Ollama");
-    const rawJson = await ollamaPost(ollamaHost, ollamaModel, prompt, 60000);
-    parsed = JSON.parse(rawJson) as GeminiJson;
-  } else {
-    const apiKey = process.env.GEMINI_API_KEY!.trim();
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const ollamaHost = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.AI_MODEL || process.env.OLLAMA_MODEL || "llama3.2";
+  let ollamaDraft = "";
+  try {
+    logger.info({ provider: "ollama", host: ollamaHost, model: ollamaModel }, "producer first pass via Ollama");
+    ollamaDraft = await ollamaPost(ollamaHost, ollamaModel, prompt, 45000);
+  } catch (err) {
+    logger.warn({ err }, "ollama producer pass failed");
+  }
+  if (apiKey) {
     const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
-    logger.info({ provider: "gemini", model }, "generating producer draft via Gemini");
+    const geminiPrompt = ollamaDraft
+      ? `${prompt}\n\nOLLAMA DRAFT TO TIGHTEN (do not add facts):\n${ollamaDraft.slice(0, 6000)}`
+      : prompt;
+    logger.info({ provider: "gemini", model, polishedOllama: Boolean(ollamaDraft) }, "producer Gemini pass");
     const payload = await geminiPost(
       apiKey,
       model,
       {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: [{ text: geminiPrompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: PRODUCER_SCHEMA,
-          maxOutputTokens: 8192,
-          temperature: 0.55,
+          maxOutputTokens: ollamaDraft ? 1536 : 4096,
+          temperature: 0.4,
         },
       },
-      45000,
+      40000,
     );
     parsed = JSON.parse(extractText(payload)) as GeminiJson;
+  } else if (ollamaDraft) {
+    parsed = JSON.parse(ollamaDraft) as GeminiJson;
+  } else {
+    throw new Error("No desk AI available (Ollama and Gemini both failed)");
   }
 
   const trends = normalizeTrends(parsed.trends);

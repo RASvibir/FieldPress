@@ -19,10 +19,10 @@ import { loadTrendDesk } from "@/lib/trend-desk";
 
 const MODE_CONFIG = {
   article: {
-    label: "ARTICLE",
+    label: "PRESSIE",
     icon: Newspaper,
     color: "text-neon",
-    placeholder: "Write your publication-ready article here...\n\nUse the source material in the sidebar as reference. Structure your piece with a compelling lede, supporting evidence from your field notes, and a strong closing.\n\nTip: Copy quotes and observations from the source panel on the left.",
+    placeholder: "Write the Pressie here…\n\nUse the source material in the sidebar as reference. Lede, evidence from field notes, close.\n\nTip: Copy quotes and observations from the source panel on the left.",
     templateHint: "HEADLINE // BYLINE // DATELINE\n\nLEDE - Hook the reader\n\nBODY - Evidence, quotes, context\n\nNUT GRAF - Why this matters\n\nKICKER - Memorable close",
   },
   social: {
@@ -43,8 +43,8 @@ const MODE_CONFIG = {
 
 export default function EditorPage() {
   const params = useParams<{ storyId: string; draftId: string }>();
-  const storyId = params.storyId!;
-  const draftId = params.draftId!;
+  const storyId = params.storyId || "";
+  const draftId = params.draftId || "";
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -176,8 +176,8 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-neon/10 bg-card">
+    <div className="h-[100dvh] bg-background flex flex-col pt-[max(3.25rem,env(safe-area-inset-top))]">
+      <div className="flex items-center justify-between gap-2 px-4 py-2 pr-16 border-b border-border bg-card overflow-x-auto">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(`/story/${storyId}`)}>
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -192,7 +192,7 @@ export default function EditorPage() {
             {story?.title}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-14">
           <span className="text-[10px] text-muted-foreground">
             {saved ? "SAVED" : "UNSAVED"}
           </span>
@@ -211,8 +211,8 @@ export default function EditorPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-72 border-r border-neon/10 bg-card overflow-y-auto p-3 shrink-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div className="max-h-44 md:max-h-none w-full md:w-72 border-b md:border-b-0 md:border-r border-neon/10 bg-card overflow-y-auto p-3 shrink-0">
           <div className="text-xs text-muted-foreground tracking-widest mb-3">SOURCE MATERIAL</div>
           {!story?.items.length ? (
             <div className="text-xs text-muted-foreground text-center py-4">NO SOURCE ITEMS</div>

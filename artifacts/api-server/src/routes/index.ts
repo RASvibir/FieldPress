@@ -6,13 +6,13 @@ import itemsRouter from "./items";
 import draftsRouter from "./drafts";
 import dashboardRouter from "./dashboard";
 import produceRouter from "./produce";
-import { requireAuth } from "../lib/auth";
+import { optionalAuth } from "../lib/auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
-router.use(requireAuth);
+router.use(optionalAuth);
 router.use(storiesRouter);
 router.use(itemsRouter);
 router.use(draftsRouter);

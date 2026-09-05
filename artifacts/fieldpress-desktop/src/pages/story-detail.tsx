@@ -1,89 +1,58 @@
-import { useGetStory, useListDrafts, useCreateDraft, useDeleteStory } from "@workspace/api-client-react";
+import { useGetStory, useListDrafts, useDeleteStory, useAddStoryItem } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  FileText, Mic, Camera, ArrowLeft, Plus,
-  Newspaper, MessageSquare, Podcast, Trash2, Cpu
+  FileText, Mic, Camera, ArrowLeft,
+  Newspaper, MessageSquare, Podcast, Trash2
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import { DistributeDialog } from "@/components/distribute-dialog";
-import { TrendDeskPanel } from "@/components/trend-desk";
 import type { DistributePayload } from "@/lib/distribute";
-import { deskFromProducePayload, loadTrendDesk, saveTrendDesk, type TrendDesk } from "@/lib/trend-desk";
+import { CaptureBar } from "@/components/capture-bar";
+import { PressyMark } from "@/components/pressy-mark";
+import { InkPad } from "@/components/ink-pad";
+import { inkLabel, type InkId } from "@/lib/ink";
+import { VisualDesk } from "@/components/visual-desk";
+import { IdeaDesk } from "@/components/idea-desk";
+import { HeadlineCache } from "@/components/headline-cache";
+import { GenericPostDialog } from "@/components/generic-post";
+import { fetchMe, type SessionUser } from "@/lib/session";
+import { PageShell } from "@/components/page-shell";
+import { DeskBoard } from "@/components/desk-board";
+import { PressieMedia } from "@/components/pressie-media";
+import { extractImageSrc } from "@/lib/item-media";
 
 const MODE_CONFIG = {
-  article: { label: "ARTICLE", icon: Newspaper, color: "text-neon" },
+  article: { label: "PRESSIE", icon: Newspaper, color: "text-neon" },
   social: { label: "SOCIAL", icon: MessageSquare, color: "text-neon-yellow" },
   podcast: { label: "PODCAST", icon: Podcast, color: "text-neon-red" },
 } as const;
 
 export default function StoryDetailPage() {
   const params = useParams<{ storyId: string }>();
-  const storyId = params.storyId!;
+  const storyId = params.storyId || "";
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
   const { data: story, isLoading } = useGetStory(storyId);
   const { data: drafts } = useListDrafts(storyId);
-  const createDraftMutation = useCreateDraft();
+  const addItemMutation = useAddStoryItem();
   const deleteMutation = useDeleteStory();
-  const [producing, setProducing] = useState(false);
-  const [produceError, setProduceError] = useState<string | null>(null);
-  const [trendDesk, setTrendDesk] = useState<TrendDesk | null>(() => loadTrendDesk(storyId));
+  const [me, setMe] = useState<SessionUser | null>(null);
+  const [photoQuery, setPhotoQuery] = useState<string | undefined>(undefined);
+  const signedIn = Boolean(me);
+  const canEdit =
+    Boolean(me) &&
+    (me?.role === "superadmin" ||
+      Boolean((story as { ownerId?: string | null } | undefined)?.ownerId && (story as { ownerId?: string }).ownerId === me?.id));
 
   useEffect(() => {
-    setTrendDesk(loadTrendDesk(storyId));
-  }, [storyId]);
-
-  async function handleProduce() {
-    setProduceError(null);
-    setProducing(true);
-    try {
-      const response = await fetch(`/api/stories/${storyId}/produce`, { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as {
-        error?: string;
-        summary?: string;
-        outline?: string[];
-        caption?: string;
-        whyNow?: string;
-        audience?: string;
-        trends?: TrendDesk["trends"];
-        trendQuery?: string;
-        headlineCount?: number;
-      } | null;
-      if (!response.ok) {
-        throw new Error(payload?.error ?? `Producer failed (${response.status})`);
-      }
-      if (payload) {
-        const desk = deskFromProducePayload(payload);
-        setTrendDesk(desk);
-        saveTrendDesk(storyId, desk);
-      }
-      await queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-      await queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}/drafts`] });
-    } catch (err) {
-      setProduceError(err instanceof Error ? err.message : "Producer failed");
-    } finally {
-      setProducing(false);
-    }
-  }
-
-  function handleNewDraft(mode: "article" | "social" | "podcast") {
-    createDraftMutation.mutate(
-      { storyId, data: { mode, title: "", content: "" } },
-      {
-        onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-          navigate(`/story/${storyId}/editor/${data.id}`);
-        },
-      }
-    );
-  }
+    fetchMe().then(setMe);
+  }, []);
 
   const packagePayload = useMemo<DistributePayload | null>(() => {
     if (!story) return null;
@@ -99,6 +68,7 @@ export default function StoryDetailPage() {
       sections.push("", `## ${draft.mode.toUpperCase()}: ${draft.title || "Untitled"}`, "", draft.content || "_Empty draft._");
     }
     return {
+      storyId,
       storyTitle: story.title,
       mode: "package",
       title: story.title,
@@ -114,7 +84,7 @@ export default function StoryDetailPage() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-          navigate("/app");
+          navigate("/");
         },
       }
     );
@@ -130,40 +100,50 @@ export default function StoryDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-neon text-glow-pulse text-xl">LOADING STORY...</div>
-      </div>
+      <PageShell center>
+        <div className="text-neon text-glow-pulse text-xl">Loading story…</div>
+      </PageShell>
     );
   }
 
   if (!story) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <PageShell center>
         <div className="text-center">
-          <div className="text-neon-red text-xl mb-4">STORY NOT FOUND</div>
-          <Button variant="outline" onClick={() => navigate("/app")}>
+          <div className="text-neon-red text-xl mb-4">Story not found</div>
+          <Button variant="outline" onClick={() => navigate("/")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            BACK TO DASHBOARD
+            Back
           </Button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <PageShell>
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/app")}>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4 mr-1" />
               BACK
             </Button>
             <div>
-              <h1 className="text-3xl text-neon text-glow tracking-wider">{story.title}</h1>
+              <h1 className="text-3xl text-neon text-glow tracking-wider flex items-center gap-2">
+                {(story as { lane?: string }).lane === "feed" ? <PressyMark className="h-8 w-8 shrink-0" /> : null}
+                {story.title}
+              </h1>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                 <Badge variant="outline" className="border-neon/30 text-neon text-xs">
-                  {story.status.toUpperCase()}
+                  {(story as { lane?: string }).lane === "feed" ? "PRESSIE" : story.status.toUpperCase()}
+                </Badge>
+                <Badge variant="outline" className="border-neon/30 text-xs">
+                  {(story as { contentRating?: string }).contentRating === "g"
+                    ? "G / KIDS"
+                    : (story as { contentRating?: string }).contentRating === "mature"
+                      ? "18+"
+                      : "PG-13"}
                 </Badge>
                 <span>{story.items.length} items</span>
                 <span>Created {new Date(story.createdAt).toLocaleDateString()}</span>
@@ -171,23 +151,92 @@ export default function StoryDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <DistributeDialog payload={packagePayload} triggerLabel="DISTRIBUTE STORY" />
-            <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4 mr-1" />
-              DELETE
-            </Button>
+            <DistributeDialog payload={packagePayload} triggerLabel="SHARE" />
+            {canEdit && (
+              <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
+                <Trash2 className="w-4 h-4 mr-1" />
+                DELETE
+              </Button>
+            )}
           </div>
         </div>
+
+        {(story as { lane?: string }).lane === "feed" && (
+          <div className="space-y-2">
+            <p className="text-[10px] tracking-widest text-muted-foreground">
+              REACT{inkLabel((story as { pulse?: string }).pulse) ? ` · ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
+            </p>
+            <InkPad
+              value={(story as { myInk?: string | null }).myInk || (story as { pulse?: string }).pulse}
+              counts={(story as { inkCounts?: Partial<Record<InkId, number>> }).inkCounts}
+              onPick={async (ink) => {
+                if (!signedIn) {
+                  navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`);
+                  return;
+                }
+                await fetch(`/api/stories/${storyId}/ink`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ ink }),
+                });
+                queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+                queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+              }}
+            />
+          </div>
+        )}
 
         <Separator className="bg-neon/10" />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <h2 className="text-lg text-neon tracking-wider mb-3">SOURCE MATERIAL</h2>
+            <h2 className="text-lg text-neon tracking-wider mb-3">Field</h2>
+            <div className="mb-4">
+              <CaptureBar
+                signedIn={signedIn}
+                busy={addItemMutation.isPending}
+                onNeedSignIn={() => navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`)}
+                onPhoto={async (dataUrl) => {
+                  await addItemMutation.mutateAsync({
+                    storyId,
+                    data: { type: "photo", content: dataUrl },
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+                }}
+              />
+            </div>
+            <div className="mb-4">
+              <VisualDesk
+                storyId={storyId}
+                headline={story.title}
+                notes={story.items.filter((item) => item.type === "note").map((item) => item.content).join("\n")}
+                signedIn={signedIn}
+                seedQuery={photoQuery}
+                onNeedSignIn={() => navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`)}
+                onAttachUrl={async (url) => {
+                  await addItemMutation.mutateAsync({
+                    storyId,
+                    data: { type: "photo", content: url },
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+                }}
+                onRendered={async (dataUrl) => {
+                  await addItemMutation.mutateAsync({
+                    storyId,
+                    data: { type: "photo", content: dataUrl },
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+                }}
+              />
+            </div>
             {story.items.length === 0 ? (
               <Card className="border-neon/10">
                 <CardContent className="p-6 text-center text-muted-foreground">
-                  NO ITEMS. IMPORT FROM MOBILE TO ADD NOTES, AUDIO, AND PHOTOS.
+                  Add a note, photo, or clip to start this file.
                 </CardContent>
               </Card>
             ) : (
@@ -204,7 +253,16 @@ export default function StoryDetailPage() {
                               {new Date(item.createdAt).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
+                          {extractImageSrc(item.content, item.type) ? (
+                            <PressieMedia
+                              src={extractImageSrc(item.content, item.type) || ""}
+                              alt={`${story.title} — ${item.type}`}
+                              variant="detail"
+                              className="w-full border-neon/20"
+                            />
+                          ) : (
+                            <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -215,63 +273,67 @@ export default function StoryDetailPage() {
           </div>
 
           <div>
-            <h2 className="text-lg text-neon tracking-wider mb-3">PRODUCTION OUTPUTS</h2>
-            <Button
-              variant="outline"
-              className="w-full mb-3 border-cyan-400/30 text-cyan-300 hover:border-cyan-300/60"
-              onClick={handleProduce}
-              disabled={producing}
-            >
-              <Cpu className="w-4 h-4 mr-2" />
-              {producing ? "SCANNING TRENDS + PRODUCING..." : "AI PRODUCE"}
-            </Button>
-            <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
-              Matches field notes to relatable, national, and global public conversation before drafting article, social, and podcast.
-            </p>
-            {produceError && (
-              <p className="text-xs text-neon-red mb-3">{produceError}</p>
-            )}
-            {trendDesk && (
-              <div className="mb-4">
-                <TrendDeskPanel desk={trendDesk} />
-              </div>
-            )}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {(["article", "social", "podcast"] as const).map((mode) => {
-                const config = MODE_CONFIG[mode];
-                const Icon = config.icon;
-                return (
-                  <Button
-                    key={mode}
-                    variant="outline"
-                    className={`border-neon/20 hover:border-neon/40 ${config.color}`}
-                    onClick={() => handleNewDraft(mode)}
-                    disabled={createDraftMutation.isPending}
-                  >
-                    <Icon className="w-4 h-4 mr-1" />
-                    <Plus className="w-3 h-3 mr-1" />
-                    {config.label}
-                  </Button>
-                );
-              })}
+            <h2 className="text-lg text-neon tracking-wider mb-3">Write</h2>
+            <div className="mb-4">
+              <IdeaDesk storyId={storyId} onUseQuery={setPhotoQuery} />
+            </div>
+            <div className="mb-4">
+              <HeadlineCache storyId={storyId} />
+            </div>
+            <div className="mb-4">
+              <GenericPostDialog storyId={storyId} />
+            </div>
+            <div className="mb-4">
+              <DeskBoard
+                storyId={storyId}
+                canEdit={canEdit}
+                embargoUntil={(story as { embargoUntil?: string | null }).embargoUntil}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <Button
+                variant="outline"
+                className="border-neon/20 text-neon"
+                onClick={() => navigate(`/story/${storyId}/news`)}
+              >
+                <Newspaper className="w-4 h-4 mr-1" />
+                PRESSIE DESK
+              </Button>
+              <Button
+                variant="outline"
+                className="border-neon/20 text-neon-red"
+                onClick={() => navigate(`/story/${storyId}/podcast`)}
+              >
+                <Podcast className="w-4 h-4 mr-1" />
+                PODCAST STUDIO
+              </Button>
             </div>
 
             {!drafts?.length ? (
               <Card className="border-neon/10">
                 <CardContent className="p-6 text-center text-muted-foreground">
-                  NO DRAFTS YET. CREATE AN ARTICLE, SOCIAL POST, OR PODCAST SCRIPT.
+                  Drafts you save show up here.
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-2">
                 {drafts.map((draft) => {
-                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG];
+                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG] || MODE_CONFIG.article;
                   const Icon = config.icon;
+                  const updated = draft.updatedAt ? new Date(draft.updatedAt) : null;
                   return (
                     <Card
                       key={draft.id}
                       className="border-neon/10 bg-card cursor-pointer hover:border-neon/30 transition-colors"
-                      onClick={() => navigate(`/story/${storyId}/editor/${draft.id}`)}
+                      onClick={() =>
+                        navigate(
+                          draft.mode === "article"
+                            ? `/story/${storyId}/news`
+                            : draft.mode === "podcast"
+                              ? `/story/${storyId}/podcast`
+                              : `/story/${storyId}/editor/${draft.id}`,
+                        )
+                      }
                     >
                       <CardContent className="p-3">
                         <div className="flex items-center gap-3">
@@ -284,12 +346,12 @@ export default function StoryDetailPage() {
                               </span>
                             </div>
                             <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Updated {new Date(draft.updatedAt).toLocaleString()}
+                              Updated {updated && !Number.isNaN(updated.getTime()) ? updated.toLocaleString() : "just now"}
                             </div>
                           </div>
                           <DistributeDialog
                             compact
-                            triggerLabel="SEND"
+                            triggerLabel="COPY"
                             payload={{
                               storyTitle: story.title,
                               mode: draft.mode as "article" | "social" | "podcast",
@@ -307,6 +369,6 @@ export default function StoryDetailPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
