@@ -2006,7 +2006,7 @@ No celebrities, no logos, no on-image text. Return only the prompt.`,
         if (!story) return json({ error: "Story not found" }, 404);
         const body = (await req.json()) as { ink?: string };
         const ink = parseInk(body.ink);
-        if (!ink) return json({ error: "Pick Cool, Love, LOL, Whoa, Iconic, Same, or Mad." }, 400);
+        if (!ink) return json({ error: "Pick Cool, Signal, Heat, Respect, Brainwave, Vibe, or Power." }, 400);
         await sql`
           insert into pressie_stamps (story_id, user_id, ink)
           values (${parts[1]}, ${userId}, ${ink})
