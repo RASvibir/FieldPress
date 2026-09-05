@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsMenu } from "@/components/settings-menu";
 import { PressyBubble } from "@/components/pressy-bubble";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { FieldPressLogo } from "@/components/fieldpress-logo";
 import DashboardPage from "@/pages/dashboard";
 import StoryDetailPage from "@/pages/story-detail";
 import EditorPage from "@/pages/editor";
@@ -48,20 +49,34 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="fp-theme" disableTransitionOnChange>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem
+      storageKey="fp-theme"
+      disableTransitionOnChange
+    >
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <div className="crt-scanlines min-h-screen">
-              <div className="pointer-events-auto fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[10001]">
-                <SettingsMenu />
-              </div>
+              <header className="pointer-events-none fixed inset-x-0 top-0 z-[10001] flex items-center justify-between px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+                <div className="pointer-events-auto">
+                  <FieldPressLogo />
+                </div>
+                <div className="pointer-events-auto">
+                  <SettingsMenu />
+                </div>
+              </header>
+
               <ErrorBoundary>
                 <Router />
               </ErrorBoundary>
+
               <PressyBubble />
             </div>
           </WouterRouter>
+
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
