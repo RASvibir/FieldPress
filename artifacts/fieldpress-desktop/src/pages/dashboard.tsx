@@ -12,7 +12,7 @@ import { fetchMe } from "@/lib/session";
 import { PageShell } from "@/components/page-shell";
 import { PressyMark } from "@/components/pressy-mark";
 import { InkPad } from "@/components/ink-pad";
-import { DistributeDialog } from "@/components/distribute-dialog";
+import { PressieShareMenu } from "@/components/pressie-share-menu";
 import { PressieMedia } from "@/components/pressie-media";
 import { CaptureBar } from "@/components/capture-bar";
 import { extractImageSrc } from "@/lib/item-media";
@@ -25,6 +25,9 @@ type StoryCard = {
   id: string;
   title: string;
   createdAt: string;
+  status: "draft" | "active" | "embargoed" | "published" | "archived";
+  visibility?: "public" | "private";
+  ownerId?: string | null;
   lane?: string;
   pulse?: string;
   inkCounts?: Partial<Record<InkId, number>>;
@@ -362,16 +365,14 @@ export default function DashboardPage() {
                     counts={story.inkCounts}
                     onPick={(ink) => void stampInk(story.id, ink)}
                   />
-                  <DistributeDialog
-                    compact
-                    triggerLabel="SHARE PRESSIE"
-                    payload={{
-                      storyId: story.id,
-                      storyTitle: story.title,
-                      mode: "social",
-                      title: story.title,
-                      content: copy.map((item) => item.content).join("\n\n"),
-                    }}
+                  <PressieShareMenu
+                    pressieId={story.id}
+                    title={story.title}
+                    items={story.items}
+                    isPubliclyShareable={
+                      story.status === "active" &&
+                      (story.visibility === "public" || story.ownerId == null)
+                    }
                   />
                 </div>
               )}
