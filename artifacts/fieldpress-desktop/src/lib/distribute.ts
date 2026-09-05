@@ -157,3 +157,96 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
 export async function copyText(text: string) {
   await navigator.clipboard.writeText(text);
 }
+
+export type PressieShareItem = {
+  type: string;
+  content: string;
+};
+
+export type PressieSharePayload = {
+  pressieId: string;
+  title: string;
+  body: string;
+  url: string;
+};
+
+const FIELDPRESS_PUBLIC_ORIGIN = "https://fieldpress.studio";
+const FIELDPRESS_SHARE_FALLBACK = "Read this Pressie on FieldPress.";
+const PRESSIE_SHARE_TEXT_TYPES = new Set([
+  "text",
+  "body",
+  "note",
+  "caption",
+  "quote",
+  "markdown",
+]);
+
+function cleanPressieShareText(value: unknown, maximum: number): string {
+  return String(value ?? "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+}
+
+function isSafePressieShareExcerpt(value: string): boolean {
+  if (!value) return false;
+
+  return !(
+    /^(?:\/Users\/|\/tmp\/|file:|https?:\/\/)/i.test(value) ||
+    value.includes("WKFileShare-")
+  );
+}
+
+export function createPressieSharePayload(input: {
+  pressieId: string;
+  title: unknown;
+  items?: PressieShareItem[];
+}): PressieSharePayload | null {
+  const pressieId = String(input.pressieId ?? "").trim();
+
+  if (!pressieId) {
+    return null;
+  }
+
+  const body =
+    input.items
+      ?.filter((item) =>
+        PRESSIE_SHARE_TEXT_TYPES.has(String(item.type ?? "").toLowerCase()),
+      )
+      .map((item) => cleanPressieShareText(item.content, 280))
+      .find(isSafePressieShareExcerpt) || FIELDPRESS_SHARE_FALLBACK;
+
+  return {
+    pressieId,
+    title: cleanPressieShareText(input.title, 160) || "FieldPress Pressie",
+    body,
+    url: `${FIELDPRESS_PUBLIC_ORIGIN}/s/${encodeURIComponent(pressieId)}`,
+  };
+}
+
+export function buildPressieShareText(payload: PressieSharePayload): string {
+  return [payload.title, payload.body, payload.url]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function pressieFacebookShareUrl(payload: PressieSharePayload): string {
+  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(payload.url)}`;
+}
+
+export function pressieXShareUrl(payload: PressieSharePayload): string {
+  return `https://x.com/intent/post?text=${encodeURIComponent(
+    buildPressieShareText(payload),
+  )}`;
+}
+
+export async function nativePressieShare(
+  payload: PressieSharePayload,
+): Promise<void> {
+  await navigator.share({
+    title: payload.title,
+    text: payload.body,
+    url: payload.url,
+  });
+}

@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { DistributeDialog } from "@/components/distribute-dialog";
-import type { DistributePayload } from "@/lib/distribute";
+import { PressieShareMenu } from "@/components/pressie-share-menu";
 import { CaptureBar } from "@/components/capture-bar";
 import { PressyMark } from "@/components/pressy-mark";
 import { InkPad } from "@/components/ink-pad";
@@ -53,28 +53,6 @@ export default function StoryDetailPage() {
   useEffect(() => {
     fetchMe().then(setMe);
   }, []);
-
-  const packagePayload = useMemo<DistributePayload | null>(() => {
-    if (!story) return null;
-    const sections = [
-      `# ${story.title}`,
-      "",
-      "## Source notes",
-      story.items.length
-        ? story.items.map((item) => `- (${item.type}) ${item.content}`).join("\n")
-        : "_No field notes._",
-    ];
-    for (const draft of drafts ?? []) {
-      sections.push("", `## ${draft.mode.toUpperCase()}: ${draft.title || "Untitled"}`, "", draft.content || "_Empty draft._");
-    }
-    return {
-      storyId,
-      storyTitle: story.title,
-      mode: "package",
-      title: story.title,
-      content: sections.join("\n"),
-    };
-  }, [story, drafts]);
 
   function handleDelete() {
     if (!confirm("DELETE THIS STORY AND ALL DRAFTS? This cannot be undone.")) return;
@@ -151,7 +129,17 @@ export default function StoryDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <DistributeDialog payload={packagePayload} triggerLabel="SHARE" />
+            {(story as { lane?: string }).lane === "feed" &&
+            story.status === "active" &&
+            ((story as { visibility?: string }).visibility === "public" ||
+              (story as { ownerId?: string | null }).ownerId == null) ? (
+              <PressieShareMenu
+                pressieId={story.id}
+                title={story.title}
+                items={story.items}
+                isPubliclyShareable
+              />
+            ) : null}
             {canEdit && (
               <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
                 <Trash2 className="w-4 h-4 mr-1" />

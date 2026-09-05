@@ -33,8 +33,10 @@
     }
   ],
   "rewrites": [
+    { "source": "/og/pressies/:id.png", "destination": "/api/og/pressies/:id.png" },
+    { "source": "/s/:id", "destination": "/api/share/:id" },
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|admin-manual\\.md|user-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|s/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|admin-manual\\.md|user-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.mjs": {
