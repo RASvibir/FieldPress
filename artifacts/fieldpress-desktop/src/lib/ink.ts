@@ -1,11 +1,11 @@
 export const INKS = [
-  { id: "cool", label: "Cool", hint: "That’s a like." },
-  { id: "love", label: "Love", hint: "Heart this." },
-  { id: "lol", label: "LOL", hint: "That’s funny." },
-  { id: "whoa", label: "Whoa", hint: "Didn’t see that coming." },
-  { id: "iconic", label: "Iconic", hint: "That’s the one." },
-  { id: "same", label: "Same", hint: "Felt that." },
-  { id: "mad", label: "Mad", hint: "That’s messed up." },
+  { id: "cool", emoji: "🤠", label: "Cool", hint: "A good Pressie." },
+  { id: "whoa", emoji: "📡", label: "Signal", hint: "Worth tracking." },
+  { id: "iconic", emoji: "🔥", label: "Heat", hint: "This is moving." },
+  { id: "love", emoji: "🫡", label: "Respect", hint: "Respect the work.", supportsTone: true },
+  { id: "same", emoji: "🧠", label: "Brainwave", hint: "That clicks." },
+  { id: "lol", emoji: "🪩", label: "Vibe", hint: "The energy is right." },
+  { id: "mad", emoji: "✊", label: "Power", hint: "Stand with it.", supportsTone: true },
 ] as const;
 
 export type InkId = (typeof INKS)[number]["id"];
@@ -17,6 +17,7 @@ const ALIASES: Record<string, InkId> = {
   spark: "cool",
   lead: "same",
   hush: "love",
+
   awesome: "iconic",
   funny: "lol",
   fire: "iconic",
@@ -25,6 +26,12 @@ const ALIASES: Record<string, InkId> = {
   wow: "whoa",
   wait: "whoa",
   wild: "whoa",
+
+  signal: "whoa",
+  respect: "love",
+  brainwave: "same",
+  vibe: "lol",
+  power: "mad",
 };
 
 export function parseInk(value: unknown): InkId | null {
@@ -33,9 +40,17 @@ export function parseInk(value: unknown): InkId | null {
   return ALIASES[id] || null;
 }
 
-export function inkLabel(id: string | null | undefined) {
+export function getInk(id: string | null | undefined) {
   const parsed = parseInk(id);
-  return INKS.find((ink) => ink.id === parsed)?.label || null;
+  return INKS.find((ink) => ink.id === parsed) || null;
+}
+
+export function inkLabel(id: string | null | undefined) {
+  return getInk(id)?.label || null;
+}
+
+export function inkEmoji(id: string | null | undefined) {
+  return getInk(id)?.emoji || "🤠";
 }
 
 export function pressieShareUrl(storyId: string, origin = "https://fieldpress.studio") {

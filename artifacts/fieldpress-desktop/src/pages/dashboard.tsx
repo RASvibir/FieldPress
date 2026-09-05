@@ -480,7 +480,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] tracking-widest text-muted-foreground">HOW IT HITS</p>
-                  <InkPad value={feedPulse} onPick={setFeedPulse} />
+                  <InkPad value={feedPulse} onPick={setFeedPulse} mode="picker" />
                   <p className="text-xs text-muted-foreground">
                     {INKS.find((ink) => ink.id === feedPulse)?.hint}
                   </p>
