@@ -71,7 +71,12 @@ export function DistributeDialog({
     if (target === "reddit") {
       setStatus("Reddit opens a text post with your title and body. You still hit Post.");
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    const tauri = (window as unknown as { __TAURI__?: { core?: { invoke: (cmd: string, args: Record<string, unknown>) => Promise<void> } } }).__TAURI__;
+    if (tauri?.core?.invoke) {
+      void tauri.core.invoke("open_url", { url });
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   }
 
   return (
