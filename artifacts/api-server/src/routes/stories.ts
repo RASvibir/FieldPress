@@ -7,7 +7,7 @@ import {
   CreateStoryBody,
   ImportStoryBody,
 } from "@workspace/api-zod";
-import { getAccessibleStory } from "../lib/auth";
+import { getAccessibleStory, getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -89,15 +89,19 @@ router.get("/stories/:storyId", async (req: Request, res: Response) => {
 
 router.delete("/stories/:storyId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const story = await getAccessibleStory(req.user?.id, storyId);
+  const userId = req.user?.id;
+
+  if (!userId) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+
+  const story = await getOwnedStory(userId, storyId);
   if (!story) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (story.ownerId && story.ownerId !== req.user?.id) {
-    res.status(403).json({ error: "Only the owner can delete this story" });
-    return;
-  }
+
   await db.delete(storiesTable).where(eq(storiesTable.id, storyId));
   res.status(204).end();
 });

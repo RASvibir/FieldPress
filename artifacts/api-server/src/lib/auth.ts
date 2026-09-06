@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, sessionsTable, storiesTable, usersTable } from "@workspace/db";
 import { sha256 } from "./crypto";
 
@@ -88,20 +88,29 @@ export async function getAccessibleStory(userId: string | undefined, storyId: st
 }
 
 export async function getOwnedStory(userId: string, storyId: string) {
-  return getAccessibleStory(userId, storyId);
+  const rows = await db
+    .select()
+    .from(storiesTable)
+    .where(and(eq(storiesTable.id, storyId), eq(storiesTable.ownerId, userId)))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 export async function requireOwnedStory(req: Request, res: Response, next: NextFunction) {
   const user = req.user;
   const storyId = req.params.storyId as string | undefined;
-  if (!storyId) {
+
+  if (!user || !storyId) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const story = await getAccessibleStory(user?.id, storyId);
+
+  const story = await getOwnedStory(user.id, storyId);
   if (!story) {
     res.status(404).json({ error: "Not found" });
     return;
   }
+
   next();
 }

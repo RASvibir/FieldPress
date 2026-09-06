@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { storyItemsTable, storiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { AddStoryItemBody } from "@workspace/api-zod";
-import { getAccessibleStory } from "../lib/auth";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -11,9 +11,22 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
+
+function requireUserId(req: Request, res: Response): string | null {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in required" });
+    return null;
+  }
+  return userId;
+}
+
+
 router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Story not found" });
     return;
@@ -55,8 +68,10 @@ router.post("/stories/:storyId/items", async (req: Request, res: Response) => {
 
 router.delete("/stories/:storyId/items/:itemId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const userId = requireUserId(req, res);
+  if (!userId) return;
   const itemId = req.params.itemId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Story not found" });
     return;

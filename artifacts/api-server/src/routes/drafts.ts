@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { CreateDraftBody, UpdateDraftBody } from "@workspace/api-zod";
-import { getAccessibleStory } from "../lib/auth";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -11,9 +11,22 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
+
+function requireUserId(req: Request, res: Response): string | null {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in required" });
+    return null;
+  }
+  return userId;
+}
+
+
 router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -26,13 +39,15 @@ router.get("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 
 router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const userId = requireUserId(req, res);
+  if (!userId) return;
   const parsed = CreateDraftBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const storyExists = await getAccessibleStory(req.user?.id, storyId);
+  const storyExists = await getOwnedStory(userId, storyId);
   if (!storyExists) {
     res.status(404).json({ error: "Story not found" });
     return;
@@ -58,8 +73,10 @@ router.post("/stories/:storyId/drafts", async (req: Request, res: Response) => {
 
 router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const userId = requireUserId(req, res);
+  if (!userId) return;
   const draftId = req.params.draftId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -76,8 +93,10 @@ router.get("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 
 router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const userId = requireUserId(req, res);
+  if (!userId) return;
   const draftId = req.params.draftId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -107,8 +126,10 @@ router.put("/stories/:storyId/drafts/:draftId", async (req: Request, res: Respon
 
 router.delete("/stories/:storyId/drafts/:draftId", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
+  const userId = requireUserId(req, res);
+  if (!userId) return;
   const draftId = req.params.draftId as string;
-  const owned = await getAccessibleStory(req.user?.id, storyId);
+  const owned = await getOwnedStory(userId, storyId);
   if (!owned) {
     res.status(404).json({ error: "Not found" });
     return;

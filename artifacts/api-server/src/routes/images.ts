@@ -4,7 +4,7 @@ import {
   synthesizePhotoPrompt,
   WikimediaRateLimitError,
 } from "../lib/images";
-import { getAccessibleStory } from "../lib/auth";
+import { getOwnedStory } from "../lib/auth";
 import { logger } from "../lib/logger";
 
 export const imagesRouter = Router();
@@ -47,8 +47,8 @@ async function requireAccessibleStory(req: Request, res: Response) {
     return null;
   }
 
-  const story = await getAccessibleStory(req.user.id, storyId);
-  if (!story || (story.ownerId && story.ownerId !== req.user.id)) {
+  const story = await getOwnedStory(req.user.id, storyId);
+  if (!story) {
     res.status(404).json({ error: "Pressie not found" });
     return null;
   }

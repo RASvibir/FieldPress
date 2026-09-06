@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { draftsTable, storiesTable, storyItemsTable } from "@workspace/db";
 import { generateProducerDraft } from "../lib/gemini";
 import { logger } from "../lib/logger";
-import { getAccessibleStory } from "../lib/auth";
+import { getOwnedStory } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -23,6 +23,17 @@ function readProduceBody(body: unknown): { title?: string; notes: string[] } {
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
+
+
+function requireUserId(req: Request, res: Response): string | null {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in required" });
+    return null;
+  }
+  return userId;
+}
+
 
 function isNoteType(type: string): boolean {
   return type === "text" || type === "note";
@@ -96,7 +107,9 @@ router.post("/produce", async (req: Request, res: Response) => {
 
 router.post("/stories/:storyId/produce", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
-  const story = await getAccessibleStory(req.user?.id, storyId);
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const story = await getOwnedStory(userId, storyId);
   if (!story) {
     res.status(404).json({ error: "Story not found" });
     return;
