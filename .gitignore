@@ -65,3 +65,7 @@ lib/fieldpress-pro/node_modules/
 # Retired Expo tree leftovers (node_modules, dist, local experiments)
 artifacts/fieldpress/**
 !artifacts/fieldpress/README.md
+
+# FieldPress Worker local development secrets and Wrangler state
+workers/fieldpress-api/.dev.vars
+workers/fieldpress-api/.wrangler/

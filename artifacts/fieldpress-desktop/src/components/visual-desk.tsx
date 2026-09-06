@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Search, Sparkles } from "lucide-react";
+import { Copy, ImagePlus, Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { askLocalDesk } from "@/lib/desk";
 
 type Hit = {
   id: number | string;
@@ -23,7 +22,15 @@ type Hit = {
 };
 
 type Quota = { used: number; remaining: number; limit: number };
-type StyleId = "polaroid" | "hd" | "toon" | "fantasy" | "sketch" | "abstract";
+type FormatId = "article_hero" | "social_feed" | "podcast_square";
+type DirectionId =
+  | "documentary_still"
+  | "editorial_illustration"
+  | "archival_poster"
+  | "collage"
+  | "zine_texture"
+  | "quiet_portrait"
+  | "abstract_signal";
 
 type Props = {
   storyId: string;
@@ -36,35 +43,57 @@ type Props = {
   seedQuery?: string;
 };
 
-const FORMATS = [
-  { id: "article_hero", label: "16:9" },
-  { id: "social_feed", label: "4:5" },
-  { id: "podcast_square", label: "1:1" },
-] as const;
-
-const STYLES: Array<{ id: StyleId; label: string }> = [
-  { id: "polaroid", label: "Polaroid" },
-  { id: "hd", label: "HD" },
-  { id: "toon", label: "Toons" },
-  { id: "fantasy", label: "Fantasy" },
-  { id: "sketch", label: "Sketch" },
-  { id: "abstract", label: "Abstract" },
+const FORMATS: Array<{ id: FormatId; label: string; detail: string }> = [
+  { id: "social_feed", label: "4:5 Feed", detail: "Primary Pressie image" },
+  { id: "article_hero", label: "16:9 Hero", detail: "Editorial header" },
+  { id: "podcast_square", label: "1:1 Square", detail: "Podcast or cover" },
 ];
 
-function scrubCopy(value: string) {
-  return value
-    .replace(/\bno pornography\b/gi, "")
-    .replace(/\bno porn(?:ography)?\b/gi, "")
-    .replace(/porn is not allowed[^.]*\./gi, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+\./g, ".")
-    .trim();
-}
+const DIRECTIONS: Array<{ id: DirectionId; label: string; detail: string }> = [
+  { id: "documentary_still", label: "Documentary still", detail: "Observed, grounded, human" },
+  { id: "editorial_illustration", label: "Editorial illustration", detail: "Interpretive, clear, original" },
+  { id: "archival_poster", label: "Archival-poster treatment", detail: "Printed history, material texture" },
+  { id: "collage", label: "Collage", detail: "Layered source fragments" },
+  { id: "zine_texture", label: "Zine texture", detail: "Photocopied, raw, handmade" },
+  { id: "quiet_portrait", label: "Quiet portrait", detail: "Intimate and considered" },
+  { id: "abstract_signal", label: "Abstract signal", detail: "Mood, motion, pattern" },
+];
+
+const WORKER_STYLE_BY_DIRECTION: Record<DirectionId, "polaroid" | "hd" | "toon" | "fantasy" | "sketch" | "abstract"> = {
+  documentary_still: "hd",
+  editorial_illustration: "toon",
+  archival_poster: "polaroid",
+  collage: "abstract",
+  zine_texture: "sketch",
+  quiet_portrait: "hd",
+  abstract_signal: "abstract",
+};
+
+type BriefResponse = {
+  prompt?: string;
+  source?: "ai" | "fallback";
+  error?: string;
+};
+
+type RenderResponse = {
+  dataUrl?: string;
+  dataUrls?: string[];
+  prompt?: string;
+  remaining?: number;
+  used?: number;
+  limit?: number;
+  error?: string;
+};
 
 function friendlyError(value?: string) {
-  if (!value) return "That take failed. Try MAKE again.";
-  if (/porn|nudity|rating|not allowed/i.test(value)) return "That take failed. Try MAKE again.";
-  return value;
+  if (!value) return "Pressy could not complete that request. Try again.";
+  if (/sign in|authentication/i.test(value)) return "Sign in to use Pressy Visuals.";
+  if (/not found|access/i.test(value)) return "This Pressie is not available for visual work.";
+  if (/limit|quota/i.test(value)) return "Today's visual limit has been reached. Try again later.";
+  if (/unavailable|not configured|provider/i.test(value)) {
+    return "Visual rendering is not available on this FieldPress desk yet.";
+  }
+  return "Pressy could not complete that request. Try again.";
 }
 
 export function VisualDesk({
@@ -78,38 +107,45 @@ export function VisualDesk({
   seedQuery,
 }: Props) {
   const [query, setQuery] = useState(headline);
-  const [format, setFormat] = useState<(typeof FORMATS)[number]["id"]>("article_hero");
+  const [format, setFormat] = useState<FormatId>("social_feed");
+  const [direction, setDirection] = useState<DirectionId>("documentary_still");
   const [hits, setHits] = useState<Hit[]>([]);
-  const [prompt, setPrompt] = useState("");
+  const [brief, setBrief] = useState("");
   const [stills, setStills] = useState<string[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [style, setStyle] = useState<StyleId>("hd");
-  const [count, setCount] = useState<1 | 2 | 3>(1);
+  const [makerOpen, setMakerOpen] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
-  const [busy, setBusy] = useState<"search" | "make" | null>(null);
+  const [busy, setBusy] = useState<"search" | "brief" | "render" | "attach" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function loadQuota() {
     if (!signedIn) {
       setQuota(null);
       return;
     }
-    const res = await fetch("/api/images/quota", { credentials: "include" });
-    const body = (await res.json().catch(() => null)) as Quota | null;
-    if (res.ok && body && typeof body.remaining === "number") setQuota(body);
+
+    try {
+      const res = await fetch("/api/images/quota", { credentials: "include" });
+      const body = (await res.json().catch(() => null)) as Quota | null;
+      if (res.ok && body && typeof body.remaining === "number") setQuota(body);
+    } catch {
+      setQuota(null);
+    }
   }
 
   useEffect(() => {
     void loadQuota();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
   async function search(nextQuery = query.trim() || headline) {
-    if (!nextQuery) return;
+    if (!nextQuery.trim()) return;
+
     setQuery(nextQuery);
     setBusy("search");
     setError(null);
+    setNotice(null);
+
     try {
       const res = await fetch(`/api/stories/${storyId}/images/search`, {
         method: "POST",
@@ -118,10 +154,10 @@ export function VisualDesk({
         body: JSON.stringify({ query: nextQuery }),
       });
       const payload = (await res.json().catch(() => null)) as Hit[] | { error?: string } | null;
-      if (!res.ok) throw new Error((payload as { error?: string })?.error || "Image search failed");
+      if (!res.ok) throw new Error((payload as { error?: string } | null)?.error);
       setHits(Array.isArray(payload) ? payload : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Image search failed");
+      setError(friendlyError(err instanceof Error ? err.message : undefined));
     } finally {
       setBusy(null);
     }
@@ -129,12 +165,10 @@ export function VisualDesk({
 
   useEffect(() => {
     void search(seedQuery || headline);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyId, headline]);
+  }, [storyId]);
 
   useEffect(() => {
     if (seedQuery) void search(seedQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedQuery]);
 
   function openMaker() {
@@ -143,35 +177,65 @@ export function VisualDesk({
       return;
     }
     setError(null);
+    setNotice(null);
     void loadQuota();
-    setPickerOpen(true);
+    setMakerOpen(true);
   }
 
-  async function runMake() {
-    setPickerOpen(false);
-    setBusy("make");
-    setError(null);
-    try {
-      let nextPrompt = "";
-      const localBrief = await askLocalDesk(
-        `Write ONE dense documentary still brief (80–160 words). Style ${style}. Headline: ${headline || "(none)"}. Notes: ${notes || "(none)"}. No celebrities, no logos, no on-image text. Return only the prompt.`,
-      );
-      if (localBrief?.text) {
-        nextPrompt = localBrief.text.trim();
-      } else {
-        const promptRes = await fetch(`/api/stories/${storyId}/images/generate-prompt`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ format, headline, fieldNotes: notes, style }),
-        });
-        const promptBody = (await promptRes.json().catch(() => null)) as { prompt?: string; error?: string } | null;
-        if (!promptRes.ok) throw new Error(friendlyError(promptBody?.error));
-        nextPrompt = promptBody?.prompt?.trim() || "";
-      }
-      if (nextPrompt) setPrompt(scrubCopy(nextPrompt));
+  async function generateBrief() {
+    if (!signedIn) {
+      onNeedSignIn();
+      return;
+    }
 
-      const shots = Math.min(count, quota?.remaining ?? count) as 1 | 2 | 3;
+    setBusy("brief");
+    setError(null);
+    setNotice(null);
+
+    try {
+      const res = await fetch(`/api/stories/${storyId}/images/generate-prompt`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          format,
+          headline,
+          fieldNotes: notes,
+          style: WORKER_STYLE_BY_DIRECTION[direction],
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as BriefResponse | null;
+      if (!res.ok) throw new Error(payload?.error);
+      const nextBrief = payload?.prompt?.trim();
+      if (!nextBrief) throw new Error("No brief returned");
+      setBrief(nextBrief);
+      setNotice(
+        payload?.source === "fallback"
+          ? "Pressy made a local editorial brief. Edit it before rendering."
+          : "Pressy made an editable visual brief.",
+      );
+    } catch (err) {
+      setError(friendlyError(err instanceof Error ? err.message : undefined));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function renderVisual() {
+    if (!signedIn) {
+      onNeedSignIn();
+      return;
+    }
+    if (!brief.trim()) {
+      setError("Generate or write a visual brief before rendering.");
+      return;
+    }
+
+    setBusy("render");
+    setError(null);
+    setNotice(null);
+
+    try {
       const res = await fetch(`/api/stories/${storyId}/images/generate`, {
         method: "POST",
         credentials: "include",
@@ -180,33 +244,20 @@ export function VisualDesk({
           format,
           headline,
           fieldNotes: notes,
-          prompt: nextPrompt,
-          style,
-          count: shots,
+          prompt: brief.trim(),
+          style: WORKER_STYLE_BY_DIRECTION[direction],
+          count: 1,
         }),
       });
-      const payload = (await res.json().catch(() => null)) as {
-        dataUrl?: string;
-        dataUrls?: string[];
-        error?: string;
-        prompt?: string;
-        remaining?: number;
-        used?: number;
-        limit?: number;
-      } | null;
-      if (payload?.prompt) setPrompt(scrubCopy(payload.prompt));
+      const payload = (await res.json().catch(() => null)) as RenderResponse | null;
       if (typeof payload?.remaining === "number" && typeof payload.used === "number" && typeof payload.limit === "number") {
         setQuota({ remaining: payload.remaining, used: payload.used, limit: payload.limit });
       }
-      if (!res.ok) throw new Error(friendlyError(payload?.error));
+      if (!res.ok) throw new Error(payload?.error);
       const urls = payload?.dataUrls?.filter(Boolean) || (payload?.dataUrl ? [payload.dataUrl] : []);
-      if (!urls.length) throw new Error("No stills returned");
+      if (!urls.length) throw new Error("No visual returned");
       setStills(urls);
-      if (onRendered) {
-        for (const src of urls) {
-          await onRendered(src);
-        }
-      }
+      setNotice("Visual ready for review. It is not attached or published.");
     } catch (err) {
       setError(friendlyError(err instanceof Error ? err.message : undefined));
     } finally {
@@ -214,45 +265,70 @@ export function VisualDesk({
     }
   }
 
-  async function copyPrompt() {
-    if (!prompt) return;
-    await navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+  async function attachRendered(src: string) {
+    if (!onRendered) return;
+
+    setBusy("attach");
+    setError(null);
+    setNotice(null);
+
+    try {
+      await onRendered(src);
+      setNotice("Visual attached to this private Pressie workspace. Add or edit alt text before publication.");
+    } catch {
+      setError("That visual could not be attached. Try again.");
+    } finally {
+      setBusy(null);
+    }
   }
 
-  const left = quota?.remaining;
-  const maxShots = left == null ? 3 : Math.min(3, Math.max(0, left));
+  async function copyBrief() {
+    if (!brief) return;
+
+    try {
+      await navigator.clipboard.writeText(brief);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setError("Could not copy the visual brief.");
+    }
+  }
+
+  const remaining = quota?.remaining;
+  const renderingUnavailable = false;
 
   return (
     <Card className="border-neon-yellow/25 bg-card">
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm tracking-wider text-neon-yellow">VISUALS</h3>
-            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
-              Search the public web, or MAKE a prompt plus 1–3 stills. {signedIn ? `${left ?? "…"}/13 today.` : "Sign in to MAKE."}
+            <h3 className="text-sm tracking-wider text-neon-yellow">PRESSY VISUALS</h3>
+            <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+              Find source imagery or build an editable visual brief. Generated visuals stay private until you choose to attach them.
+              {signedIn ? ` ${remaining ?? "…"} visual${remaining === 1 ? "" : "s"} left today.` : " Sign in to make a brief."}
             </p>
           </div>
-          <Button size="sm" onClick={openMaker} disabled={busy === "make"}>
-            <Sparkles className="w-4 h-4 mr-1" />
-            {busy === "make" ? "…" : "MAKE"}
+          <Button type="button" size="sm" onClick={openMaker} disabled={busy === "brief" || busy === "render"}>
+            <Sparkles className="mr-1 h-4 w-4" />
+            {busy === "brief" || busy === "render" ? "WORKING…" : "PRESSY"}
           </Button>
         </div>
+
         <div className="flex gap-2">
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search from the headline…"
-            className="bg-card border-neon/20"
-            onKeyDown={(e) => e.key === "Enter" && void search()}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search source imagery from the headline…"
+            className="min-w-0 bg-card border-neon/20"
+            onKeyDown={(event) => event.key === "Enter" && void search()}
           />
-          <Button variant="outline" onClick={() => void search()} disabled={busy === "search"}>
-            <Search className="w-4 h-4 mr-1" />
+          <Button type="button" variant="outline" onClick={() => void search()} disabled={busy === "search"}>
+            <Search className="mr-1 h-4 w-4" />
             {busy === "search" ? "…" : "FIND"}
           </Button>
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div className="flex flex-wrap gap-2" aria-label="Visual format">
           {FORMATS.map((item) => (
             <Button
               key={item.id}
@@ -260,22 +336,25 @@ export function VisualDesk({
               size="sm"
               variant={format === item.id ? "default" : "outline"}
               onClick={() => setFormat(item.id)}
+              title={item.detail}
             >
               {item.label}
             </Button>
           ))}
         </div>
+
         {hits.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {hits.map((hit) => (
               <button
                 key={String(hit.id)}
                 type="button"
-                className="text-left border border-neon/15 hover:border-neon-yellow/50 rounded overflow-hidden bg-card"
+                className="overflow-hidden rounded border border-neon/15 bg-card text-left transition-colors hover:border-neon-yellow/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-yellow"
                 onClick={() => void onAttachUrl(hit.url, hit.title)}
+                aria-label={`Attach source image: ${hit.title}`}
               >
-                <img src={hit.thumbUrl || hit.url} alt={hit.title} className="w-full h-24 object-cover" />
-                <div className="p-1.5 text-[10px] text-muted-foreground truncate">
+                <img src={hit.thumbUrl || hit.url} alt="" className="h-24 w-full object-cover" />
+                <div className="truncate p-1.5 text-[10px] text-muted-foreground">
                   {hit.source ? `${hit.source} · ` : ""}
                   {hit.title}
                 </div>
@@ -283,84 +362,123 @@ export function VisualDesk({
             ))}
           </div>
         )}
+
         {stills.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] tracking-widest text-neon-yellow">STILLS — filed on this story</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {stills.map((src, i) => (
-                <button
-                  key={`${i}-${src.slice(-24)}`}
-                  type="button"
-                  className="border border-neon-yellow/40 rounded overflow-hidden bg-black"
-                  onClick={() => void onRendered?.(src)}
-                >
-                  <img src={src} alt={`Still ${i + 1}`} className="w-full max-h-64 object-cover" />
-                </button>
+            <p className="text-[10px] tracking-widest text-neon-yellow">PRESSY VISUALS — REVIEW BEFORE ATTACHING</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {stills.map((src, index) => (
+                <div key={`${index}-${src.slice(-24)}`} className="overflow-hidden rounded border border-neon-yellow/40 bg-black">
+                  <img src={src} alt={`Pressy-generated visual candidate ${index + 1}`} className="max-h-80 w-full object-cover" />
+                  <div className="flex items-center justify-between gap-2 p-2">
+                    <span className="text-[10px] text-muted-foreground">AI-generated visual</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void attachRendered(src)}
+                      disabled={busy === "attach" || !onRendered}
+                    >
+                      <ImagePlus className="mr-1 h-4 w-4" />
+                      {busy === "attach" ? "ATTACHING…" : "ATTACH"}
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         )}
-        {prompt && (
-          <div className="space-y-2">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="w-full min-h-[90px] text-xs bg-card border border-neon/20 rounded-md p-2 text-foreground/90 whitespace-pre-wrap"
-            />
-            <Button variant="ghost" size="sm" onClick={() => void copyPrompt()}>
-              <Copy className="w-3 h-3 mr-1" />
-              {copied ? "COPIED" : "COPY"}
-            </Button>
-          </div>
-        )}
-        {error && <p className="text-xs text-neon-red">{error}</p>}
 
-        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent className="bg-terminal border-neon/30">
+        {notice && <p className="text-xs text-neon">{notice}</p>}
+        {error && <p className="text-xs text-neon-red" role="alert">{error}</p>}
+
+        <Dialog open={makerOpen} onOpenChange={setMakerOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto bg-terminal border-neon/30">
             <DialogHeader>
-              <DialogTitle className="tracking-widest">MAKE</DialogTitle>
+              <DialogTitle className="tracking-widest">PRESSY VISUALS</DialogTitle>
               <DialogDescription>
-                Style and shot count, then we write the prompt and render. {left != null ? `${left} left today.` : "13 stills a day."}
+                Build a visual brief first. You keep control of the wording, rendering, attachment, and publication.
               </DialogDescription>
             </DialogHeader>
+
             <div className="space-y-4">
               <div>
-                <p className="text-[10px] tracking-widest text-muted-foreground mb-2">STYLE</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {STYLES.map((item) => (
+                <p className="mb-2 text-[10px] tracking-widest text-muted-foreground">EDITORIAL DIRECTION</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {DIRECTIONS.map((item) => (
                     <Button
                       key={item.id}
                       type="button"
-                      variant={style === item.id ? "default" : "outline"}
-                      className="justify-start"
-                      onClick={() => setStyle(item.id)}
+                      variant={direction === item.id ? "default" : "outline"}
+                      className="min-h-11 justify-start whitespace-normal text-left"
+                      onClick={() => setDirection(item.id)}
+                      title={item.detail}
                     >
                       {item.label}
                     </Button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <p className="text-[10px] tracking-widest text-muted-foreground mb-2">SHOTS</p>
-                <div className="flex gap-2">
-                  {([1, 2, 3] as const).map((n) => (
+                <p className="mb-2 text-[10px] tracking-widest text-muted-foreground">OUTPUT</p>
+                <div className="flex flex-wrap gap-2">
+                  {FORMATS.map((item) => (
                     <Button
-                      key={n}
+                      key={item.id}
                       type="button"
-                      variant={count === n ? "default" : "outline"}
-                      disabled={maxShots > 0 && n > maxShots}
-                      onClick={() => setCount(n)}
+                      size="sm"
+                      variant={format === item.id ? "default" : "outline"}
+                      onClick={() => setFormat(item.id)}
                     >
-                      {n}
+                      {item.label}
                     </Button>
                   ))}
                 </div>
               </div>
-              <Button className="w-full" onClick={() => void runMake()} disabled={maxShots === 0}>
-                GO
+
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => void generateBrief()}
+                disabled={busy === "brief"}
+              >
+                <Sparkles className="mr-1 h-4 w-4" />
+                {busy === "brief" ? "WRITING BRIEF…" : brief ? "REGENERATE BRIEF" : "GENERATE BRIEF"}
               </Button>
-              {maxShots === 0 && signedIn && (
-                <p className="text-xs text-neon-red">Daily still limit reached. Back tomorrow.</p>
+
+              {brief && (
+                <div className="space-y-2">
+                  <label htmlFor="pressy-visual-brief" className="text-[10px] tracking-widest text-muted-foreground">
+                    EDITABLE VISUAL BRIEF
+                  </label>
+                  <textarea
+                    id="pressy-visual-brief"
+                    value={brief}
+                    onChange={(event) => setBrief(event.target.value)}
+                    className="min-h-32 w-full rounded-md border border-neon/20 bg-card p-2 text-xs text-foreground/90"
+                    maxLength={1200}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void copyBrief()}>
+                      <Copy className="mr-1 h-3 w-3" />
+                      {copied ? "COPIED" : "COPY BRIEF"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void renderVisual()}
+                      disabled={busy === "render" || renderingUnavailable}
+                    >
+                      <ImagePlus className="mr-1 h-4 w-4" />
+                      {busy === "render" ? "RENDERING…" : "RENDER VISUAL"}
+                    </Button>
+                  </div>
+                  {renderingUnavailable && (
+                    <p className="text-xs text-muted-foreground">
+                      Image rendering is not configured on this FieldPress desk. Copy the brief for now.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </DialogContent>
