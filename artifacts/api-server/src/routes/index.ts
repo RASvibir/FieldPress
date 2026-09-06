@@ -6,6 +6,7 @@ import itemsRouter from "./items";
 import draftsRouter from "./drafts";
 import dashboardRouter from "./dashboard";
 import produceRouter from "./produce";
+import pressyRouter from "./pressy";
 import { optionalAuth } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -13,6 +14,7 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(optionalAuth);
+router.use(pressyRouter);
 router.use(storiesRouter);
 router.use(itemsRouter);
 router.use(draftsRouter);

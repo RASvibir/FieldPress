@@ -162,8 +162,10 @@ export default function DashboardPage() {
 
   async function renderPressyFlow() {
     if (!newTitle.trim()) return;
+
     setPostError(null);
     setFlowBusy(true);
+
     try {
       const res = await fetch("/api/pressy/flow", {
         method: "POST",
@@ -171,16 +173,41 @@ export default function DashboardPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: newTitle.trim() }),
       });
-      const body = await res.json().catch(() => ({}));
+
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        ideas?: Array<{ headline?: string; hook?: string; visual?: string }>;
+        notice?: string;
+      };
+
       if (!res.ok) {
-        setPostError(typeof body.error === "string" ? body.error : "Pressy could not render a flow");
+        setPostError(
+          typeof body.error === "string"
+            ? body.error
+            : "Pressy could not generate ideas. Please try again.",
+        );
         return;
       }
-      setCreateOpen(false);
-      setNewTitle("");
-      refresh();
-      const id = body.story?.id;
-      if (id) navigate(`/story/${id}/news`);
+
+      const firstIdea = body.ideas?.[0];
+      const suggestedTitle = firstIdea?.headline?.trim();
+
+      if (suggestedTitle) {
+        setNewTitle(suggestedTitle);
+      }
+
+      setPostError(
+        firstIdea?.hook
+          ? `Pressy suggestion: ${firstIdea.hook} Review or edit the headline, then choose Create Pressie to make it.`
+          : body.notice ||
+              "Pressy made editable suggestions. Review or edit the headline, then choose Create Pressie to make it.",
+      );
+    } catch (error) {
+      setPostError(
+        error instanceof Error
+          ? error.message
+          : "Pressy could not generate ideas. Please try again.",
+      );
     } finally {
       setFlowBusy(false);
     }

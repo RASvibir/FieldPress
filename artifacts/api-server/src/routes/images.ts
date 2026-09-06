@@ -1,5 +1,9 @@
 import express, { Router, type Request, type Response } from "express";
-import { searchArchivalMedia, synthesizePhotoPrompt } from "../lib/images";
+import {
+  searchArchivalMedia,
+  synthesizePhotoPrompt,
+  WikimediaRateLimitError,
+} from "../lib/images";
 import { getAccessibleStory } from "../lib/auth";
 import { logger } from "../lib/logger";
 
@@ -77,6 +81,16 @@ imagesRouter.post("/stories/:id/images/search", async (req: Request, res: Respon
     const results = await searchArchivalMedia(query);
     res.json(results);
   } catch (err) {
+    if (err instanceof WikimediaRateLimitError) {
+      logger.warn({ context: "archival-image-search", upstream: "wikimedia" }, err.message);
+      res.status(503).json({
+        error: err.message,
+        code: "UPSTREAM_RATE_LIMITED",
+        retryable: true,
+      });
+      return;
+    }
+
     safeFailure(res, "Archival media search is unavailable. Try again.", err, "archival-image-search");
   }
 });
