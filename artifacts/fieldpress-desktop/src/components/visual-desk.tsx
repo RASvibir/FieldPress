@@ -90,6 +90,9 @@ function friendlyError(value?: string) {
   if (/sign in|authentication/i.test(value)) return "Sign in to use Pressy Visuals.";
   if (/not found|access/i.test(value)) return "This Pressie is not available for visual work.";
   if (/limit|quota/i.test(value)) return "Today's visual limit has been reached. Try again later.";
+  if (/rate-limited|wikimedia|upstream_rate_limited/i.test(value)) {
+    return "Archival image search is temporarily rate-limited by Wikimedia. Please wait a moment and try again.";
+  }
   if (/unavailable|not configured|provider/i.test(value)) {
     return "Visual rendering is not available on this FieldPress desk yet.";
   }
