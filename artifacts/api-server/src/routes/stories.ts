@@ -114,6 +114,21 @@ router.get("/stories/:storyId", async (req: Request, res: Response) => {
   res.json(result);
 });
 
+router.post("/stories/:storyId/cover", async (req: Request, res: Response) => {
+  const storyId = req.params.storyId as string;
+  const story = await getAccessibleStory(req.user?.id, storyId);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  const coverImage = typeof req.body?.coverImage === "string" ? req.body.coverImage.trim() : null;
+  const existingChecks = (story.deskChecks as Record<string, unknown>) || {};
+  const updatedChecks = { ...existingChecks, coverImage };
+  await db.update(storiesTable).set({ deskChecks: updatedChecks }).where(eq(storiesTable.id, storyId));
+  const updated = await getStoryWithItems(req.user?.id, storyId);
+  res.json(updated);
+});
+
 router.post("/stories/:storyId/ink", async (req: Request, res: Response) => {
   const storyId = req.params.storyId as string;
   const story = await getAccessibleStory(req.user?.id, storyId);

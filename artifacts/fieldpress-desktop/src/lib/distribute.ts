@@ -6,6 +6,7 @@ export type DistributePayload = {
   title: string;
   content: string;
   storyId?: string;
+  photos?: string[];
 };
 
 export function slugify(value: string) {

@@ -4,7 +4,7 @@ const CARD_WIDTH = 1200;
 const CARD_HEIGHT = 630;
 
 const PRESSIE_FAVICON_SVG = `
-  <rect width="180" height="180" rx="40" fill="#000"/>
+  
   <g
     transform="translate(18 18) scale(2.25)"
     fill="none"

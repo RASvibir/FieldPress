@@ -231,6 +231,7 @@ export default function EditorPage() {
     mode,
     title,
     content,
+    photos: story?.items?.filter((i) => i.type === "photo").map((i) => i.content) || [],
   };
 
   return (

@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "next-themes";
@@ -36,6 +37,45 @@ export function SettingsMenu() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [crt, setCrt] = useState(true);
   const [glow, setGlow] = useState(true);
+  const [displayName, setDisplayName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [markStyle, setMarkStyle] = useState("neon");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName || "");
+      setAvatarUrl(user.deskLinks?.avatarUrl || "");
+      setMarkStyle(user.deskLinks?.markStyle || localStorage.getItem("fp-mark-style") || "neon");
+    }
+  }, [user]);
+
+  async function saveProfile() {
+    setProfileSaving(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ displayName, avatarUrl, markStyle }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.user) {
+        setUser(data.user);
+        localStorage.setItem("fp-mark-style", markStyle);
+        setProfileMsg("Profile updated!");
+        setTimeout(() => setProfileMsg(null), 1800);
+      } else {
+        setProfileMsg(data?.error || "Could not update profile");
+      }
+    } catch {
+      setProfileMsg("Network error saving profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   useEffect(() => {
     applyDisplaySettings();
@@ -134,15 +174,85 @@ export function SettingsMenu() {
         </section>
 
         <section className="mt-6 space-y-3">
-          <h3 className="text-xs tracking-widest text-muted-foreground">ACCOUNT</h3>
+          <h3 className="text-xs tracking-widest text-muted-foreground">ACCOUNT & PROFILE</h3>
           {user ? (
-            <>
-              <p className="text-sm">{user.displayName}</p>
-              <p className="text-xs text-muted-foreground">{user.email}</p>
-              <p className="text-xs text-muted-foreground">Desk rating: {ageLabel}. Chosen at signup. No birthday is stored.</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover border border-neon/30" />
+                ) : (
+                  <div className="h-11 w-11 rounded-full border border-border bg-muted flex items-center justify-center text-xs font-mono font-bold text-neon">
+                    {user.displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold truncate">{user.displayName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] tracking-widest text-muted-foreground block mb-1">REPORTER BYLINE</label>
+                <Input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Reporter Name"
+                  className="bg-card text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] tracking-widest text-muted-foreground block mb-1">AVATAR PHOTO URL</label>
+                <Input
+                  value={avatarUrl}
+                  onChange={(e) => setAvatarUrl(e.target.value)}
+                  placeholder="https://... image link"
+                  className="bg-card text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] tracking-widest text-muted-foreground block mb-1">PRESSIE BADGE THEME</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarkStyle("neon")}
+                    className={`flex items-center justify-center gap-2 border px-3 py-2 rounded text-xs transition-colors ${
+                      markStyle === "neon" ? "border-neon bg-neon/10 text-neon" : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-neon shadow-[0_0_8px_#39ff14]"></span>
+                    Neon Green
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarkStyle("ink")}
+                    className={`flex items-center justify-center gap-2 border px-3 py-2 rounded text-xs transition-colors ${
+                      markStyle === "ink" ? "border-foreground bg-foreground/10 text-foreground" : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-foreground"></span>
+                    Ink & Paper
+                  </button>
+                </div>
+              </div>
+
+              {profileMsg && <p className="text-xs text-neon font-mono">{profileMsg}</p>}
+
               <Button
+                type="button"
                 variant="outline"
-                className="w-full"
+                className="w-full border-neon/40 text-neon"
+                disabled={profileSaving}
+                onClick={() => void saveProfile()}
+              >
+                {profileSaving ? "SAVING…" : "SAVE PROFILE & IDENTITY"}
+              </Button>
+
+              <p className="text-xs text-muted-foreground">Desk rating: {ageLabel}. Chosen at signup.</p>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-neon-red"
                 onClick={async () => {
                   await signOut();
                   setUser(null);
@@ -150,10 +260,10 @@ export function SettingsMenu() {
                   navigate("/app");
                 }}
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4 mr-1" />
                 SIGN OUT
               </Button>
-            </>
+            </div>
           ) : (
             <>
               <p className="text-xs text-muted-foreground leading-relaxed">{ageLabel}. Sign in to capture photos, keep private files, and set a desk rating.</p>
