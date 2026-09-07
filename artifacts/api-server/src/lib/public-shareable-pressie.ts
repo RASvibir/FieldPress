@@ -11,6 +11,7 @@ export type PublicShareablePressie = {
   id: string;
   title: string;
   excerpt: string;
+  image?: string;
 };
 
 export function normalizePublicPressieId(value: unknown): string | null {
@@ -100,6 +101,11 @@ export async function getPublicShareablePressie(
     .map((item) => cleanPublicShareText(item.content))
     .find(isSafePublicShareExcerpt);
 
+  const firstImage = items
+    .filter((item) => ["photo", "image", "hero"].includes(String(item.type || "").toLowerCase()))
+    .map((item) => String(item.content || "").trim())
+    .find((val) => /^https?:\/\/[^\s]+$/i.test(val));
+
   return {
     id: story.id,
     title: truncate(
@@ -107,5 +113,6 @@ export async function getPublicShareablePressie(
       MAX_PUBLIC_TITLE_LENGTH,
     ),
     excerpt: excerpt ? truncate(excerpt, MAX_PUBLIC_EXCERPT_LENGTH) : "",
+    image: firstImage || undefined,
   };
 }

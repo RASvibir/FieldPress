@@ -75,7 +75,7 @@ const renderSharePreview = async (req: Request, res: Response) => {
     const description = escapeHtml(pressie.excerpt || "Read this Pressie on FieldPress.");
     const canonical = `${PUBLIC_ORIGIN}/s/${encodeURIComponent(pressie.id)}`;
     const open = `${PUBLIC_ORIGIN}/story/${encodeURIComponent(pressie.id)}`;
-    const image = `${PUBLIC_ORIGIN}/og/pressies/${encodeURIComponent(pressie.id)}.png`;
+    const image = pressie.image || `${PUBLIC_ORIGIN}/og/pressies/${encodeURIComponent(pressie.id)}.png`;
 
     res
       .status(200)
@@ -101,9 +101,16 @@ const renderSharePreview = async (req: Request, res: Response) => {
 <meta name="twitter:description" content="${description}"/>
 <meta name="twitter:image" content="${image}"/>
 <link rel="canonical" href="${canonical}"/>
-<meta http-equiv="refresh" content="2;url=${open}"/>
+<script>
+  if (!navigator.userAgent.match(/bot|crawl|spider|facebook|twitter|slack|discord|whatsapp|threads/i)) {
+    window.location.replace("${open}");
+  }
+</script>
+<noscript>
+  <meta http-equiv="refresh" content="0;url=${open}"/>
+</noscript>
 </head><body style="background:#000;color:#f5f5f5;font-family:system-ui,sans-serif;padding:2rem">
-<main><p>Opening Pressie…</p><h1>${title}</h1><p>${description}</p><p><a href="${open}" style="color:#b8ff5a">Open this Pressie in FieldPress</a></p></main>
+<main><p>Opening Pressie…</p><h1>${title}</h1><p>${description}</p><p><a href="${open}" style="color:#39ff14">Open this Pressie in FieldPress</a></p></main>
 </body></html>`);
   } catch {
     sharePreviewError(res);
