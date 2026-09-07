@@ -44,6 +44,12 @@ export function DistributeDialog({
   const [bookmarks, setBookmarks] = useState<Record<string, string>>({});
   const [chosenCover, setChosenCover] = useState<string | null>(null);
 
+  const activeCover = chosenCover || (payload?.photos && payload.photos.length > 0 ? payload.photos[0] : null);
+  const cardTitle = payload?.title?.trim() || payload?.storyTitle?.trim() || "Untitled Pressie";
+  const cardExcerpt = payload?.content
+    ? payload.content.replace(/^[#*>\s-]+/gm, "").replace(/\n+/g, " ").trim().slice(0, 150)
+    : "Verified dispatch from the field on FieldPress.";
+
   async function selectCover(url: string) {
     setChosenCover(url);
     if (!payload?.storyId) return;
@@ -144,6 +150,46 @@ export function DistributeDialog({
               </div>
             </div>
           )}
+
+          {/* WYSIWYG Social Card Preview */}
+          <div className="space-y-1.5">
+            <div className="text-[10px] tracking-widest text-muted-foreground flex items-center justify-between">
+              <span>LIVE SOCIAL CARD PREVIEW</span>
+              <span className="text-[9px] text-neon font-mono">X • Facebook • Threads</span>
+            </div>
+
+            <div className="rounded-lg border border-border/80 bg-card overflow-hidden shadow-sm">
+              {activeCover ? (
+                <div className="relative w-full aspect-[1.91/1] bg-black/40 overflow-hidden border-b border-border/40">
+                  <img
+                    src={activeCover}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm text-[9px] font-mono text-signal-yellow border border-signal-yellow/30 font-bold">
+                    PRESSIE
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full py-6 flex flex-col items-center justify-center bg-muted/20 border-b border-border/40 text-muted-foreground text-xs font-mono">
+                  <span>No cover photo selected</span>
+                  <span className="text-[10px] text-muted-foreground/60 mt-0.5">Transparent pressie mark will be used</span>
+                </div>
+              )}
+
+              <div className="p-3 space-y-1 bg-background/50">
+                <p className="text-[10px] tracking-wider uppercase text-muted-foreground font-mono">
+                  fieldpress.studio
+                </p>
+                <h4 className="text-sm font-semibold line-clamp-2 text-foreground leading-snug">
+                  {cardTitle}
+                </h4>
+                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                  {cardExcerpt}
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div>
             <div className="text-[10px] tracking-widest text-muted-foreground mb-2">POST</div>
