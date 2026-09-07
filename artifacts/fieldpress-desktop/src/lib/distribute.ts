@@ -134,21 +134,21 @@ export function composeUrl(target: ComposeTargetId, payload: DistributePayload) 
   const pageUrl = payload.storyId ? `${origin}/s/${payload.storyId}` : `${origin}${typeof window !== "undefined" ? window.location.pathname : ""}`;
   switch (target) {
     case "x":
-      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}`;
+      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(short)}&url=${encodeURIComponent(pageUrl)}`;
     case "threads":
-      return `https://www.threads.net/intent/post?text=${encodeURIComponent(short)}`;
+      return `https://www.threads.net/intent/post?text=${encodeURIComponent(short + "\n\n" + pageUrl)}`;
     case "bluesky":
-      return `https://bsky.app/intent/compose?text=${encodeURIComponent(short)}`;
+      return `https://bsky.app/intent/compose?text=${encodeURIComponent(short + "\n\n" + pageUrl)}`;
     case "linkedin":
-      return `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(full.slice(0, 3000))}`;
+      return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`;
     case "facebook":
-      return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}&quote=${encodeURIComponent(short)}`;
+      return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`;
     case "reddit":
-      return `https://www.reddit.com/submit?title=${encodeURIComponent(subject.slice(0, 300))}&text=${encodeURIComponent(full.slice(0, 40000))}`;
+      return `https://www.reddit.com/submit?title=${encodeURIComponent(subject.slice(0, 300))}&url=${encodeURIComponent(pageUrl)}`;
     case "instagram":
       return "https://www.instagram.com/";
     case "whatsapp":
-      return `https://wa.me/?text=${encodeURIComponent(short)}`;
+      return `https://wa.me/?text=${encodeURIComponent(short + " " + pageUrl)}`;
     case "email":
       return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(full.slice(0, 1800))}`;
   }
