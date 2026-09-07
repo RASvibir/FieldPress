@@ -131,7 +131,7 @@ export async function searchArchivalMedia(query: string): Promise<MediaSearchRes
         height: info.height,
       } satisfies MediaSearchResult;
     })
-    .filter((item) => item.url);
+    .filter((item) => Boolean(item.url) && /\.(jpe?g|png|webp)$/i.test(item.url.split("?")[0].toLowerCase()));
 
   setCachedSearch(query, results);
   return results;
