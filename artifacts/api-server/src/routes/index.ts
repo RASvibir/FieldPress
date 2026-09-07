@@ -6,6 +6,7 @@ import itemsRouter from "./items";
 import draftsRouter from "./drafts";
 import dashboardRouter from "./dashboard";
 import produceRouter from "./produce";
+import desksRouter from "./desks";
 import pressyRouter from "./pressy";
 import { optionalAuth } from "../lib/auth";
 
@@ -20,5 +21,6 @@ router.use(itemsRouter);
 router.use(draftsRouter);
 router.use(dashboardRouter);
 router.use(produceRouter);
+router.use(desksRouter);
 
 export default router;

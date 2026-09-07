@@ -17,6 +17,7 @@ import LoginPage from "@/pages/login";
 import ResetPasswordPage from "@/pages/reset-password";
 import UserManualPage from "@/pages/user-manual";
 import AdminManualPage from "@/pages/admin-manual";
+import JoinPage from "@/pages/join";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -33,6 +34,7 @@ function Router() {
     <Switch>
       <Route path="/" component={DashboardPage} />
       <Route path="/app" component={DashboardPage} />
+      <Route path="/join/:code" component={JoinPage} />
       <Route path="/launch" component={LaunchPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
