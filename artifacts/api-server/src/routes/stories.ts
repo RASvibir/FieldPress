@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { storiesTable, storyItemsTable } from "@workspace/db";
+import { storiesTable, storyItemsTable, usersTable } from "@workspace/db";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import {
   ListStoriesQueryParams,
@@ -39,7 +39,14 @@ async function getStoryWithItems(userId: string | undefined, storyId: string) {
     // Graceful fallback if table is empty or error
   }
 
-  return { ...story, items, inkCounts, myInk };
+    let author: string | null = null;
+  if (story.ownerId) {
+    try {
+      const u = await db.select({ name: usersTable.displayName }).from(usersTable).where(eq(usersTable.id, story.ownerId)).limit(1);
+      if (u[0]?.name) author = u[0].name;
+    } catch {}
+  }
+  return { ...story, items, inkCounts, myInk, author: author || "Field Reporter" };
 }
 
 router.get("/stories", async (req: Request, res: Response) => {
