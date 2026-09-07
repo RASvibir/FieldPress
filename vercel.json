@@ -41,7 +41,10 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 60,
-      "includeFiles": "{artifacts/api-server/dist/**,artifacts/fieldpress-desktop/dist/public/**}"
+      "includeFiles": [
+        "artifacts/api-server/dist/**",
+        "artifacts/fieldpress-desktop/dist/public/**"
+      ]
     }
   }
 }
