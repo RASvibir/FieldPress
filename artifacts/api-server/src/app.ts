@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { optionalAuth } from "./lib/auth";
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -56,6 +57,7 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(optionalAuth);
 
 app.use(sharePreviewRouter);
 app.use("/api", imagesRouter);
