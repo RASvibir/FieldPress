@@ -125,6 +125,7 @@ export default function StoryDetailPage() {
                 </Badge>
                 <span>{story.items.length} items</span>
                 <span>Created {new Date(story.createdAt).toLocaleDateString()}</span>
+                <span className="text-neon font-medium">by {(story as { author?: string }).author || "Field Reporter"}</span>
               </div>
             </div>
           </div>
@@ -149,8 +150,7 @@ export default function StoryDetailPage() {
           </div>
         </div>
 
-        {(story as { lane?: string }).lane === "feed" && (
-          <div className="space-y-2">
+        <div className="space-y-2">
             <p className="text-[10px] tracking-widest text-muted-foreground">
               REACT{inkLabel((story as { pulse?: string }).pulse) ? ` · ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
             </p>
@@ -173,7 +173,6 @@ export default function StoryDetailPage() {
               }}
             />
           </div>
-        )}
 
         <Separator className="bg-neon/10" />
 

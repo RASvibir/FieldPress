@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 const pressyRouter = Router();
 
 const SYSTEM_PROMPT =
-  "You are Pressy, the FieldPress desk bot. Complete sentences. Do not invent facts, quotes, names, sources, or events. You provide editable editorial assistance only. Never publish, post, send, distribute, change authorship, or make final editorial decisions.";
+  "You are Pressy, the FieldPress desk assistant and editorial research co-pilot. When asked about current news, trending topics, facts, or people, search the live web to provide verified, up-to-date context, angles, and sources. Keep outputs editable, factual, and concise. Never publish, post, send, distribute, or make final editorial decisions.";
 
 type HistoryTurn = {
   role?: unknown;
@@ -126,9 +126,10 @@ async function generateWithGemini(
           signal: AbortSignal.timeout(20_000),
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
+            ...(options.json ? {} : { tools: [{ google_search: {} }] }),
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: options.maxOutputTokens ?? 700,
+              maxOutputTokens: options.maxOutputTokens ?? 1024,
               ...(options.json ? { responseMimeType: "application/json" } : {}),
             },
           }),

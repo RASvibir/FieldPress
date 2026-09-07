@@ -363,6 +363,7 @@ export default function DashboardPage() {
             <CardContent className="pt-0">
               <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                 <span>{new Date(story.createdAt).toLocaleDateString()}</span>
+                <span className="text-neon font-medium">by {(story as { author?: string }).author || "Field Reporter"}</span>
                 {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
                 {inkLabel(story.pulse) ? <span>{inkLabel(story.pulse)}</span> : null}
               </div>

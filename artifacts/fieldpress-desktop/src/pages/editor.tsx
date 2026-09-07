@@ -226,6 +226,7 @@ export default function EditorPage() {
   const config = MODE_CONFIG[mode];
   const ModeIcon = config.icon;
   const distributePayload: DistributePayload = {
+    storyId,
     storyTitle: story?.title ?? "FieldPress",
     mode,
     title,
@@ -305,9 +306,13 @@ export default function EditorPage() {
                       <div className="mt-0.5 shrink-0">{itemIcon(item.type)}</div>
                       <div className="min-w-0">
                         <Badge variant="secondary" className="text-[8px] uppercase mb-1">{item.type}</Badge>
-                        <p className="text-[11px] text-muted-foreground line-clamp-3 group-hover:text-foreground transition-colors">
-                          {item.content}
-                        </p>
+                        {item.type === "photo" ? (
+                          <img src={item.content} alt="" className="w-full h-28 object-cover rounded border border-neon/20 mb-1" />
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground line-clamp-3 group-hover:text-foreground transition-colors">
+                            {item.content}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </CardContent>
