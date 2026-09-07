@@ -13,7 +13,7 @@ export function PressyBubble() {
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "pressy",
-      content: "Pressy here. Prompt me like a desk bot. I’ll help you draft a Pressie — that’s the written piece, not me.",
+      content: "Pressy'O here. Prompt me like a desk co-pilot. I’ll help you research breaking angles, facts, or draft a Pressie.",
     },
   ]);
   const [busy, setBusy] = useState(false);
@@ -51,7 +51,10 @@ export function PressyBubble() {
         <div className="pointer-events-auto w-[min(94vw,28rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
           <div className="flex items-center justify-between border-b border-neon/20 px-3 py-2">
             <div>
-              <p className="text-sm tracking-widest text-neon">PRESSY</p>
+              <div className="flex items-center gap-2">
+              <img src="/pressy-o.png" alt="Pressy'O" className="h-6 w-6 object-contain drop-shadow" />
+              <p className="text-sm tracking-widest text-neon font-bold">PRESSY'O</p>
+            </div>
               <p className="text-[10px] text-muted-foreground">Desk bot · writes help for Pressies</p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close Pressy">
@@ -78,7 +81,7 @@ export function PressyBubble() {
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask Pressy…"
+              placeholder="Ask Pressy'O…"
               className="min-h-[52px] resize-none bg-card border-border text-sm"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -95,11 +98,12 @@ export function PressyBubble() {
       )}
       <button
         type="button"
-        className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border border-neon bg-terminal text-neon shadow-[0_0_18px_rgba(57,255,20,0.35)] hover:text-glow"
+        className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#39ff14] bg-card p-1.5 shadow-[0_0_20px_rgba(57,255,20,0.35)] hover:scale-105 transition-all"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Open Pressy"
+        aria-label="Open Pressy'O"
+        title="Pressy'O Desk Co-Pilot"
       >
-        <PressyMark busy={busy || open} className="h-8 w-8" />
+        <img src="/pressy-o.png" alt="Pressy'O" className="h-full w-full object-contain" />
       </button>
     </div>
   );
