@@ -24,7 +24,7 @@ import {
 
 const THEMES = [
   { id: "dark", label: "Dark", hint: "Neon CRT desk", Icon: Moon },
-  { id: "light", label: "Light", hint: "Newsprint edition", Icon: Sun },
+  { id: "light", label: "Ink & Paper", hint: "Newsprint edition", Icon: Sun },
   { id: "system", label: "System", hint: "Follow the device", Icon: Monitor },
 ] as const;
 
