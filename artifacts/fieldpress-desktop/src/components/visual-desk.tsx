@@ -21,7 +21,6 @@ type Hit = {
   source?: string;
 };
 
-type Quota = { used: number; remaining: number; limit: number };
 type FormatId = "article_hero" | "social_feed" | "podcast_square";
 type DirectionId =
   | "documentary_still"
@@ -116,30 +115,10 @@ export function VisualDesk({
   const [brief, setBrief] = useState("");
   const [stills, setStills] = useState<string[]>([]);
   const [makerOpen, setMakerOpen] = useState(false);
-  const [quota, setQuota] = useState<Quota | null>(null);
   const [busy, setBusy] = useState<"search" | "brief" | "render" | "attach" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-
-  async function loadQuota() {
-    if (!signedIn) {
-      setQuota(null);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/images/quota", { credentials: "include" });
-      const body = (await res.json().catch(() => null)) as Quota | null;
-      if (res.ok && body && typeof body.remaining === "number") setQuota(body);
-    } catch {
-      setQuota(null);
-    }
-  }
-
-  useEffect(() => {
-    void loadQuota();
-  }, [signedIn]);
 
   async function search(nextQuery = query.trim() || headline) {
     if (!nextQuery.trim()) return;
@@ -181,7 +160,6 @@ export function VisualDesk({
     }
     setError(null);
     setNotice(null);
-    void loadQuota();
     setMakerOpen(true);
   }
 
@@ -253,9 +231,6 @@ export function VisualDesk({
         }),
       });
       const payload = (await res.json().catch(() => null)) as RenderResponse | null;
-      if (typeof payload?.remaining === "number" && typeof payload.used === "number" && typeof payload.limit === "number") {
-        setQuota({ remaining: payload.remaining, used: payload.used, limit: payload.limit });
-      }
       if (!res.ok) throw new Error(payload?.error);
       const urls = payload?.dataUrls?.filter(Boolean) || (payload?.dataUrl ? [payload.dataUrl] : []);
       if (!urls.length) throw new Error("No visual returned");
@@ -297,8 +272,7 @@ export function VisualDesk({
     }
   }
 
-  const remaining = quota?.remaining;
-  const renderingUnavailable = false;
+  const renderingUnavailable = true;
 
   return (
     <Card className="border-neon-yellow/25 bg-card">
@@ -308,7 +282,11 @@ export function VisualDesk({
             <h3 className="text-sm tracking-wider text-neon-yellow">PRESSY VISUALS</h3>
             <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
               Find source imagery or build an editable visual brief. Generated visuals stay private until you choose to attach them.
-              {signedIn ? ` ${remaining ?? "…"} visual${remaining === 1 ? "" : "s"} left today.` : " Sign in to make a brief."}
+              {renderingUnavailable
+                ? " Visual rendering is not configured on this FieldPress desk yet."
+                : signedIn
+                  ? " Sign in to make a brief."
+                  : " Sign in to make a brief."}
             </p>
           </div>
           <Button type="button" size="sm" onClick={openMaker} disabled={busy === "brief" || busy === "render"}>
