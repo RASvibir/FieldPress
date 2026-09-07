@@ -54,7 +54,7 @@ export function PressieMedia({
       {badge && (
         <span
           aria-hidden="true"
-          className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-md border border-[#39ff14]/50 bg-black/75 p-1.5 text-[#39ff14] shadow-sm backdrop-blur-sm sm:left-4 sm:top-4 sm:h-10 sm:w-10"
+          className="absolute left-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-md border border-[#39ff14]/30 bg-black/30 p-1 text-[#39ff14] shadow-sm backdrop-blur-md"
         >
           <PressyMark className="h-full w-full" />
         </span>

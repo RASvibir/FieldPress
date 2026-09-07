@@ -113,6 +113,6 @@ export async function getPublicShareablePressie(
       MAX_PUBLIC_TITLE_LENGTH,
     ),
     excerpt: excerpt ? truncate(excerpt, MAX_PUBLIC_EXCERPT_LENGTH) : "",
-    image: firstImage || undefined,
+    image: ((story as { deskChecks?: Record<string, string> }).deskChecks?.coverImage) || firstImage || undefined,
   };
 }

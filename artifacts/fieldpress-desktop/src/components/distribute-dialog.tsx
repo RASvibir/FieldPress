@@ -42,6 +42,24 @@ export function DistributeDialog({
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Record<string, string>>({});
+  const [chosenCover, setChosenCover] = useState<string | null>(null);
+
+  async function selectCover(url: string) {
+    setChosenCover(url);
+    if (!payload?.storyId) return;
+    try {
+      await fetch(`/api/stories/${payload.storyId}/cover`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ coverImage: url }),
+      });
+      setStatus("Social cover photo set!");
+      setTimeout(() => setStatus(null), 1800);
+    } catch {
+      setStatus("Could not set cover photo");
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +115,36 @@ export function DistributeDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {payload?.photos && payload.photos.length > 0 && (
+            <div>
+              <div className="text-[10px] tracking-widest text-muted-foreground mb-2 flex items-center justify-between">
+                <span>SOCIAL PREVIEW COVER PHOTO</span>
+                <span className="text-[9px] text-neon">Click to choose image</span>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {payload.photos.map((photo, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => void selectCover(photo)}
+                    className={`relative shrink-0 rounded overflow-hidden border-2 transition-all ${
+                      chosenCover === photo
+                        ? "border-neon ring-2 ring-neon/40 scale-105"
+                        : "border-border/60 hover:border-border opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={photo} alt="" className="w-16 h-16 object-cover" />
+                    {chosenCover === photo && (
+                      <span className="absolute bottom-0 inset-x-0 bg-neon text-black text-[8px] font-bold text-center py-0.5">
+                        COVER
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="text-[10px] tracking-widest text-muted-foreground mb-2">POST</div>
             <div className="grid grid-cols-2 gap-2">

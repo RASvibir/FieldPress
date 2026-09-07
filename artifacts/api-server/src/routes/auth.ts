@@ -134,6 +134,44 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   res.status(204).end();
 });
 
+router.patch("/auth/me", async (req: Request, res: Response) => {
+  const user = await loadUserFromSession(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+  const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim().slice(0, 200) : undefined;
+  const avatarUrl = typeof req.body?.avatarUrl === "string" ? req.body.avatarUrl.trim().slice(0, 1000) : undefined;
+  const markStyle = typeof req.body?.markStyle === "string" && ["neon", "ink"].includes(req.body.markStyle) ? req.body.markStyle : undefined;
+
+  const [row] = await db.select().from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
+  if (!row) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const existingLinks = (row.deskLinks as Record<string, string>) || {};
+  const updatedLinks = { ...existingLinks };
+  if (avatarUrl !== undefined) updatedLinks.avatarUrl = avatarUrl;
+  if (markStyle !== undefined) updatedLinks.markStyle = markStyle;
+
+  await db.update(usersTable).set({
+    ...(displayName ? { displayName } : {}),
+    deskLinks: updatedLinks,
+  }).where(eq(usersTable.id, user.id));
+
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: displayName || row.displayName,
+      ageBand: row.ageBand || "teen",
+      deskLinks: updatedLinks,
+      avatarUrl: updatedLinks.avatarUrl || null,
+      markStyle: updatedLinks.markStyle || "neon",
+    }
+  });
+});
+
 router.get("/auth/me", async (req: Request, res: Response) => {
   const user = await loadUserFromSession(req);
   if (!user) {
