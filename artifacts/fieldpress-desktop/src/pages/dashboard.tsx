@@ -111,6 +111,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("feed");
   const [query, setQuery] = useState("");
   const [postError, setPostError] = useState<string | null>(null);
+  const [pressyNotice, setPressyNotice] = useState<string | null>(null);
   const [flowBusy, setFlowBusy] = useState(false);
   const [pressyPrompt, setPressyPrompt] = useState("");
   const [pressyBusy, setPressyBusy] = useState(false);
@@ -160,10 +161,12 @@ export default function DashboardPage() {
     }
   }
 
-  async function renderPressyFlow() {
-    if (!newTitle.trim()) return;
+  async function renderPressyFlow(targetTitle?: string) {
+    const rawTitle = (targetTitle ?? newTitle).trim();
+    if (!rawTitle) return;
 
     setPostError(null);
+    setPressyNotice(null);
     setFlowBusy(true);
 
     try {
@@ -171,7 +174,7 @@ export default function DashboardPage() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: newTitle.trim() }),
+        body: JSON.stringify({ title: rawTitle }),
       });
 
       const body = (await res.json().catch(() => ({}))) as {
@@ -193,15 +196,17 @@ export default function DashboardPage() {
       const suggestedTitle = firstIdea?.headline?.trim();
 
       if (suggestedTitle) {
-        setNewTitle(suggestedTitle);
+        if (targetTitle !== undefined) {
+          setFeedTitle(suggestedTitle);
+        } else {
+          setNewTitle(suggestedTitle);
+        }
       }
 
-      setPostError(
-        firstIdea?.hook
-          ? `Pressy suggestion: ${firstIdea.hook} Review or edit the headline, then choose Create Pressie to make it.`
-          : body.notice ||
-              "Pressy made editable suggestions. Review or edit the headline, then choose Create Pressie to make it.",
-      );
+      const notice = firstIdea?.hook
+        ? `Pressy suggestion: ${firstIdea.hook}`
+        : body.notice || "Pressy generated suggestions. Review headline and post.";
+      setPressyNotice(notice);
     } catch (error) {
       setPostError(
         error instanceof Error
@@ -266,6 +271,7 @@ export default function DashboardPage() {
   async function postToFeed() {
     if (!feedTitle.trim()) return;
     setPostError(null);
+    setPressyNotice(null);
     if (!signedIn) {
       navigate("/login?next=%2F");
       return;
@@ -618,7 +624,120 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ) : tab === "feed" ? (
-          renderGrid(pressieRiver, "feed")
+          <div className="space-y-6">
+            <Card className="border-border bg-card shadow-sm">
+              <CardContent className="p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <PressyMark className="h-5 w-5 text-signal-yellow" />
+                    <span className="font-mono text-xs font-semibold tracking-wider uppercase text-foreground">
+                      Dispatch Desk • Quick Pressie
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    {signedIn ? "Connected" : "Guest (Sign in to post)"}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={feedTitle}
+                      onChange={(e) => setFeedTitle(e.target.value)}
+                      placeholder="Headline or breaking hook…"
+                      className="bg-background border-border flex-1 font-medium"
+                      onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && void postToFeed()}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void renderPressyFlow(feedTitle)}
+                      disabled={!feedTitle.trim() || flowBusy}
+                      className="shrink-0 gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-signal-yellow" />
+                      {flowBusy ? "POLISHING…" : "POLISH"}
+                    </Button>
+                  </div>
+
+                  <Textarea
+                    value={feedBody}
+                    onChange={(e) => setFeedBody(e.target.value)}
+                    placeholder="Field notes, verified details, voices from the ground…"
+                    className="min-h-[85px] bg-background border-border text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] tracking-widest text-muted-foreground uppercase font-mono">
+                      Visual Evidence
+                    </p>
+                    {feedPhoto ? (
+                      <div className="relative rounded border border-border overflow-hidden bg-background">
+                        <img src={feedPhoto} alt="Dispatch attachment" className="w-full max-h-36 object-cover" />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-2 right-2 h-7 px-2 text-xs"
+                          onClick={() => setFeedPhoto(null)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <CaptureBar
+                        signedIn={signedIn}
+                        onNeedSignIn={() => navigate("/login?next=%2F")}
+                        onPhoto={(dataUrl) => setFeedPhoto(dataUrl)}
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] tracking-widest text-muted-foreground uppercase font-mono">
+                        How It Hits (Pulse)
+                      </p>
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        {INKS.find((ink) => ink.id === feedPulse)?.hint}
+                      </span>
+                    </div>
+                    <InkPad value={feedPulse} onPick={setFeedPulse} mode="picker" />
+                  </div>
+                </div>
+
+                {pressyNotice && (
+                  <div className="p-2.5 rounded bg-signal-yellow/10 border border-signal-yellow/30 text-xs text-signal-yellow font-mono">
+                    {pressyNotice}
+                  </div>
+                )}
+                {postError && (
+                  <div className="p-2.5 rounded bg-neon-red/10 border border-neon-red/30 text-xs text-neon-red font-mono">
+                    {postError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1 border-t border-border">
+                  <p className="text-[11px] text-muted-foreground">
+                    Posts instantly to the live river.
+                  </p>
+                  <Button
+                    onClick={() => void postToFeed()}
+                    disabled={!feedTitle.trim()}
+                    className="font-semibold tracking-wide"
+                  >
+                    <PressyMark className="h-4 w-4 mr-1.5" />
+                    {signedIn ? "POST PRESSIE" : "SIGN IN TO POST"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {renderGrid(pressieRiver, "feed")}
+          </div>
         ) : tab === "wall" ? (
           renderGrid(wallStories, "wall")
         ) : (
