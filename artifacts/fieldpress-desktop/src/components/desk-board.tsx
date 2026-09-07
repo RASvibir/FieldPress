@@ -28,18 +28,6 @@ export function DeskBoard({
     setEmbargo(embargoUntil ? new Date(embargoUntil).toISOString().slice(0, 16) : "");
   }, [embargoUntil]);
 
-  useEffect(() => {
-    void Promise.all([
-      fetch(`/api/stories/${storyId}/tips`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/stories/${storyId}/notes`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/stories/${storyId}/chapters`, { credentials: "include" }).then((r) => (r.ok ? r.json() : { chapters: [] })),
-    ]).then(([nextTips, nextNotes, nextChapters]) => {
-      setTips(Array.isArray(nextTips) ? nextTips : []);
-      setNotes(Array.isArray(nextNotes) ? nextNotes : []);
-      setChapters(Array.isArray(nextChapters?.chapters) ? nextChapters.chapters.length : 0);
-    });
-  }, [storyId]);
-
   async function sendTip() {
     const body = tipBody.trim();
     if (!body) return;
