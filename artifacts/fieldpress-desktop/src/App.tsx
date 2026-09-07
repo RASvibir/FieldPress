@@ -51,9 +51,9 @@ function App() {
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="dark"
+      defaultTheme="light"
       enableSystem
-      storageKey="fp-theme"
+      storageKey="fp-theme-v2"
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
