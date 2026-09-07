@@ -26,7 +26,9 @@ async function ollamaAt(base: string): Promise<{ base: string; model: string } |
 }
 
 async function findOllama(): Promise<{ base: string; model: string } | null> {
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
   for (const base of OLLAMA_BASES) {
+    if (isHttps && base.startsWith("http://")) continue;
     const hit = await ollamaAt(base);
     if (hit) return hit;
   }

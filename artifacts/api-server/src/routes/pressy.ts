@@ -260,4 +260,50 @@ Additional context: ${promptDetail || "(none)"}`;
   }
 });
 
+
+pressyRouter.post("/stories/:id/ideas", async (req: Request, res: Response) => {
+  const title = text(req.body?.title ?? req.body?.prompt, 255) || "Field Report";
+  const prompt = `${SYSTEM_PROMPT}
+
+You are generating editable newsroom idea suggestions for a headline. Return valid JSON only:
+{
+  "ideas": [
+    { "headline": "string", "hook": "string", "visual": "string" }
+  ]
+}
+
+Return exactly three ideas. These are suggestions, not finished copy.
+Headline: ${title}
+Reporter prompt: ${text(req.body?.prompt, 4_000) || "(none)"}`;
+
+  try {
+    const raw = await generateWithGemini(prompt);
+    const ideas = safeIdeas(JSON.parse(raw) as unknown, title);
+    res.json({
+      ideas,
+      spiffs: ideas,
+      searchQueries: [title],
+      articleIdeas: ideas.map((i) => i.headline),
+      socialIdeas: ideas.map((i) => i.hook),
+      podcastIdeas: ideas.map((i) => `${i.headline} - ${i.hook}`),
+      automates: false,
+      source: "gemini",
+    });
+  } catch {
+    const ideas = fallbackIdeas(title);
+    res.json({
+      ideas,
+      spiffs: ideas,
+      searchQueries: [title],
+      articleIdeas: ideas.map((i) => i.headline),
+      socialIdeas: ideas.map((i) => i.hook),
+      podcastIdeas: ideas.map((i) => `${i.headline} - ${i.hook}`),
+      automates: false,
+      source: "fallback",
+      notice: "Pressy generated baseline editorial ideas while live AI is unavailable.",
+    });
+  }
+});
+
 export default pressyRouter;
+
