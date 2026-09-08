@@ -110,11 +110,17 @@ export default function DashboardPage() {
   useEffect(() => {
     const handleSync = (e: any) => {
       const { headline, notes, photo } = e.detail || {};
+      setTab("feed");
       if (headline) setFeedTitle(headline);
       if (notes) setFeedBody(notes);
       if (photo) setFeedPhoto(photo);
-      setSyncedNotice("Synced from Pressy'O ✓");
+      setSyncedNotice("Synced to Desk ✓");
       setTimeout(() => setSyncedNotice(null), 3000);
+      setTimeout(() => {
+        const el = document.querySelector('input[placeholder*="Headline"]');
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        (el as HTMLInputElement)?.focus();
+      }, 80);
     };
     window.addEventListener("fieldpress:populate-composer", handleSync);
     return () => window.removeEventListener("fieldpress:populate-composer", handleSync);
@@ -441,18 +447,18 @@ export default function DashboardPage() {
   return (
     <PageShell>
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-4xl text-neon text-glow-pulse tracking-wider">FIELDPRESS</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              The Pressie feed is the desk. React Cool, Love, LOL, Whoa, Iconic, Same, or Mad. Headlines still live on the wall.
-              {" · "}
+        {/* LOCKED STICKY HEADER BAR (Anti-collision, responsive) */}
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 py-2.5 -mx-4 px-4 sm:-mx-6 sm:px-6 mb-4 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+          <div className="min-w-0">
+            <h1 className="text-3xl sm:text-4xl text-neon text-glow-pulse tracking-wider truncate">FIELDPRESS</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 truncate">
+              The Pressie feed is the desk · Headlines on the wall ·{" "}
               <button type="button" className="underline hover:text-neon" onClick={() => navigate("/launch")}>
                 Install
               </button>
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 justify-end">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <ImportDialog />
             <Dialog open={articleOpen} onOpenChange={setArticleOpen}>
               <DialogTrigger asChild>
