@@ -149,14 +149,18 @@ async function generateWithGemini(
   prompt: string,
   options: { json?: boolean; maxOutputTokens?: number } = {},
 ): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    try { (process as any).loadEnvFile?.("artifacts/api-server/.env"); } catch {}
+    try { (process as any).loadEnvFile?.(".env"); } catch {}
+  }
   const apiKey = text(process.env.GEMINI_API_KEY, 512);
   if (!apiKey) throw new Error("AI provider is not configured");
 
   const preferred = text(process.env.GEMINI_MODEL, 120);
   const models = [
     preferred,
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
     "gemini-flash-latest",
   ].filter((model, index, values) => model && values.indexOf(model) === index);
 
@@ -177,7 +181,7 @@ async function generateWithGemini(
           signal: AbortSignal.timeout(20_000),
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            ...(options.json ? {} : { tools: [{ google_search: {} }] }),
+            
             generationConfig: {
               temperature: 0.4,
               maxOutputTokens: options.maxOutputTokens ?? 1024,
