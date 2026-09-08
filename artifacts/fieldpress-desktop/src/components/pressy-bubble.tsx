@@ -8,40 +8,42 @@ type Turn = { role: "user" | "pressy"; content: string };
 
 function extractHeadlineAndNotes(text: string): { headline: string; notes: string } {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  let headline = "";
-  let notes = "";
+  if (!lines.length) return { headline: "", notes: "" };
 
-  for (const line of lines) {
-    const cleaned = line.replace(/[*_#`]/g, "").trim();
-    if (/^(?:suggested\s+)?(?:headline|title)\s*:\s*$/i.test(cleaned)) continue;
-    if (/(?:breaking|headline|title)\s*:\s*(.+)/i.test(cleaned)) {
-      const match = cleaned.match(/(?:breaking|headline|title)\s*:\s*(.+)/i);
-      const candidate = match ? match.replace(/^[•\s-]+/, "").trim() : "";
-      if (candidate.length > 5) {
-        headline = candidate;
+  let titleIdx = -1;
+  let headline = "";
+
+  // 1. Look for explicit title indicators
+  for (let i = 0; i < lines.length; i++) {
+    const clean = lines[i].replace(/[*#•`_>]/g, "").trim();
+    const match = clean.match(/^(?:suggested\s+)?(?:headline|title|breaking)\s*:\s*(.+)/i);
+    if (match && match && match.trim().length > 3) {
+      headline = match.replace(/^[•\s-]+/, "").trim();
+      titleIdx = i;
+      break;
+    }
+  }
+
+  // 2. Fallback: first non-greeting line as title
+  if (!headline) {
+    for (let i = 0; i < lines.length; i++) {
+      const clean = lines[i].replace(/[*#•`_>]/g, "").trim();
+      if (!/^(pressy['’]?o? here|here are your|let['’]?s|hello|hi|sure)/i.test(clean) && clean.length > 8) {
+        headline = clean.split(".")[0].trim();
+        titleIdx = i;
         break;
       }
     }
   }
 
-  const filteredLines = lines
-    .map((l) => l.replace(/[*_#`>]/g, "").trim())
-    .filter((l) => !/^(pressy['’]?o? here|here are your|let['’]?s|hello|hi|welcome|###|\*\*suggested)/i.test(l) && l.length > 10);
+  // 3. Body is EVERYTHING else from the dispatch
+  const bodyLines = lines.filter((_, idx) => idx !== titleIdx && !/^(?:\*\*Suggested Headline:\*\*|###\s*⚡)/i.test(lines[idx]));
+  const notes = bodyLines.join("\n\n").replace(/^>\s*/gm, "").trim();
 
-  if (!headline && filteredLines.length > 0) {
-    headline = filteredLines[0].split(".")[0];
-  }
-
-  const ledeMatch = text.match(/\*\*Field Lede:\*\*\s*\n*(?:>\s*)?([^\n*#]+)/i);
-  if (ledeMatch && ledeMatch) {
-    notes = ledeMatch.replace(/^>\s*/gm, "").trim();
-  } else if (filteredLines.length > 1) {
-    notes = filteredLines.slice(1, 4).join(" ");
-  } else if (filteredLines.length > 0) {
-    notes = filteredLines[0];
-  }
-
-  return { headline: headline.slice(0, 120).trim(), notes: notes.slice(0, 600).trim() };
+  return {
+    headline: headline.slice(0, 100).trim(),
+    notes: notes || text.trim(),
+  };
 }
 
 export function PressyBubble() {
@@ -87,20 +89,24 @@ export function PressyBubble() {
   }
 
   function syncToDesk(content: string, idx: number) {
-    const { headline, notes } = extractHeadlineAndNotes(content);
-    window.dispatchEvent(
-      new CustomEvent("fieldpress:populate-composer", {
-        detail: { headline, notes },
-      })
-    );
-    setSyncedIdx(idx);
-    setTimeout(() => setSyncedIdx(null), 2500);
+    try {
+      const { headline, notes } = extractHeadlineAndNotes(content);
+      window.dispatchEvent(
+        new CustomEvent("fieldpress:populate-composer", {
+          detail: { headline, notes },
+        })
+      );
+      setSyncedIdx(idx);
+      setTimeout(() => setSyncedIdx(null), 2500);
+    } catch (err) {
+      setError("Failed to sync to desk");
+    }
   }
 
   async function syncImageToDesk(content: string, idx: number) {
-    const { headline } = extractHeadlineAndNotes(content);
     setImgBusyIdx(idx);
     try {
+      const { headline } = extractHeadlineAndNotes(content);
       const res = await fetch("/api/images/quick", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -128,8 +134,13 @@ export function PressyBubble() {
     const b = textarea?.value?.trim() || "";
 
     if (!h && !b) {
-      setError("Type a headline or field notes on the Dispatch Desk first.");
-      setTimeout(() => setError(null), 3000);
+      setTurns((prev) => [
+        ...prev,
+        {
+          role: "pressy",
+          content: "Your Dispatch Desk is currently empty! Type a working headline or field notes on the desk on the left, then click [INGEST ACTIVE DESK] and I will audit, fact-check, and expand it into a full dispatch.",
+        },
+      ]);
       return;
     }
 
@@ -217,7 +228,7 @@ Field Notes: ${b || "(none)"}`;
                       className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
                       onClick={() => {
                         const { headline } = extractHeadlineAndNotes(turn.content);
-                        void handleSend(`Audit and verify public records for: "${headline}"`);
+                        void handleSend(`Audit and verify public records for: "${headline || turn.content.slice(0, 60)}"`);
                       }}
                     >
                       <ShieldCheck className="w-3 h-3 text-neon-green" />
@@ -230,7 +241,7 @@ Field Notes: ${b || "(none)"}`;
                       className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
                       onClick={() => {
                         const { headline } = extractHeadlineAndNotes(turn.content);
-                        void handleSend(`Draft a 30-second radio broadcast intro for this story: "${headline}"`);
+                        void handleSend(`Draft a 30-second radio broadcast intro for this story: "${headline || turn.content.slice(0, 60)}"`);
                       }}
                     >
                       <Radio className="w-3 h-3 text-signal-yellow" />
@@ -259,7 +270,7 @@ Field Notes: ${b || "(none)"}`;
             {error && <p className="text-xs text-neon-red">{error}</p>}
           </div>
 
-          {/* QUICK COMMAND DIRECTIVES BAR (Above prompt) */}
+          {/* QUICK COMMAND DIRECTIVES BAR */}
           <div className="border-t border-neon/15 bg-card/40 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
               <Button
