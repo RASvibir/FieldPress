@@ -1,49 +1,47 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, X, Copy, Zap, Image as ImageIcon, Check } from "lucide-react";
+import { Send, X, Copy, Zap, Image as ImageIcon, Check, Radio, ShieldCheck, CornerDownLeft, Flame, Scale, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { askPressy } from "@/lib/desk";
 
 type Turn = { role: "user" | "pressy"; content: string };
 
-const QUICK_GUIDES = [
-  { label: "⚡ Draft from Spiffs", query: "How do I create story drafts from Spiffs?" },
-  { label: "📸 Generate & Attach Photos", query: "How do I produce and attach photos in FieldPress?" },
-  { label: "🗞️ Quick Pressie (<15s)", query: "How do I post a Quick Pressie in under 15 seconds?" },
-  { label: "🏢 Bureau Desks & Invites", query: "How do collaborative bureau desks and /join/:code work?" },
-];
-
 function extractHeadlineAndNotes(text: string): { headline: string; notes: string } {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   let headline = "";
   let notes = "";
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.includes("Breaking:") || line.includes("Headline:")) {
-      headline = line.replace(/.*(?:Breaking:|Headline:)\s*/i, "").replace(/^\*+|\*+$/g, "").trim();
-      break;
+  for (const line of lines) {
+    const cleaned = line.replace(/[*_#`]/g, "").trim();
+    if (/^(?:suggested\s+)?(?:headline|title)\s*:\s*$/i.test(cleaned)) continue;
+    if (/(?:breaking|headline|title)\s*:\s*(.+)/i.test(cleaned)) {
+      const match = cleaned.match(/(?:breaking|headline|title)\s*:\s*(.+)/i);
+      const candidate = match ? match.replace(/^[•\s-]+/, "").trim() : "";
+      if (candidate.length > 5) {
+        headline = candidate;
+        break;
+      }
     }
   }
 
-  const ledeIndex = text.indexOf("**Field Lede:**");
-  if (ledeIndex !== -1) {
-    const sub = text.slice(ledeIndex + 15);
-    const end = sub.indexOf("**Photo Brief:**");
-    notes = (end !== -1 ? sub.slice(0, end) : sub)
-      .replace(/^>\s*/gm, "")
-      .replace(/^\*+|\*+$/g, "")
-      .trim();
+  const filteredLines = lines
+    .map((l) => l.replace(/[*_#`>]/g, "").trim())
+    .filter((l) => !/^(pressy['’]?o? here|here are your|let['’]?s|hello|hi|welcome|###|\*\*suggested)/i.test(l) && l.length > 10);
+
+  if (!headline && filteredLines.length > 0) {
+    headline = filteredLines[0].split(".")[0];
   }
 
-  if (!headline && lines[0]) {
-    headline = lines[0].replace(/^[#*>\s-]+/, "").slice(0, 120);
-  }
-  if (!notes && lines.length > 1) {
-    notes = lines.slice(1).join("\n").replace(/^>\s*/gm, "").trim();
+  const ledeMatch = text.match(/\*\*Field Lede:\*\*\s*\n*(?:>\s*)?([^\n*#]+)/i);
+  if (ledeMatch && ledeMatch) {
+    notes = ledeMatch.replace(/^>\s*/gm, "").trim();
+  } else if (filteredLines.length > 1) {
+    notes = filteredLines.slice(1, 4).join(" ");
+  } else if (filteredLines.length > 0) {
+    notes = filteredLines[0];
   }
 
-  return { headline, notes };
+  return { headline: headline.slice(0, 120).trim(), notes: notes.slice(0, 600).trim() };
 }
 
 export function PressyBubble() {
@@ -53,7 +51,7 @@ export function PressyBubble() {
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "pressy",
-      content: "Pressy'O here — your newsroom desk co-pilot. Ask me for breaking headline angles, field ledes, verification checks, or in-app guidance on publishing, Spiffs, and visuals.",
+      content: "Pressy'O here — newsroom co-pilot. Use the command buttons below to ingest your active desk, verify sources, generate radio scriptlets, or command visuals.",
     },
   ]);
   const [busy, setBusy] = useState(false);
@@ -101,20 +99,44 @@ export function PressyBubble() {
 
   async function syncImageToDesk(content: string, idx: number) {
     const { headline } = extractHeadlineAndNotes(content);
-    const topic = headline || "news journalism";
     setImgBusyIdx(idx);
     try {
-      const imageUrl = `https://images.unsplash.com/featured/?${encodeURIComponent(topic + ",documentary,news")}`;
-      window.dispatchEvent(
-        new CustomEvent("fieldpress:populate-composer", {
-          detail: { photo: imageUrl },
-        })
-      );
+      const res = await fetch("/api/images/quick", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topic: headline || content.slice(0, 80) }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.url) {
+        window.dispatchEvent(
+          new CustomEvent("fieldpress:populate-composer", {
+            detail: { photo: data.url },
+          })
+        );
+      }
     } catch {
-      // ignore
+      // fallback
     } finally {
       setImgBusyIdx(null);
     }
+  }
+
+  function ingestActiveDesk() {
+    const input = document.querySelector('input[placeholder*="Headline"]') as HTMLInputElement | null;
+    const textarea = document.querySelector('textarea[placeholder*="Field notes"]') as HTMLTextAreaElement | null;
+    const h = input?.value?.trim() || "";
+    const b = textarea?.value?.trim() || "";
+
+    if (!h && !b) {
+      setError("Type a headline or field notes on the Dispatch Desk first.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const command = `Audit, summarize, and punch up this active field dispatch from my desk:
+Headline: ${h || "(none)"}
+Field Notes: ${b || "(none)"}`;
+    void handleSend(command);
   }
 
   return (
@@ -138,7 +160,7 @@ export function PressyBubble() {
 
       {/* CHAT COPILOT MODAL */}
       {open && (
-        <div className="pointer-events-auto w-[min(94vw,30rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
+        <div className="pointer-events-auto w-[min(94vw,31rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
           <div className="flex items-center justify-between border-b border-neon/20 px-3 py-2">
             <div>
               <div className="flex items-center gap-2">
@@ -165,13 +187,13 @@ export function PressyBubble() {
                   {turn.content}
                 </div>
 
-                {/* FUNCTIONAL SYNC BUTTONS FOR PRESSY OUTPUTS */}
+                {/* EXPANDED ACTION BAR FOR EACH PRESSY DISPATCH */}
                 {turn.role === "pressy" && i > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pl-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-[11px] border-neon/30 text-neon hover:bg-neon/10 hover:border-neon gap-1"
+                      className="h-6 text-[10px] border-neon/30 text-neon hover:bg-neon/10 hover:border-neon gap-1"
                       onClick={() => syncToDesk(turn.content, i)}
                     >
                       {syncedIdx === i ? <Check className="w-3 h-3 text-neon-green" /> : <Zap className="w-3 h-3 text-signal-yellow" />}
@@ -181,7 +203,7 @@ export function PressyBubble() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-[11px] border-border text-foreground hover:bg-card gap-1"
+                      className="h-6 text-[10px] border-border text-foreground hover:bg-card gap-1"
                       disabled={imgBusyIdx === i}
                       onClick={() => void syncImageToDesk(turn.content, i)}
                     >
@@ -191,8 +213,34 @@ export function PressyBubble() {
 
                     <Button
                       size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
+                      onClick={() => {
+                        const { headline } = extractHeadlineAndNotes(turn.content);
+                        void handleSend(`Audit and verify public records for: "${headline}"`);
+                      }}
+                    >
+                      <ShieldCheck className="w-3 h-3 text-neon-green" />
+                      VERIFY AUDIT
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
+                      onClick={() => {
+                        const { headline } = extractHeadlineAndNotes(turn.content);
+                        void handleSend(`Draft a 30-second radio broadcast intro for this story: "${headline}"`);
+                      }}
+                    >
+                      <Radio className="w-3 h-3 text-signal-yellow" />
+                      RADIO CLIP
+                    </Button>
+
+                    <Button
+                      size="sm"
                       variant="ghost"
-                      className="h-7 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                      className="h-6 text-[10px] text-muted-foreground hover:text-foreground gap-1"
                       onClick={async () => {
                         await navigator.clipboard.writeText(turn.content);
                         setCopiedIdx(i);
@@ -207,39 +255,65 @@ export function PressyBubble() {
               </div>
             ))}
 
-            {/* QUICK IN-APP GUIDANCE CHIPS */}
-            {turns.length <= 2 && (
-              <div className="pt-2">
-                <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mb-1.5">
-                  Quick In-App Guides:
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {QUICK_GUIDES.map((g) => (
-                    <button
-                      key={g.label}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void handleSend(g.query)}
-                      className="rounded-md border border-neon/20 bg-card/90 px-2 py-1 text-[11px] text-neon hover:border-neon hover:bg-neon/10 transition-colors text-left"
-                    >
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* TYPING INDICATOR (FIXED) */}
             {busy && <p className="text-xs text-muted-foreground animate-pulse">Pressy&apos;O is typing…</p>}
             {error && <p className="text-xs text-neon-red">{error}</p>}
+          </div>
+
+          {/* QUICK COMMAND DIRECTIVES BAR (Above prompt) */}
+          <div className="border-t border-neon/15 bg-card/40 px-2.5 py-1.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] font-mono shrink-0 border-signal-yellow/40 text-signal-yellow hover:bg-signal-yellow/10 gap-1"
+                onClick={ingestActiveDesk}
+              >
+                <CornerDownLeft className="w-3 h-3" />
+                INGEST ACTIVE DESK
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] shrink-0 border border-border/50 text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => void handleSend("Punch up my headline into 3 high-impact breaking angles under 12 words.")}
+              >
+                <Flame className="w-3 h-3 text-neon-red" />
+                PUNCH UP
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] shrink-0 border border-border/50 text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => void handleSend("What is the official defense or counter-perspective on this development?")}
+              >
+                <Scale className="w-3 h-3 text-neon-blue" />
+                COUNTER-ANGLE
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] shrink-0 border border-border/50 text-muted-foreground hover:text-foreground gap-1"
+                onClick={() => void handleSend("Draft a 3-part thread formatted for social distribution with hashtags.")}
+              >
+                <Share2 className="w-3 h-3 text-neon-green" />
+                SOCIAL THREAD
+              </Button>
+            </div>
           </div>
 
           <div className="flex gap-2 border-t border-neon/20 p-2">
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask Pressy'O for headlines or how to use any feature…"
-              className="min-h-[52px] resize-none bg-card border-border text-sm"
+              placeholder="Command Pressy'O (e.g. 'Ingest active desk' or ask breaking questions)…"
+              className="min-h-[50px] resize-none bg-card border-border text-sm"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
