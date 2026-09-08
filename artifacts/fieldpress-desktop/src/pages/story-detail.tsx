@@ -39,7 +39,7 @@ export default function StoryDetailPage() {
   const queryClient = useQueryClient();
 
   const { data: story, isLoading } = useGetStory(storyId);
-  const { data: drafts } = useListDrafts(storyId);
+  const { data: drafts, refetch: refetchDrafts } = useListDrafts(storyId);
   const addItemMutation = useAddStoryItem();
   const deleteMutation = useDeleteStory();
   const [me, setMe] = useState<SessionUser | null>(null);
@@ -262,7 +262,7 @@ export default function StoryDetailPage() {
           <div>
             <h2 className="text-lg text-neon tracking-wider mb-3">Write</h2>
             <div className="mb-4">
-              <IdeaDesk storyId={storyId} onUseQuery={setPhotoQuery} />
+              <IdeaDesk storyId={storyId} onUseQuery={setPhotoQuery} onDraftCreated={() => void refetchDrafts?.()} />
             </div>
             <div className="mb-4">
               <HeadlineCache storyId={storyId} />
