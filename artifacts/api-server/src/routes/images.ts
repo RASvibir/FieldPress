@@ -11,6 +11,22 @@ export const imagesRouter = Router();
 
 imagesRouter.use(express.json());
 
+imagesRouter.post("/images/quick", async (req: Request, res: Response) => {
+  const rawTopic = text(req.body?.topic, 240) || "news";
+  const stopWords = new Set(["a","an","the","in","on","at","for","to","of","by","with","about","pressy","here","let","lets","editorial","assets","quick","guide","move","story","provisional","suggested","headline","field","lede"]);
+  const keywords = rawTopic.replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase())).slice(0, 3).join(" ") || "news";
+
+  try {
+    const results = await searchArchivalMedia(keywords);
+    if (results.length > 0 && results[0].thumbUrl) {
+      return res.json({ url: results[0].thumbUrl });
+    }
+  } catch {}
+
+  const fallbackUrl = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80";
+  return res.json({ url: fallbackUrl });
+});
+
 const FORMAT_IDS = new Set(["article_hero", "social_feed", "podcast_square"]);
 const STYLE_IDS = new Set([
   "documentary_still",

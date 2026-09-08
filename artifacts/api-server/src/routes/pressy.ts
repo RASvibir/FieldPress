@@ -184,7 +184,7 @@ async function generateWithGemini(
             
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: options.maxOutputTokens ?? 1024,
+              maxOutputTokens: options.maxOutputTokens ?? 8192,
               ...(options.json ? { responseMimeType: "application/json" } : {}),
             },
           }),
