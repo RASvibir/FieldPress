@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 const pressyRouter = Router();
 
 const SYSTEM_PROMPT =
-  "You are Pressy, the FieldPress desk assistant and editorial research co-pilot. When asked about current news, trending topics, facts, or people, search the live web to provide verified, up-to-date context, angles, and sources. Keep outputs editable, factual, and concise. Never publish, post, send, distribute, or make final editorial decisions.";
+  "You are Pressy'O, the FieldPress newsroom co-pilot and in-app desk assistant. You provide verified headline angles, field ledes, photo briefs, and verification checks. You also provide clear, numbered, step-by-step guidance on how to use FieldPress features (Top-of-Feed Quick Pressies in <15s, Spiffs-to-Drafts expansion in the Idea Desk, Visual Desk image generation, Bureau Desks and /join/:code onboarding, and WYSIWYG OpenGraph social card distribution). Keep outputs editable, factual, and concise.";
 
 type HistoryTurn = {
   role?: unknown;
@@ -42,8 +42,53 @@ function normaliseHistory(value: unknown): Array<{ role: "Reporter" | "Pressy"; 
 }
 
 function fallbackReply(message: string): string {
+  const m = message.toLowerCase();
+
+  // In-App Guidance Engine
+  if (m.includes("spiff") || m.includes("draft story") || m.includes("create draft")) {
+    return `### ⚡ How to Draft Stories from Spiffs
+1. Open any Pressie's detail workspace (\`/story/:id\`).
+2. Scroll to the **Idea Desk** and click **[GET IDEAS FROM THIS HEADLINE]**.
+3. Under the **SPIFFS** section, browse the suggested reporting angles.
+4. Click **[⚡ DRAFT FULL STORY]** on any Spiff card.
+5. The Spiff will immediately compile into an article draft (with headline, hook, ground overview, visual brief, and verification checklist) and appear in your **DRAFTS** list!`;
+  }
+  if (m.includes("photo") || m.includes("image") || m.includes("visual") || m.includes("camera")) {
+    return `### 📸 How to Produce & Attach Visuals
+1. **Quick Top-of-Feed Dispatch:** In the headline composer, click **[CAMERA]** or **[PHOTO LIBRARY]** to attach photos inline before posting.
+2. **Visual Desk (Full Pressie):** On any story detail page, open the **Visual Desk**.
+3. Click **[Generate]** to render a live 35mm documentary still, or use **[Search]** for archival media.
+4. Click **[Attach Visual]** to lock it as your story's 1.91:1 OpenGraph cover card.`;
+  }
+  if (m.includes("publish") || m.includes("post") || m.includes("quick pressie") || m.includes("how to post")) {
+    return `### 🗞️ How to Post a Quick Pressie in <15s
+1. At the top of the **Headline Wall / Pressie Feed**, locate the quick dispatch card.
+2. Type your breaking headline and field notes.
+3. Select your reaction pulse (**Cool**, **Signal**, or **Heat**).
+4. Click **[POST PRESSIE]** — it immediately posts to \`/api/stories\` and refreshes the live river in under 15 seconds.`;
+  }
+  if (m.includes("bureau") || m.includes("desk") || m.includes("join") || m.includes("invite") || m.includes("collaborat")) {
+    return `### 🏢 How Collaborative Desks Work
+1. In the top navigation or desk switcher, create a new Bureau Desk.
+2. Copy your unique desk invite URL (\`fieldpress.studio/join/:code\`).
+3. Send it to reporters — they can click **"JOIN BUREAU AS REPORTER"** to onboard with 1 click and begin filing to your shared bureau wire.`;
+  }
+  if (m.includes("polish") || m.includes("headline")) {
+    return `### ✨ How to Use the [✨ POLISH] Chip
+1. In the headline composer, type a rough draft headline.
+2. Click the **[✨ POLISH]** chip next to the headline field.
+3. Pressy will immediately analyze the topic and generate three distinct newsroom angles (Breaking, Explainer, and Ground Report) that you can adopt with one click.`;
+  }
+  if (m.includes("distribute") || m.includes("card") || m.includes("share") || m.includes("opengraph")) {
+    return `### 🚀 How to Distribute & Preview Social Cards
+1. On any published Pressie, click the **[Distribute]** button.
+2. A live **WYSIWYG 1.91:1 OpenGraph Card Preview** will appear, showing exactly how the card renders on social crawlers with \`fieldpress.studio\` domain attribution.
+3. Choose your cover image dynamically, then click **[X]**, **[Bluesky]**, **[Facebook]**, or **[Telegram]** to trigger native share sheets.`;
+  }
+
+  // Editorial Dispatch Generation (when not asking for in-app help)
   const topic = message.slice(0, 100).trim();
-  return `### ⚡ Pressy Wire Dispatch
+  return `### ⚡ Pressy'O Wire Dispatch
 
 **Suggested Headline:**
 • Breaking: ${topic}
