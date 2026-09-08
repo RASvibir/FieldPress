@@ -1,3 +1,4 @@
+import { MobileBottomRail } from '../components/MobileBottomRail';
 
 import { FieldyCommunications } from '../components/FieldyCommunications';
 import { BeatBounties } from '../components/BeatBounties';
@@ -25,7 +26,7 @@ import { extractImageSrc } from "@/lib/item-media";
 import { INKS, type InkId, inkLabel } from "@/lib/ink";
 import { askPressy } from "@/lib/desk";
 
-type Tab = "wall" | "feed" | "search" | 'wire' | 'bounties';
+type Tab = "wall" | "feed" | "search" | 'wire' | 'bounties' | 'profile';
 
 type StoryCard = {
   id: string;
@@ -844,7 +845,10 @@ export default function DashboardPage() {
         ) : (
           renderGrid(searched, "feed")
         )}
-      </div>
+      
+      {/* Mobile Bottom Navigation Rail */}
+      <MobileBottomRail currentTab={tab} onSelectTab={setTab} />
+</div>
     </PageShell>
   );
 }
