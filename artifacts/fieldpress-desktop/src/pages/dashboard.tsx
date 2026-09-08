@@ -105,6 +105,20 @@ export default function DashboardPage() {
   const [articleTitle, setArticleTitle] = useState("");
   const [feedOpen, setFeedOpen] = useState(false);
   const [feedTitle, setFeedTitle] = useState("");
+  const [syncedNotice, setSyncedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      const { headline, notes, photo } = e.detail || {};
+      if (headline) setFeedTitle(headline);
+      if (notes) setFeedBody(notes);
+      if (photo) setFeedPhoto(photo);
+      setSyncedNotice("Synced from Pressy'O ✓");
+      setTimeout(() => setSyncedNotice(null), 3000);
+    };
+    window.addEventListener("fieldpress:populate-composer", handleSync);
+    return () => window.removeEventListener("fieldpress:populate-composer", handleSync);
+  }, []);
   const [feedBody, setFeedBody] = useState("");
   const [feedPulse, setFeedPulse] = useState<InkId>("cool");
   const [signedIn, setSignedIn] = useState(false);

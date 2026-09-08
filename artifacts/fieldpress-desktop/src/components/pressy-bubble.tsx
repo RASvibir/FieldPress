@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import { Send, X, Copy, Zap, Image as ImageIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { askPressy } from "@/lib/desk";
@@ -13,6 +13,39 @@ const QUICK_GUIDES = [
   { label: "🏢 Bureau Desks & Invites", query: "How do collaborative bureau desks and /join/:code work?" },
 ];
 
+function extractHeadlineAndNotes(text: string): { headline: string; notes: string } {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  let headline = "";
+  let notes = "";
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes("Breaking:") || line.includes("Headline:")) {
+      headline = line.replace(/.*(?:Breaking:|Headline:)\s*/i, "").replace(/^\*+|\*+$/g, "").trim();
+      break;
+    }
+  }
+
+  const ledeIndex = text.indexOf("**Field Lede:**");
+  if (ledeIndex !== -1) {
+    const sub = text.slice(ledeIndex + 15);
+    const end = sub.indexOf("**Photo Brief:**");
+    notes = (end !== -1 ? sub.slice(0, end) : sub)
+      .replace(/^>\s*/gm, "")
+      .replace(/^\*+|\*+$/g, "")
+      .trim();
+  }
+
+  if (!headline && lines[0]) {
+    headline = lines[0].replace(/^[#*>\s-]+/, "").slice(0, 120);
+  }
+  if (!notes && lines.length > 1) {
+    notes = lines.slice(1).join("\n").replace(/^>\s*/gm, "").trim();
+  }
+
+  return { headline, notes };
+}
+
 export function PressyBubble() {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -25,6 +58,9 @@ export function PressyBubble() {
   ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncedIdx, setSyncedIdx] = useState<number | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [imgBusyIdx, setImgBusyIdx] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +88,35 @@ export function PressyBubble() {
     }
   }
 
+  function syncToDesk(content: string, idx: number) {
+    const { headline, notes } = extractHeadlineAndNotes(content);
+    window.dispatchEvent(
+      new CustomEvent("fieldpress:populate-composer", {
+        detail: { headline, notes },
+      })
+    );
+    setSyncedIdx(idx);
+    setTimeout(() => setSyncedIdx(null), 2500);
+  }
+
+  async function syncImageToDesk(content: string, idx: number) {
+    const { headline } = extractHeadlineAndNotes(content);
+    const topic = headline || "news journalism";
+    setImgBusyIdx(idx);
+    try {
+      const imageUrl = `https://images.unsplash.com/featured/?${encodeURIComponent(topic + ",documentary,news")}`;
+      window.dispatchEvent(
+        new CustomEvent("fieldpress:populate-composer", {
+          detail: { photo: imageUrl },
+        })
+      );
+    } catch {
+      // ignore
+    } finally {
+      setImgBusyIdx(null);
+    }
+  }
+
   return (
     <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-[9990] flex flex-col items-start gap-3 sm:left-auto sm:right-[max(1rem,env(safe-area-inset-right))] sm:items-end">
       {/* 3X HOVER MAGNIFICATION MODAL */}
@@ -73,7 +138,7 @@ export function PressyBubble() {
 
       {/* CHAT COPILOT MODAL */}
       {open && (
-        <div className="pointer-events-auto w-[min(94vw,28rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
+        <div className="pointer-events-auto w-[min(94vw,30rem)] overflow-hidden rounded-2xl border border-neon/40 bg-terminal shadow-[0_0_24px_rgba(57,255,20,0.18)]">
           <div className="flex items-center justify-between border-b border-neon/20 px-3 py-2">
             <div>
               <div className="flex items-center gap-2">
@@ -87,17 +152,58 @@ export function PressyBubble() {
             </Button>
           </div>
 
-          <div ref={scroller} className="max-h-[min(28rem,55vh)] space-y-2 overflow-y-auto p-3">
+          <div ref={scroller} className="max-h-[min(28rem,55vh)] space-y-3 overflow-y-auto p-3">
             {turns.map((turn, i) => (
-              <div
-                key={`${turn.role}-${i}`}
-                className={
-                  turn.role === "user"
-                    ? "ml-8 rounded-lg border border-border bg-card px-3 py-2 text-sm whitespace-pre-wrap break-words"
-                    : "mr-4 rounded-lg border border-neon/25 bg-card/80 px-3 py-2 text-sm text-foreground/90 whitespace-pre-wrap break-words"
-                }
-              >
-                {turn.content}
+              <div key={`${turn.role}-${i}`} className="space-y-1.5">
+                <div
+                  className={
+                    turn.role === "user"
+                      ? "ml-8 rounded-lg border border-border bg-card px-3 py-2 text-sm whitespace-pre-wrap break-words"
+                      : "mr-2 rounded-lg border border-neon/25 bg-card/80 px-3 py-2 text-sm text-foreground/90 whitespace-pre-wrap break-words"
+                  }
+                >
+                  {turn.content}
+                </div>
+
+                {/* FUNCTIONAL SYNC BUTTONS FOR PRESSY OUTPUTS */}
+                {turn.role === "pressy" && i > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pl-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px] border-neon/30 text-neon hover:bg-neon/10 hover:border-neon gap-1"
+                      onClick={() => syncToDesk(turn.content, i)}
+                    >
+                      {syncedIdx === i ? <Check className="w-3 h-3 text-neon-green" /> : <Zap className="w-3 h-3 text-signal-yellow" />}
+                      {syncedIdx === i ? "POPULATED ✓" : "POPULATE DESK"}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px] border-border text-foreground hover:bg-card gap-1"
+                      disabled={imgBusyIdx === i}
+                      onClick={() => void syncImageToDesk(turn.content, i)}
+                    >
+                      <ImageIcon className="w-3 h-3 text-neon-blue" />
+                      {imgBusyIdx === i ? "ATTACHING…" : "GEN IMAGE"}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(turn.content);
+                        setCopiedIdx(i);
+                        setTimeout(() => setCopiedIdx(null), 1500);
+                      }}
+                    >
+                      <Copy className="w-3 h-3" />
+                      {copiedIdx === i ? "COPIED" : "COPY"}
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -123,7 +229,8 @@ export function PressyBubble() {
               </div>
             )}
 
-            {busy && <p className="text-xs text-muted-foreground animate-pulse">Pressy is typing…</p>}
+            {/* TYPING INDICATOR (FIXED) */}
+            {busy && <p className="text-xs text-muted-foreground animate-pulse">Pressy&apos;O is typing…</p>}
             {error && <p className="text-xs text-neon-red">{error}</p>}
           </div>
 
