@@ -55,7 +55,7 @@ router.post("/desks", async (req: Request, res: Response) => {
     return;
   }
 
-  const rawName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const rawName = typeof req.body?.name === "string" ? (typeof req.body.name === 'string' ? req.body.name : Array.isArray(req.body.name) ? req.body.name[0] : String(req.body.name || '')).trim() : "";
   if (!rawName) {
     res.status(400).json({ error: "Provide a bureau or desk name" });
     return;
@@ -99,7 +99,8 @@ router.post("/desks", async (req: Request, res: Response) => {
 
 // 3. Get bureau details for join preview card
 router.get("/desks/:code", async (req: Request, res: Response) => {
-  const code = req.params.code?.trim();
+  const rawCode = req.params.code;
+  const code = (typeof rawCode === "string" ? rawCode : Array.isArray(rawCode) ? rawCode[0] : "").trim();
   if (!code) {
     res.status(400).json({ error: "Desk invite code required" });
     return;
@@ -163,7 +164,8 @@ router.post("/desks/join/:code", async (req: Request, res: Response) => {
     return;
   }
 
-  const code = req.params.code?.trim();
+  const rawCode = req.params.code;
+  const code = (typeof rawCode === "string" ? rawCode : Array.isArray(rawCode) ? rawCode[0] : "").trim();
   if (!code) {
     res.status(400).json({ error: "Invite code required" });
     return;
