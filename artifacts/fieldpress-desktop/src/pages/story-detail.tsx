@@ -1,382 +1,131 @@
-import { useGetStory, useListDrafts, useDeleteStory, useAddStoryItem } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { GitFork,
-  FileText, Mic, Camera, ArrowLeft,
-  Newspaper, MessageSquare, Podcast, Trash2
-} from "lucide-react";
-import { useLocation, useParams } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { DistributeDialog } from "@/components/distribute-dialog";
-import { PressieShareMenu } from "@/components/pressie-share-menu";
-import { CaptureBar } from "@/components/capture-bar";
-import { PressyMark } from "@/components/pressy-mark";
-import { InkPad } from "@/components/ink-pad";
-import { inkLabel, type InkId } from "@/lib/ink";
-import { VisualDesk } from "@/components/visual-desk";
-import { IdeaDesk } from "@/components/idea-desk";
-import { HeadlineCache } from "@/components/headline-cache";
-import { GenericPostDialog } from "@/components/generic-post";
-import { fetchMe, type SessionUser } from "@/lib/session";
-import { PageShell } from "@/components/page-shell";
-import { DeskBoard } from "@/components/desk-board";
-import { PressieMedia } from "@/components/pressie-media";
-import { extractImageSrc } from "@/lib/item-media";
+import React, { useState } from 'react';
+import { useRoute } from 'wouter';
+import { AttributionChain, AttributionNode } from '../components/AttributionChain';
+import { CommunityNotes } from '../components/CommunityNotes';
+import { PressieOwnershipBanner, PressieActionControls } from '../components/PressieOwnershipBadge';
+import { PeerReactions } from '../components/PeerReactions';
 
-const MODE_CONFIG = {
-  article: { label: "PRESSIE", icon: Newspaper, color: "text-neon" },
-  social: { label: "SOCIAL", icon: MessageSquare, color: "text-neon-yellow" },
-  podcast: { label: "PODCAST", icon: Podcast, color: "text-neon-red" },
-} as const;
+export interface StoryDetailPageProps {
+  params?: { storyId?: string };
+  storyId?: string;
+  onBack?: () => void;
+  onForkToDesk?: (storyId: string) => void;
+  [key: string]: any;
+}
 
-export default function StoryDetailPage() {
-  const params = useParams<{ storyId: string }>();
-  const storyId = params.storyId || "";
-  const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
+export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
+  const [, routeParams] = useRoute('/story/:storyId');
+  const resolvedStoryId = props.storyId || routeParams?.storyId || props.params?.storyId || 'story-danville-corroborate';
+  const [currentId, setCurrentId] = useState(resolvedStoryId);
 
-  const { data: story, isLoading } = useGetStory(storyId);
-  const { data: drafts, refetch: refetchDrafts } = useListDrafts(storyId);
-  const addItemMutation = useAddStoryItem();
-  const deleteMutation = useDeleteStory();
-  const [me, setMe] = useState<SessionUser | null>(null);
-  const [photoQuery, setPhotoQuery] = useState<string | undefined>(undefined);
-  const signedIn = Boolean(me);
-  const canEdit =
-    Boolean(me) &&
-    (me?.role === "superadmin" ||
-      Boolean((story as { ownerId?: string | null } | undefined)?.ownerId && (story as { ownerId?: string }).ownerId === me?.id));
-
-  useEffect(() => {
-    fetchMe().then(setMe);
-  }, []);
-
-  function handleDelete() {
-    if (!confirm("DELETE THIS STORY AND ALL DRAFTS? This cannot be undone.")) return;
-    deleteMutation.mutate(
-      { storyId },
+  const attributionData: AttributionNode = {
+    storyId: 'story-chicago-root',
+    authorHandle: 'jordan',
+    authorDisplayName: 'Jordan M.',
+    location: 'Chicago Loop',
+    timestamp: '10:15 AM',
+    corroborationType: 'original',
+    summary: 'Class 1 freight delay reports filed after main switch relay tripped.',
+    children: [
       {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-          navigate("/");
-        },
-      }
-    );
-  }
-
-  const itemIcon = (type: string) => {
-    switch (type) {
-      case "audio": return <Mic className="w-4 h-4 text-neon-red" />;
-      case "photo": return <Camera className="w-4 h-4 text-neon-yellow" />;
-      default: return <FileText className="w-4 h-4 text-neon" />;
-    }
+        storyId: 'story-danville-corroborate',
+        authorHandle: 'ras.ip',
+        authorDisplayName: 'Victor Birkle',
+        location: 'Danville Junction',
+        timestamp: '11:30 AM',
+        corroborationType: 'ground',
+        summary: 'Junction switch failure confirmed on Vermilion line; two haulers parked waiting on signal dispatch.',
+        isCurrentStory: currentId === 'story-danville-corroborate',
+        children: [
+          {
+            storyId: 'story-photo-evidence',
+            authorHandle: 'glitterpop',
+            authorDisplayName: 'Pamela Black',
+            location: 'Danville South Lead',
+            timestamp: '12:05 PM',
+            corroborationType: 'photo',
+            summary: 'High-contrast photo attached of locked switch indicator at Milepost 124.',
+            isCurrentStory: currentId === 'story-photo-evidence',
+          },
+        ],
+      },
+    ],
   };
 
-  if (isLoading) {
-    return (
-      <PageShell center>
-        <div className="text-neon text-glow-pulse text-xl">Loading story…</div>
-      </PageShell>
-    );
-  }
-
-  if (!story) {
-    return (
-      <PageShell center>
-        <div className="text-center">
-          <div className="text-neon-red text-xl mb-4">Story not found</div>
-          <Button variant="outline" onClick={() => navigate("/")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-        </div>
-      </PageShell>
-    );
-  }
-
   return (
-    <PageShell>
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              BACK
-            </Button>
-            <div>
-              <h1 className="text-3xl text-neon text-glow tracking-wider flex items-center gap-2">
-                {(story as { lane?: string }).lane === "feed" ? <PressyMark className="h-8 w-8 shrink-0" /> : null}
-                {story.title}
-              </h1>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                <Badge variant="outline" className="border-neon/30 text-neon text-xs">
-                  {(story as { lane?: string }).lane === "feed" ? "PRESSIE" : story.status.toUpperCase()}
-                </Badge>
-                <Badge variant="outline" className="border-neon/30 text-xs">
-                  {(story as { contentRating?: string }).contentRating === "g"
-                    ? "G / KIDS"
-                    : (story as { contentRating?: string }).contentRating === "mature"
-                      ? "18+"
-                      : "PG-13"}
-                </Badge>
-                <span>{story.items.length} items</span>
-                <span>Created {new Date(story.createdAt).toLocaleDateString()}</span>
-                {(story as any).isAnonymous || (story as any).author === "Anonymous Fieldy" ? (
-                  <span className="text-signal-yellow font-medium">🎭 Anonymous Fieldy</span>
-                ) : (
-                  <span className="text-neon font-medium">🟢 @{(story as { author?: string }).author || "Field Reporter"}</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-neon/40 text-neon hover:bg-neon/10 gap-1.5 font-mono text-xs"
-              onClick={() => {
-                const copyText = story.items.filter((it) => it.type === "note" || it.type === "text").map((it) => it.content).join("\n\n");
-                const authorTag = (story as any).isAnonymous ? "Anonymous Fieldy" : `@${(story as any).author || "Field Reporter"}`;
-                sessionStorage.setItem("fieldpress_fork", JSON.stringify({
-                  title: `Fork: ${story.title}`,
-                  notes: `> 🍴 Forked from ${authorTag}'s dispatch on "${story.title}":\n\n${copyText}\n\n--- Local Fieldy Update:\n`
-                }));
-                navigate("/");
-              }}
-            >
-              <GitFork className="w-3.5 h-3.5 text-neon" />
-              FORK TO DESK
-            </Button>
-            {(story as { lane?: string }).lane === "feed" &&
-            story.status === "active" &&
-            ((story as { visibility?: string }).visibility === "public" ||
-              (story as { ownerId?: string | null }).ownerId == null) ? (
-              <PressieShareMenu
-                pressieId={story.id}
-                title={story.title}
-                items={story.items}
-                isPubliclyShareable
-              />
-            ) : null}
-            {canEdit && (
-              <Button variant="ghost" className="text-muted-foreground hover:text-neon-red" onClick={handleDelete}>
-                <Trash2 className="w-4 h-4 mr-1" />
-                DELETE
-              </Button>
-            )}
-          </div>
+    <div className="max-w-4xl mx-auto px-4 py-8 font-mono text-zinc-200">
+      <div className="flex items-center justify-between mb-4">
+        {props.onBack ? (
+          <button
+            type="button"
+            onClick={props.onBack}
+            className="text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            ← Return to Dashboard
+          </button>
+        ) : (
+          <a href="/" className="text-xs text-zinc-400 hover:text-zinc-200">
+            ← Return to Dashboard
+          </a>
+        )}
+
+        <PressieActionControls
+          originalCreatorHandle="jordan"
+          forkPolicy="open"
+          storyId={currentId}
+          onForkToDesk={props.onForkToDesk}
+          onRequestCollab={(id, author) => alert(`Collab request sent to @${author}`)}
+        />
+      </div>
+
+      <article className="p-6 rounded-lg border border-zinc-800 bg-zinc-950 mb-6">
+        <PressieOwnershipBanner
+          originalCreatorHandle="jordan"
+          originalCreatorName="Jordan M."
+          sharedByHandle="ras.ip"
+        />
+
+        <div className="flex items-center space-x-2 text-[11px] text-emerald-400 mb-2">
+          <span>📍 Danville Junction • Vermilion County</span>
+          <span>•</span>
+          <span className="text-zinc-500">Filed at 11:30 AM</span>
         </div>
 
-        <div className="space-y-2">
-            <p className="text-[10px] tracking-widest text-muted-foreground">
-              REACT{inkLabel((story as { pulse?: string }).pulse) ? ` · ${inkLabel((story as { pulse?: string }).pulse)}` : ""}
-            </p>
-            <InkPad
-              value={(story as { myInk?: string | null }).myInk || (story as { pulse?: string }).pulse}
-              counts={(story as { inkCounts?: Partial<Record<InkId, number>> }).inkCounts}
-              onPick={async (ink) => {
-                if (!signedIn) {
-                  navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`);
-                  return;
-                }
-                await fetch(`/api/stories/${storyId}/ink`, {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ ink }),
-                });
-                queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-                queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
-              }}
+        <h1 className="text-xl font-bold text-white mb-3">
+          Junction Switch Malfunction Stalls Vermilion Line Freight Corridor
+        </h1>
+
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800 text-xs text-zinc-400">
+          <span>Reporter: <strong className="text-zinc-200">@ras.ip</strong></span>
+          <div className="flex items-center space-x-2">
+            <span className="text-zinc-500">Credibility:</span>
+            <PeerReactions
+              storyId={currentId}
+              initialCounts={{ signal: 42, heat: 12, iconic: 8 }}
+              initialUserReactions={['signal']}
             />
           </div>
-
-        <Separator className="bg-neon/10" />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h2 className="text-lg text-neon tracking-wider mb-3">Field</h2>
-            <div className="mb-4">
-              <CaptureBar
-                signedIn={signedIn}
-                busy={addItemMutation.isPending}
-                onNeedSignIn={() => navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`)}
-                onPhoto={async (dataUrl) => {
-                  await addItemMutation.mutateAsync({
-                    storyId,
-                    data: { type: "photo", content: dataUrl },
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
-                }}
-              />
-            </div>
-            <div className="mb-4">
-              <VisualDesk
-                storyId={storyId}
-                headline={story.title}
-                notes={story.items.filter((item) => item.type === "note").map((item) => item.content).join("\n")}
-                signedIn={signedIn}
-                seedQuery={photoQuery}
-                onNeedSignIn={() => navigate(`/login?next=${encodeURIComponent(`/story/${storyId}`)}`)}
-                onAttachUrl={async (url) => {
-                  await addItemMutation.mutateAsync({
-                    storyId,
-                    data: { type: "photo", content: url },
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
-                }}
-                onRendered={async (dataUrl) => {
-                  await addItemMutation.mutateAsync({
-                    storyId,
-                    data: { type: "photo", content: dataUrl },
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
-                  queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
-                }}
-              />
-            </div>
-            {story.items.length === 0 ? (
-              <Card className="border-neon/10">
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  Add a note, photo, or clip to start this file.
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
-                {story.items.map((item) => (
-                  <Card key={item.id} className="border-neon/10 bg-card">
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">{itemIcon(item.type)}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="secondary" className="text-[10px] uppercase">{item.type}</Badge>
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(item.createdAt).toLocaleString()}
-                            </span>
-                          </div>
-                          {extractImageSrc(item.content, item.type) ? (
-                            <PressieMedia
-                              src={extractImageSrc(item.content, item.type) || ""}
-                              alt={`${story.title} — ${item.type}`}
-                              variant="detail"
-                              className="w-full border-neon/20"
-                            />
-                          ) : (
-                            <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{item.content}</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h2 className="text-lg text-neon tracking-wider mb-3">Write</h2>
-            <div className="mb-4">
-              <IdeaDesk storyId={storyId} onUseQuery={setPhotoQuery} onDraftCreated={() => void refetchDrafts?.()} />
-            </div>
-            <div className="mb-4">
-              <HeadlineCache storyId={storyId} />
-            </div>
-            <div className="mb-4">
-              <GenericPostDialog storyId={storyId} />
-            </div>
-            <div className="mb-4">
-              <DeskBoard
-                storyId={storyId}
-                canEdit={canEdit}
-                embargoUntil={(story as { embargoUntil?: string | null }).embargoUntil}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <Button
-                variant="outline"
-                className="border-neon/20 text-neon"
-                onClick={() => navigate(`/story/${storyId}/news`)}
-              >
-                <Newspaper className="w-4 h-4 mr-1" />
-                PRESSIE DESK
-              </Button>
-              <Button
-                variant="outline"
-                className="border-neon/20 text-neon-red"
-                onClick={() => navigate(`/story/${storyId}/podcast`)}
-              >
-                <Podcast className="w-4 h-4 mr-1" />
-                PODCAST STUDIO
-              </Button>
-            </div>
-
-            {!drafts?.length ? (
-              <Card className="border-neon/10">
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  Drafts you save show up here.
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-2">
-                {drafts.map((draft) => {
-                  const config = MODE_CONFIG[draft.mode as keyof typeof MODE_CONFIG] || MODE_CONFIG.article;
-                  const Icon = config.icon;
-                  const updated = draft.updatedAt ? new Date(draft.updatedAt) : null;
-                  return (
-                    <Card
-                      key={draft.id}
-                      className="border-neon/10 bg-card cursor-pointer hover:border-neon/30 transition-colors"
-                      onClick={() =>
-                        navigate(
-                          draft.mode === "article"
-                            ? `/story/${storyId}/news`
-                            : draft.mode === "podcast"
-                              ? `/story/${storyId}/podcast`
-                              : `/story/${storyId}/editor/${draft.id}`,
-                        )
-                      }
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-3">
-                          <Icon className={`w-5 h-5 ${config.color}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="text-[10px]">{config.label}</Badge>
-                              <span className="text-sm truncate">
-                                {draft.title || "Untitled Draft"}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Updated {updated && !Number.isNaN(updated.getTime()) ? updated.toLocaleString() : "just now"}
-                            </div>
-                          </div>
-                          <DistributeDialog
-                            compact
-                            triggerLabel="COPY"
-                            payload={{
-                              storyTitle: story.title,
-                              mode: draft.mode as "article" | "social" | "podcast",
-                              title: draft.title,
-                              content: draft.content,
-                            }}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
-      </div>
-    </PageShell>
+
+        <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
+          <p>
+            Following initial freight relay alerts originating in the Chicago Loop desk (@jordan), direct inspection at the Danville Junction rail crossing indicates locked points on the northbound Vermilion lead.
+          </p>
+          <p>
+            Two westbound freights have halted operations waiting on manual field authority. Regional logistics coordinators have bypassed normal automated corridors.
+          </p>
+        </div>
+      </article>
+
+      <CommunityNotes storyId={currentId} currentUserHandle="ras.ip" />
+
+      <AttributionChain
+        rootNode={attributionData}
+        onSelectStory={(id) => setCurrentId(id)}
+        onForkBranch={(id) => props.onForkToDesk && props.onForkToDesk(id)}
+      />
+    </div>
   );
-}
+};
+
+export default StoryDetailPage;

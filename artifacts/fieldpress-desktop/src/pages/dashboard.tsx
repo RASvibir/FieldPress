@@ -1,10 +1,16 @@
+
+import { FieldyCommunications } from '../components/FieldyCommunications';
+import { BeatBounties } from '../components/BeatBounties';
+import { ForkPolicySelector, ForkPolicy } from '../components/PressieOwnershipBadge';
+import { ShareDispatchModal } from '../components/ShareDispatchModal';
+import { AnonymousFieldyToggle } from '../components/AnonymousFieldyToggle';
 import { useGetDashboard, useListStories, useCreateStory, useDeleteStory, useImportStory } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Mic, Camera, Plus, Upload, Trash2, Newspaper, Search, Sparkles } from "lucide-react";
+import { FileText, Mic, Camera, Plus, Upload, Trash2, Newspaper, Search, Sparkles, GitFork } from 'lucide-react';
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +25,7 @@ import { extractImageSrc } from "@/lib/item-media";
 import { INKS, type InkId, inkLabel } from "@/lib/ink";
 import { askPressy } from "@/lib/desk";
 
-type Tab = "wall" | "feed" | "search";
+type Tab = "wall" | "feed" | "search" | 'wire' | 'bounties';
 
 type StoryCard = {
   id: string;
@@ -98,6 +104,7 @@ function ImportDialog() {
 }
 
 export default function DashboardPage() {
+  const me = { name: 'ras.ip', email: 'ras.ip@fieldpress.studio' };
   const [, navigate] = useLocation();
   const [newTitle, setNewTitle] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -498,6 +505,24 @@ export default function DashboardPage() {
               The Pressie feed is the desk · Headlines on the wall ·{" "}
               <button type="button" className="underline hover:text-neon" onClick={() => navigate("/launch")}>
                 Install
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('wire')}
+                className={`px-3 py-1.5 text-xs font-bold rounded ${
+                  tab === 'wire' ? 'bg-cyan-900/60 text-cyan-200 border border-cyan-700' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                📡 Fieldy Wire
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('bounties')}
+                className={`px-3 py-1.5 text-xs font-bold rounded ${
+                  tab === 'bounties' ? 'bg-emerald-900/60 text-emerald-200 border border-emerald-700' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                🎯 Beat Bounties
               </button>
             </p>
           </div>
