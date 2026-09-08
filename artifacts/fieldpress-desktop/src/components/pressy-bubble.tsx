@@ -7,42 +7,16 @@ import { askPressy } from "@/lib/desk";
 type Turn = { role: "user" | "pressy"; content: string };
 
 function extractHeadlineAndNotes(text: string): { headline: string; notes: string } {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) return { headline: "", notes: "" };
+  // Strip conversational bot intros
+  const cleanBody = text
+    .replace(/^Pressy['’]?O? here[^\n]*\n+/i, "")
+    .replace(/^Here are your provisional[^\n]*\n+/i, "")
+    .trim();
 
-  let titleIdx = -1;
-  let headline = "";
-
-  // 1. Look for explicit title indicators
-  for (let i = 0; i < lines.length; i++) {
-    const clean = lines[i].replace(/[*#•`_>]/g, "").trim();
-    const match = clean.match(/^(?:suggested\s+)?(?:headline|title|breaking)\s*:\s*(.+)/i);
-    if (match && match && match.trim().length > 3) {
-      headline = match.replace(/^[•\s-]+/, "").trim();
-      titleIdx = i;
-      break;
-    }
-  }
-
-  // 2. Fallback: first non-greeting line as title
-  if (!headline) {
-    for (let i = 0; i < lines.length; i++) {
-      const clean = lines[i].replace(/[*#•`_>]/g, "").trim();
-      if (!/^(pressy['’]?o? here|here are your|let['’]?s|hello|hi|sure)/i.test(clean) && clean.length > 8) {
-        headline = clean.split(".")[0].trim();
-        titleIdx = i;
-        break;
-      }
-    }
-  }
-
-  // 3. Body is EVERYTHING else from the dispatch
-  const bodyLines = lines.filter((_, idx) => idx !== titleIdx && !/^(?:\*\*Suggested Headline:\*\*|###\s*⚡)/i.test(lines[idx]));
-  const notes = bodyLines.join("\n\n").replace(/^>\s*/gm, "").trim();
-
+  // Leave headline empty so user names their own title; body gets 100% of the story!
   return {
-    headline: headline.slice(0, 100).trim(),
-    notes: notes || text.trim(),
+    headline: "",
+    notes: cleanBody || text.trim(),
   };
 }
 
@@ -144,9 +118,11 @@ export function PressyBubble() {
       return;
     }
 
-    const command = `Audit, summarize, and punch up this active field dispatch from my desk:
-Headline: ${h || "(none)"}
-Field Notes: ${b || "(none)"}`;
+    const command = `Review and audit this active field dispatch from my desk without generating replacement headlines:
+Title: ${h || "(not titled yet)"}
+Field Notes: ${b || "(none)"}
+
+Please fact-check the statements, identify any missing agency records, and suggest supporting angles while keeping my draft intact.`;
     void handleSend(command);
   }
 
@@ -227,8 +203,7 @@ Field Notes: ${b || "(none)"}`;
                       variant="outline"
                       className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
                       onClick={() => {
-                        const { headline } = extractHeadlineAndNotes(turn.content);
-                        void handleSend(`Audit and verify public records for: "${headline || turn.content.slice(0, 60)}"`);
+                        void handleSend(`Audit and verify public records for this story: "${turn.content.slice(0, 80)}"`);
                       }}
                     >
                       <ShieldCheck className="w-3 h-3 text-neon-green" />
@@ -240,8 +215,7 @@ Field Notes: ${b || "(none)"}`;
                       variant="outline"
                       className="h-6 text-[10px] border-border text-muted-foreground hover:text-foreground gap-1"
                       onClick={() => {
-                        const { headline } = extractHeadlineAndNotes(turn.content);
-                        void handleSend(`Draft a 30-second radio broadcast intro for this story: "${headline || turn.content.slice(0, 60)}"`);
+                        void handleSend(`Draft a 30-second radio broadcast intro for this story: "${turn.content.slice(0, 80)}"`);
                       }}
                     >
                       <Radio className="w-3 h-3 text-signal-yellow" />

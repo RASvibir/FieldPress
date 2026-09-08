@@ -105,6 +105,30 @@ export default function DashboardPage() {
   const [articleTitle, setArticleTitle] = useState("");
   const [feedOpen, setFeedOpen] = useState(false);
   const [feedTitle, setFeedTitle] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
+
+  function forkStoryToDesk(targetStory: StoryCard) {
+    const authorTag = (targetStory as any).isAnonymous ? "Anonymous Fieldy" : `@${(targetStory as any).author || "Field Reporter"}`;
+    const copyText = targetStory.items
+      .filter((it) => it.type === "note" || it.type === "text")
+      .map((it) => it.content)
+      .join("\n\n");
+    const photos = targetStory.items
+      .map((it) => extractImageSrc(it.content, it.type))
+      .filter((src): src is string => Boolean(src));
+
+    setTab("feed");
+    setFeedTitle("");
+    setFeedBody(`> 🍴 Forked from ${authorTag}'s dispatch on "${targetStory.title}":\n\n${copyText || targetStory.title}\n\n--- Local Fieldy Corroboration & Update:\n`);
+    if (photos[0]) setFeedPhoto(photos[0]);
+    setSyncedNotice("Forked to your desk! Enter your title to post ✓");
+    setTimeout(() => setSyncedNotice(null), 3500);
+    setTimeout(() => {
+      const el = document.querySelector('input[placeholder*="Headline"]');
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement)?.focus();
+    }, 100);
+  }
   const [syncedNotice, setSyncedNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -389,7 +413,11 @@ export default function DashboardPage() {
             <CardContent className="pt-0">
               <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
                 <span>{new Date(story.createdAt).toLocaleDateString()}</span>
-                <span className="text-neon font-medium">by {(story as { author?: string }).author || "Field Reporter"}</span>
+                {(story as any).isAnonymous || (story as any).author === "Anonymous Fieldy" ? (
+                  <span className="text-signal-yellow font-medium">🎭 Anonymous Fieldy</span>
+                ) : (
+                  <span className="text-neon font-medium">🟢 @{(story as { author?: string }).author || "Field Reporter"}</span>
+                )}
                 {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
                 {inkLabel(story.pulse) ? <span>{inkLabel(story.pulse)}</span> : null}
               </div>
@@ -419,15 +447,30 @@ export default function DashboardPage() {
                     counts={story.inkCounts}
                     onPick={(ink) => void stampInk(story.id, ink)}
                   />
-                  <PressieShareMenu
-                    pressieId={story.id}
-                    title={story.title}
-                    items={story.items}
-                    isPubliclyShareable={
-                      story.status === "active" &&
-                      (story.visibility === "public" || story.ownerId == null)
-                    }
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-neon/30 text-neon hover:bg-neon/10 font-mono gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        forkStoryToDesk(story);
+                      }}
+                    >
+                      <GitFork className="w-3 h-3 text-neon" />
+                      FORK TO DESK
+                    </Button>
+                    <PressieShareMenu
+                      pressieId={story.id}
+                      title={story.title}
+                      items={story.items}
+                      isPubliclyShareable={
+                        story.status === "active" &&
+                        (story.visibility === "public" || story.ownerId == null)
+                      }
+                    />
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -718,6 +761,19 @@ export default function DashboardPage() {
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsAnonymous((v) => !v)}
+                      className={
+                        isAnonymous
+                          ? "h-6 text-[10px] border-signal-yellow text-signal-yellow bg-signal-yellow/10 font-mono gap-1"
+                          : "h-6 text-[10px] border-border text-muted-foreground hover:text-foreground font-mono gap-1"
+                      }
+                    >
+                      {isAnonymous ? "🎭 Filing as: Anonymous Fieldy" : `🟢 Filing as: @${me?.name || me?.email?.split("@")[0] || "Fieldy"}`}
+                    </Button>
                       <p className="text-[10px] tracking-widest text-muted-foreground uppercase font-mono">
                         How It Hits (Pulse)
                       </p>
