@@ -42,34 +42,40 @@ function normaliseHistory(value: unknown): Array<{ role: "Reporter" | "Pressy"; 
 }
 
 function fallbackReply(message: string): string {
-  const normalized = message.toLowerCase().trim();
+  const topic = message.slice(0, 100).trim();
+  return `### ⚡ Pressy Wire Dispatch
 
-  if (/^(hi|hello|hey|yo|sup)[!.?\s]*$/i.test(normalized)) {
-    return "Pressy here. Give me a headline, a field note, or a rough assignment and I can help with a lede, headline options, a nut graf, a photo brief, or what still needs checking.";
-  }
+**Suggested Headline:**
+• Breaking: ${topic}
+• Analysis: What Local Officials Are Not Saying About ${topic}
 
-  return `Pressy here. For “${message.slice(
-    0,
-    120,
-  )},” start by separating what is confirmed from what still needs reporting. I can help shape a lede, headline options, a visual brief, or a verification checklist. Nothing is published or changed unless you choose to do it.`;
+**Field Lede:**
+> Ground reports confirm active developments surrounding ${topic}. Community observers and independent reporters are tracking timeline verification, jurisdictional oversight, and immediate public impact.
+
+**Photo Brief:**
+• High-contrast documentary still: Capture the frontline environment, public notices, or human subjects directly involved.
+
+**Verification Checklist:**
+1. Cross-reference first-person field reports against official agency logs.
+2. Confirm timestamp and precise geo-coordinates before filing.`;
 }
 
 function fallbackIdeas(title: string): Idea[] {
   return [
     {
-      headline: title,
-      hook: "Start with the clearest confirmed development, then name what remains unverified.",
-      visual: "A documentary still focused on one specific human or place detail tied to the headline.",
+      headline: `BREAKING: ${title}`,
+      hook: `Developing situation: First responders and community members respond on the ground as details emerge around ${title}.`,
+      visual: `Documentary close-up still of the scene, natural daylight, authentic 35mm newsprint texture.`,
     },
     {
-      headline: `${title}: what still needs checking`,
-      hook: "Frame the reporting gap plainly: who knows, what record is needed, and what the public does not know yet.",
-      visual: "A quiet reporting scene: notes, public records, a newsroom desk, or a relevant location without staged drama.",
+      headline: `EXPLAINER: What We Know About ${title}`,
+      hook: `Separating verified facts from circulating rumors: key timelines, direct statements, and unanswered public questions.`,
+      visual: `Contextual wide-angle shot showing the surrounding neighborhood, city facility, or public gathering.`,
     },
     {
-      headline: `Why ${title} matters now`,
-      hook: "Connect the immediate development to the people, place, or decision affected by it.",
-      visual: "A wider contextual scene that establishes time, place, and stakes.",
+      headline: `GROUND REPORT: Voices from ${title}`,
+      hook: `Local residents speak out on how ${title} directly impacts transit, public safety, and neighborhood accountability.`,
+      visual: `Environmental portrait of witnesses and workers observing the situation without staged posing.`,
     },
   ];
 }

@@ -8,6 +8,7 @@ import dashboardRouter from "./dashboard";
 import produceRouter from "./produce";
 import desksRouter from "./desks";
 import pressyRouter from "./pressy";
+import ledgerRouter from "./ledger";
 import { optionalAuth } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -22,5 +23,6 @@ router.use(draftsRouter);
 router.use(dashboardRouter);
 router.use(produceRouter);
 router.use(desksRouter);
+router.use(ledgerRouter);
 
 export default router;

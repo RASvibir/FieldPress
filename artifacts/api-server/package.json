@@ -19,6 +19,7 @@
     "express": "^5",
     "pino": "^9",
     "pino-http": "^10",
+    "stripe": "^22.6.1",
     "zod": "catalog:"
   },
   "devDependencies": {
