@@ -62,7 +62,9 @@ function safeFailure(res: Response, message: string, err: unknown, context: stri
 }
 
 imagesRouter.get("/images/quota", async (_req: Request, res: Response) => {
-  res.json({ active: true, provider: "fieldpress-editorial-render", remaining: 100 });
+  res.status(503).json({
+    error: "Visual rendering is not configured on this FieldPress desk",
+  });
 });
 
 imagesRouter.post("/stories/:id/images/search", async (req: Request, res: Response) => {
@@ -132,28 +134,15 @@ imagesRouter.post("/stories/:id/images/generate", async (req: Request, res: Resp
   const story = await requireAccessibleStory(req, res);
   if (!story) return;
 
-  const rawPrompt = text(req.body?.prompt, 1200) || text(story.title, 240);
-  if (!rawPrompt) {
+  const prompt = text(req.body?.prompt, 1200);
+  if (!prompt) {
     res.status(400).json({ error: "Write or generate a visual brief before rendering" });
     return;
   }
 
-  try {
-    const cleanPrompt = rawPrompt.replace(/[^\w\s,.-]/g, "").trim().slice(0, 320);
-    const seed = Math.floor(Math.random() * 1000000);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-      cleanPrompt + ", authentic documentary photojournalism, 35mm film grain, editorial lighting, Reuters Pulitzer style"
-    )}?width=1200&height=675&nologo=true&seed=${seed}`;
-
-    res.json({
-      dataUrls: [imageUrl],
-      dataUrl: imageUrl,
-      source: "ai",
-      notice: "Visual rendered by FieldPress Visual Desk.",
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || "Visual rendering failed" });
-  }
+  res.status(503).json({
+    error: "Visual rendering is not configured on this FieldPress desk",
+  });
 });
 
 export default imagesRouter;

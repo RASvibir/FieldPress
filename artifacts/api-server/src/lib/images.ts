@@ -73,12 +73,9 @@ export async function searchArchivalMedia(query: string): Promise<MediaSearchRes
   const cached = getCachedSearch(query);
   if (cached) return cached;
 
-  const stopWords = new Set(["a","an","the","in","on","at","for","to","of","by","with","about","is","are","was","were","and","or"]);
-  const cleanKeywords = query.replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase())).slice(0, 3).join(" ") || query.slice(0, 30);
-
   const wikiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(
-    cleanKeywords,
-  )}&gsrlimit=10&prop=imageinfo&iiprop=url|extmetadata|size&iiurlwidth=800&format=json&origin=*`;
+    query,
+  )}&gsrlimit=10&prop=imageinfo&iiprop=url|extmetadata|size&format=json&origin=*`;
 
   let response: Response | undefined;
 
@@ -135,22 +132,6 @@ export async function searchArchivalMedia(query: string): Promise<MediaSearchRes
       } satisfies MediaSearchResult;
     })
     .filter((item) => Boolean(item.url) && /\.(jpe?g|png|webp)$/i.test(item.url.split("?")[0].toLowerCase()));
-
-  if (results.length === 0) {
-    const seed = Math.floor(Math.random() * 100000);
-    const visualUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanKeywords + ", documentary photojournalism, authentic 35mm film grain")}?width=1200&height=675&nologo=true&seed=${seed}`;
-    results.push({
-      id: `fb-${seed}`,
-      title: `${query} (Editorial Context Still)`,
-      url: visualUrl,
-      thumbUrl: visualUrl,
-      author: "FieldPress Curated Wire",
-      license: "Public Domain / CC",
-      description: `Archival context still for ${query}`,
-      width: 1200,
-      height: 675,
-    });
-  }
 
   setCachedSearch(query, results);
   return results;
