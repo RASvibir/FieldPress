@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
+import { GitFork,
   FileText, Mic, Camera, ArrowLeft,
   Newspaper, MessageSquare, Podcast, Trash2
 } from "lucide-react";
@@ -125,11 +125,32 @@ export default function StoryDetailPage() {
                 </Badge>
                 <span>{story.items.length} items</span>
                 <span>Created {new Date(story.createdAt).toLocaleDateString()}</span>
-                <span className="text-neon font-medium">by {(story as { author?: string }).author || "Field Reporter"}</span>
+                {(story as any).isAnonymous || (story as any).author === "Anonymous Fieldy" ? (
+                  <span className="text-signal-yellow font-medium">🎭 Anonymous Fieldy</span>
+                ) : (
+                  <span className="text-neon font-medium">🟢 @{(story as { author?: string }).author || "Field Reporter"}</span>
+                )}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-neon/40 text-neon hover:bg-neon/10 gap-1.5 font-mono text-xs"
+              onClick={() => {
+                const copyText = story.items.filter((it) => it.type === "note" || it.type === "text").map((it) => it.content).join("\n\n");
+                const authorTag = (story as any).isAnonymous ? "Anonymous Fieldy" : `@${(story as any).author || "Field Reporter"}`;
+                sessionStorage.setItem("fieldpress_fork", JSON.stringify({
+                  title: `Fork: ${story.title}`,
+                  notes: `> 🍴 Forked from ${authorTag}'s dispatch on "${story.title}":\n\n${copyText}\n\n--- Local Fieldy Update:\n`
+                }));
+                navigate("/");
+              }}
+            >
+              <GitFork className="w-3.5 h-3.5 text-neon" />
+              FORK TO DESK
+            </Button>
             {(story as { lane?: string }).lane === "feed" &&
             story.status === "active" &&
             ((story as { visibility?: string }).visibility === "public" ||
