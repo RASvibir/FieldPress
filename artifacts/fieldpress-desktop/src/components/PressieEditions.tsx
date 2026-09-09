@@ -307,6 +307,15 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
           {photoItems.length > 0 && (
             <div className="border-3 border-black bg-black mb-4 relative shadow-[6px_6px_0px_#000]">
               <img src={photoItems[0].content} alt="" className="w-full max-h-80 object-cover contrast-150" />
+                
+                {/* Image Watermark Seal */}
+                <div className="absolute bottom-2 right-2 flex items-center space-x-1.5 px-2 py-1 rounded bg-black/60 backdrop-blur-[2px] border border-white/20 pointer-events-none">
+                  <img src="/favicon.svg" alt="" className="h-3.5 w-3.5 opacity-90" />
+                  <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                    FIELDPROOF
+                  </span>
+                </div>
+
               <div className="absolute bottom-2 left-2 bg-yellow-300 text-black px-2 py-1 font-black text-xs border border-black transform -rotate-1">
                 EVIDENCE PROOF! 📸
               </div>
@@ -467,5 +476,84 @@ export const ReporterBioFooter: React.FC<{
     </div>
   );
 };
+
+
+export const FaviconEditionSeal: React.FC<{
+  edition: PressieEdition;
+  location: string;
+}> = ({ edition, location }) => {
+  const isVintage = edition === 'vintage';
+  const isComic = edition === 'comic';
+  const isPixel = edition === 'pixel';
+  const isSleek = edition === 'sleek';
+
+  if (isVintage) {
+    return (
+      <div className="flex items-center space-x-2 pb-2 border-b border-[#2b241b]">
+        <img src="/favicon.svg" alt="" className="h-6 w-6 sepia contrast-200 opacity-90 filter" />
+        <div>
+          <div className="text-[10px] font-mono tracking-widest font-black uppercase text-[#14120e]">
+            FIELDPRESS BROADSHEET EDITION
+          </div>
+          <div className="text-[9px] font-mono text-[#5a4c3a]">
+            REG. CORRIDOR DESK • {location.toUpperCase()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isComic) {
+    return (
+      <div className="flex items-center space-x-2 mb-3">
+        <div className="h-8 w-8 bg-[#fde047] border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_#000]">
+          <img src="/favicon.svg" alt="" className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-xs font-black uppercase tracking-wider text-black">
+            FIELDPRESS COMIC EDITION
+          </div>
+          <div className="text-[9px] font-bold text-zinc-600 uppercase">
+            APPROVED BY FIELD BUREAU CODE
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPixel) {
+    return (
+      <div className="flex items-center space-x-2 text-xs text-[#22c55e] pb-2 border-b border-[#166534] mb-3 select-none">
+        <img src="/favicon.svg" alt="" className="h-5 w-5 opacity-90 filter invert hue-rotate-90" />
+        <span>[FIELDPRESS_STATION_EDITION // {location.slice(0, 20).toUpperCase()}]</span>
+      </div>
+    );
+  }
+
+  if (isSleek) {
+    return (
+      <div className="flex items-center space-x-2 text-xs font-semibold text-foreground mb-4">
+        <img src="/favicon.svg" alt="" className="h-5 w-5 opacity-90" />
+        <span className="tracking-widest uppercase text-[10px]">FieldPress Journal Issue</span>
+      </div>
+    );
+  }
+
+  // Tactical (Standard)
+  return (
+    <div className="flex items-center space-x-2 pb-2.5 mb-3 border-b border-border">
+      <img src="/favicon.svg" alt="" className="h-5 w-5 opacity-85" />
+      <div>
+        <div className="text-[10px] font-mono tracking-widest font-bold uppercase text-foreground">
+          FIELDPRESS DESK EDITION
+        </div>
+        <div className="text-[9px] text-muted-foreground font-mono">
+          SECTOR: {location.toUpperCase()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 export default PressieArticleRenderer;
