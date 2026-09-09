@@ -134,7 +134,7 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
       {/* Story Card */}
       
       {/* Multi-Edition Pressie Article Presentation (Tactical, Vintage, Comic, 8-Bit, Sleek) */}
-      <PressieArticleRenderer onEdit={() => setIsEditOpen(true)} canEdit={true} onEdit={() => setIsEditOpen(true)} canEdit={true}
+      <PressieArticleRenderer onEdit={() => setIsEditOpen(true)} canEdit={true}
         story={{
           id: story.id,
           title: story.title,
