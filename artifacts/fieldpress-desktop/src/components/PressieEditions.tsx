@@ -440,6 +440,17 @@ export const ReporterBioFooter: React.FC<{
         <div className="flex sm:flex-col items-center sm:items-end gap-2 w-full sm:w-auto justify-end">
           <button
             type="button"
+            onClick={() => {
+              const current = localStorage.getItem(`fp_cohort_${author}`) === 'true';
+              localStorage.setItem(`fp_cohort_${author}`, String(!current));
+              alert(!current ? `Added @${author} to your Cohort network.` : `Removed @${author} from your Cohorts.`);
+            }}
+            className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-emerald-600 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 font-bold text-xs"
+          >
+            + Add Cohort
+          </button>
+          <button
+            type="button"
             onClick={() => onOpenDm ? onOpenDm(author) : (window.location.href = '/wire')}
             className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs shadow-md transition"
           >

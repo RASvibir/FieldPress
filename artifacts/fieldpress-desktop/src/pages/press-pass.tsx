@@ -12,6 +12,38 @@ export const PressPassPage: React.FC<PressPassProps> = (props) => {
   const { skinConfig } = useSkin();
   const [passIssueTime, setPassIssueTime] = useState('');
 
+  const [isCohort, setIsCohort] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`fp_cohort_${handle}`);
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  const [cohortCount, setCohortCount] = useState(24);
+  const [showDmInput, setShowDmInput] = useState(false);
+  const [dmText, setDmText] = useState('');
+  const [sentNotice, setSentNotice] = useState(false);
+
+  const toggleCohort = () => {
+    const next = !isCohort;
+    setIsCohort(next);
+    setCohortCount(prev => next ? prev + 1 : prev - 1);
+    localStorage.setItem(`fp_cohort_${handle}`, String(next));
+  };
+
+  const handleSendDm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dmText.trim()) return;
+    setSentNotice(true);
+    setTimeout(() => {
+      setSentNotice(false);
+      setShowDmInput(false);
+      setDmText('');
+    }, 1400);
+  };
+
+
   useEffect(() => {
     setPassIssueTime(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
   }, []);
@@ -68,7 +100,70 @@ export const PressPassPage: React.FC<PressPassProps> = (props) => {
           </div>
 
           {/* Credentials Grid */}
-          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-center">
+          
+          {/* Cohort Network & Direct Communication Strip */}
+          <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-zinc-400 font-bold uppercase">
+                COHORT NETWORK: <strong className="text-white">{cohortCount} Connected</strong>
+              </span>
+              <span className="text-[9px] text-emerald-400 font-bold">● ONLINE ON DESK</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={toggleCohort}
+                className={`py-2 px-3 rounded-lg font-bold text-xs transition flex items-center justify-center space-x-1.5 ${
+                  isCohort
+                    ? 'bg-cyan-950 border border-cyan-500 text-cyan-300'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-black shadow-md'
+                }`}
+              >
+                <span>{isCohort ? '✓' : '+'}</span>
+                <span>{isCohort ? 'Connected Cohort' : 'Add as Cohort'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDmInput(!showDmInput)}
+                className="py-2 px-3 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center space-x-1.5"
+              >
+                <span>💬</span>
+                <span>Dispatch Memo</span>
+              </button>
+            </div>
+
+            {showDmInput && (
+              <form onSubmit={handleSendDm} className="pt-2 border-t border-zinc-800/80 space-y-2">
+                {sentNotice ? (
+                  <div className="p-2 bg-emerald-950/60 border border-emerald-700 text-emerald-300 text-center text-xs font-bold rounded">
+                    ✓ Memo dispatched to @{handle}'s wire lounge.
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      rows={2}
+                      value={dmText}
+                      onChange={e => setDmText(e.target.value)}
+                      placeholder={`Direct field memo to cohort @${handle}...`}
+                      className="w-full bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs rounded"
+                      >
+                        Transmit Memo
+                      </button>
+                    </div>
+                  </>
+                )}
+              </form>
+            )}
+          </div>
+
+<div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-center">
             <div>
               <div className="text-[9px] uppercase text-zinc-500 font-bold">SIGNAL SCORE</div>
               <div className="text-sm font-bold text-cyan-300 mt-0.5">⚡ 842 CRED</div>
