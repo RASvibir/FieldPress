@@ -115,7 +115,7 @@ export const ForkPolicySelector: React.FC<{
             className={`p-2 rounded border cursor-pointer transition ${
               selectedPolicy === opt.id
                 ? 'bg-cyan-950/40 border-cyan-600 text-cyan-200'
-                : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                : 'bg-card border-border text-muted-foreground hover:text-foreground hover:border-zinc-700'
             }`}
           >
             <div className="font-bold text-xs">{opt.label}</div>
