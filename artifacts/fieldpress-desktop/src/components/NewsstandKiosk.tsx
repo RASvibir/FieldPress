@@ -1,4 +1,5 @@
-import React from 'react';
+import { SocialShareModal } from './SocialShareModal';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { GitFork, ExternalLink, Bookmark } from 'lucide-react';
 import { InkPad } from '@/components/ink-pad';
@@ -89,6 +90,7 @@ export const NewsstandCard: React.FC<{
   onStampInk: (storyId: string, ink: string) => void;
 }> = ({ story, onFork, onStampInk }) => {
   const [, navigate] = useLocation();
+  const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
 
   const author = story.author || 'Field Reporter';
   const location = story.location || 'Danville Junction Bureau';
@@ -227,6 +229,7 @@ export const NewsstandCard: React.FC<{
           VERIFIED FIELD DISPATCH
         </div>
       </div>
+      <SocialShareModal isOpen={isSocialShareOpen} onClose={() => setIsSocialShareOpen(false)} title={story.title} summary={leadText || story.title} url={`/story/${story.id}`} type="pressie" />
     </article>
   );
 };
