@@ -71,7 +71,7 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
   const inkCounts = (story as any).inkCounts || {};
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 font-mono text-zinc-200">
+    <div className="max-w-4xl mx-auto px-4 pt-20 sm:pt-24 pb-16 font-mono text-zinc-200">
       {/* Top Bar */}
       <div className="flex items-center justify-between mb-4">
         {props.onBack ? (
