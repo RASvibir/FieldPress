@@ -69,6 +69,18 @@ function App() {
                 <div className="pointer-events-auto">
                   <FieldPressLogo />
                 </div>
+
+                {/* Coming Soon Head Ticker */}
+                <div className="pointer-events-auto flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-800/80 text-[10px] font-mono text-cyan-300 shadow-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  <span className="hidden sm:inline font-bold">
+                    COMING SOON: Desktop Suite • Super Admin • Direct Wire Rails
+                  </span>
+                  <span className="sm:hidden font-bold">
+                    Desktop & Admin Soon
+                  </span>
+                </div>
+
                 <div className="pointer-events-auto">
                   <SettingsMenu />
                 </div>
