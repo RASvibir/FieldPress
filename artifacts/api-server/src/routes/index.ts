@@ -1,3 +1,4 @@
+import bountiesRouter from "./bounties";
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
@@ -13,6 +14,7 @@ import { optionalAuth } from "../lib/auth";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(bountiesRouter);
 router.use(authRouter);
 router.use(optionalAuth);
 router.use(pressyRouter);
