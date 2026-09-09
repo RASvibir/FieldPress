@@ -1,3 +1,4 @@
+import { scanPressieDraft, autoRedactSensitiveData } from '../lib/auditScanner';
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Camera, Radio, Target, Newspaper, Sparkles, Send } from 'lucide-react';
