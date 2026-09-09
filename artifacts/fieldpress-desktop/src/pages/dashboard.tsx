@@ -1,3 +1,4 @@
+import { NewsstandCard, NewsstandKioskRack } from '../components/NewsstandKiosk';
 import { MobileBottomRail } from '../components/MobileBottomRail';
 
 import { FieldyCommunications } from '../components/FieldyCommunications';
@@ -379,110 +380,42 @@ export default function DashboardPage() {
       );
     }
     return (
-      <div className={layout === "feed" ? "max-w-xl mx-auto space-y-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
+      <div className={layout === "feed" ? "max-w-5xl mx-auto space-y-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
         {list.map((story) => {
           const photos = story.items
             .map((item) => extractImageSrc(item.content, item.type))
             .filter((src): src is string => Boolean(src));
           const copy = story.items.filter((item) => !extractImageSrc(item.content, item.type));
-          return (
-          <Card
-            key={story.id}
-            className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group overflow-hidden"
-            onClick={() => navigate(`/story/${story.id}`)}
-          >
-            {photos[0] ? (
-              <PressieMedia
-                src={photos[0]}
-                alt={story.title}
-                variant={layout === "feed" ? "feed" : "wall"}
-                className="rounded-none border-x-0 border-t-0"
-              />
-            ) : null}
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between">
-                <CardTitle className="text-lg text-neon group-hover:text-glow pr-2 leading-snug flex items-start gap-2">
-                  {layout === "feed" ? <PressyMark className="h-5 w-5 shrink-0 mt-0.5 text-neon" /> : null}
+          return layout === "feed" ? (
+            <NewsstandCard
+              key={story.id}
+              story={story as any}
+              onFork={(s) => forkStoryToDesk(s)}
+              onStampInk={(id, ink) => void stampInk(id, ink as any)}
+            />
+          ) : (
+            <Card
+              key={story.id}
+              className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group overflow-hidden"
+              onClick={() => navigate(`/story/${story.id}`)}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-neon group-hover:text-glow leading-snug">
                   {story.title}
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-neon-red shrink-0 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(story.id);
-                  }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-                <span>{new Date(story.createdAt).toLocaleDateString()}</span>
-                {(story as any).isAnonymous || (story as any).author === "Anonymous Fieldy" ? (
-                  <span className="text-signal-yellow font-medium">🎭 Anonymous Fieldy</span>
-                ) : (
-                  <span className="text-neon font-medium">🟢 @{(story as { author?: string }).author || "Field Reporter"}</span>
-                )}
-                {story.lane === "feed" ? <span>Newsstand</span> : <span>Wall</span>}
-                {inkLabel(story.pulse) ? <span>{inkLabel(story.pulse)}</span> : null}
-              </div>
-              {layout === "wall" && photos[0] ? (
-                <img src={photos[0]} alt="" className="w-full h-32 object-cover rounded border border-border mb-2" />
-              ) : null}
-              {copy.slice(0, layout === "feed" ? 4 : 2).map((item) => (
-                <div key={item.id} className="flex items-start gap-2 text-sm mb-1">
-                  {itemIcon(item.type)}
-                  <span className={`text-muted-foreground ${layout === "feed" ? "whitespace-pre-wrap" : "truncate"} text-xs`}>
-                    {item.content.startsWith("data:") ? "Photo" : item.content}
-                  </span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                  <span>{story.createdAt ? new Date(story.createdAt).toLocaleDateString() : 'Today'}</span>
+                  <span>•</span>
+                  <span>@{(story as any).author || 'Fieldy'}</span>
                 </div>
-              ))}
-              {layout === "feed" && photos.length > 1 ? (
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {photos.slice(1, 5).map((src) => (
-                    <img key={src.slice(-24)} src={src} alt="" className="w-full h-28 object-cover rounded border border-border" />
-                  ))}
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex items-center justify-between text-xs text-zinc-500 pt-2 border-t border-border">
+                  <span>⚡ {(story.inkCounts as any)?.['signal'] || 0} Signals</span>
+                  <span className="text-neon font-mono text-[11px]">View Dispatch →</span>
                 </div>
-              ) : null}
-              {layout === "feed" && (
-                <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
-                  <p className="text-[10px] tracking-widest text-muted-foreground">REACT</p>
-                  <InkPad
-                    value={story.myInk || story.pulse}
-                    counts={story.inkCounts}
-                    onPick={(ink) => void stampInk(story.id, ink)}
-                  />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs border-neon/30 text-neon hover:bg-neon/10 font-mono gap-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        forkStoryToDesk(story);
-                      }}
-                    >
-                      <GitFork className="w-3 h-3 text-neon" />
-                      FORK TO DESK
-                    </Button>
-                    <PressieShareMenu
-                      pressieId={story.id}
-                      title={story.title}
-                      items={story.items}
-                      isPubliclyShareable={
-                        story.status === "active" &&
-                        (story.visibility === "public" || story.ownerId == null)
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
@@ -490,7 +423,7 @@ export default function DashboardPage() {
   }
 
   const tabs: { id: Tab; label: string; Icon: typeof Newspaper }[] = [
-    { id: "feed", label: "Pressie feed", Icon: Newspaper },
+    { id: "feed", label: "🗞️ The Newsstand", Icon: Newspaper },
     { id: "wall", label: "Headline wall", Icon: Newspaper },
     { id: "search", label: "Search", Icon: Search },
   ];
@@ -712,6 +645,9 @@ export default function DashboardPage() {
           </Card>
         ) : tab === "feed" ? (
           <div className="space-y-6">
+            {/* Newsstand Kiosk Desktop Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-6">
+              <div className="lg:col-span-8 space-y-6">
             <Card className="border-border bg-card shadow-sm">
               <CardContent className="p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
@@ -838,7 +774,10 @@ export default function DashboardPage() {
 
             {renderGrid(pressieRiver, "feed")}
           </div>
-        ) : tab === "wall" ? (
+                      </div>
+              
+            </div>
+          ) : tab === "wall" ? (
           renderGrid(wallStories, "wall")
         ) : (
           renderGrid(searched, "feed")
