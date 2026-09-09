@@ -227,4 +227,24 @@ router.post("/stories/import", async (req: Request, res: Response) => {
   res.status(201).json(result);
 });
 
+
+router.patch("/stories/:storyId", async (req: Request, res: Response) => {
+  const storyId = req.params.storyId as string;
+  const { title, location, defaultEdition, content: bodyContent } = req.body;
+  try {
+    const story = await getAccessibleStory(req.user?.id, storyId);
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+    if (title) {
+      await db.update(storiesTable).set({ title }).where(eq(storiesTable.id, storyId));
+    }
+    const updated = await getStoryWithItems(req.user?.id, storyId);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to update story" });
+  }
+});
+
 export default router;

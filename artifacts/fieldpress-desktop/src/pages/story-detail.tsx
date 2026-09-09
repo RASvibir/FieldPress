@@ -1,5 +1,5 @@
 import { PressieArticleRenderer } from '../components/PressieEditions';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRoute } from 'wouter';
 import { useGetStory } from '@workspace/api-client-react';
 import { AttributionChain, AttributionNode } from '../components/AttributionChain';
@@ -22,6 +22,38 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
   const { data: story, isLoading, isError } = useGetStory(resolvedStoryId);
 
   const [currentId, setCurrentId] = useState(resolvedStoryId);
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Sync edit fields when story loads
+  useEffect(() => {
+    if (story) {
+      setEditTitle(story.title || '');
+      setEditLocation((story as any).location || '');
+    }
+  }, [story]);
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!story?.id) return;
+    setEditSaving(true);
+    try {
+      await fetch(`/api/stories/${story.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitle, location: editLocation }),
+      });
+      window.location.reload();
+    } catch {
+      alert('Could not update pressie.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
 
   // Loading State
   if (isLoading) {
@@ -101,7 +133,7 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
       {/* Story Card */}
       
       {/* Multi-Edition Pressie Article Presentation (Tactical, Vintage, Comic, 8-Bit, Sleek) */}
-      <PressieArticleRenderer
+      <PressieArticleRenderer onEdit={() => setIsEditOpen(true)} canEdit={true}
         story={{
           id: story.id,
           title: story.title,
@@ -126,7 +158,72 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
         onSelectStory={(id) => setCurrentId(id)}
         onForkBranch={(id) => props.onForkToDesk && props.onForkToDesk(id)}
       />
-    </div>
+    
+      {/* Edit Pressie Drawer / Modal */}
+      {isEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono text-xs">
+          <div className="w-full max-w-lg rounded-xl border border-zinc-700 bg-zinc-950 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="font-bold text-white text-sm uppercase flex items-center space-x-2">
+                <span>✏️ Edit Verified Pressie</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="text-zinc-500 hover:text-zinc-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">
+                  Dispatch Headline
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full bg-black border border-zinc-700 rounded-lg p-2.5 text-zinc-100 text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">
+                  Corridor / Dateline Location
+                </label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="e.g. Danville Junction Spur • Vermilion Line"
+                  className="w-full bg-black border border-zinc-700 rounded-lg p-2.5 text-zinc-100 text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs"
+                >
+                  {editSaving ? 'Saving...' : 'Save Updates'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+</div>
   );
 };
 
