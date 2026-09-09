@@ -374,57 +374,28 @@ export default function DashboardPage() {
       return (
         <Card className="border-border bg-card">
           <CardContent className="p-8 text-center text-muted-foreground">
-            {layout === "feed" ? "No Pressies yet. Post one — that’s the feed." : "No headlines yet."}
+            {layout === "feed" ? "No Pressies on the Newsstand yet. Post one above!" : "No headlines yet on the wall."}
           </CardContent>
         </Card>
       );
     }
     return (
-      <div className={layout === "feed" ? "max-w-5xl mx-auto space-y-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
-        {list.map((story) => {
-          const photos = story.items
-            .map((item) => extractImageSrc(item.content, item.type))
-            .filter((src): src is string => Boolean(src));
-          const copy = story.items.filter((item) => !extractImageSrc(item.content, item.type));
-          return layout === "feed" ? (
-            <NewsstandCard
-              key={story.id}
-              story={story as any}
-              onFork={(s) => forkStoryToDesk(s)}
-              onStampInk={(id, ink) => void stampInk(id, ink as any)}
-            />
-          ) : (
-            <Card
-              key={story.id}
-              className="border-border bg-card cursor-pointer hover:border-primary/50 transition-colors group overflow-hidden"
-              onClick={() => navigate(`/story/${story.id}`)}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-neon group-hover:text-glow leading-snug">
-                  {story.title}
-                </CardTitle>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                  <span>{story.createdAt ? new Date(story.createdAt).toLocaleDateString() : 'Today'}</span>
-                  <span>•</span>
-                  <span>@{(story as any).author || 'Fieldy'}</span>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between text-xs text-zinc-500 pt-2 border-t border-border">
-                  <span>⚡ {(story.inkCounts as any)?.['signal'] || 0} Signals</span>
-                  <span className="text-neon font-mono text-[11px]">View Dispatch →</span>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="max-w-5xl mx-auto space-y-6">
+        {list.map((story) => (
+          <NewsstandCard
+            key={story.id}
+            story={story as any}
+            onFork={(s) => forkStoryToDesk(s)}
+            onStampInk={(id, ink) => void stampInk(id, ink as any)}
+          />
+        ))}
       </div>
     );
   }
 
   const tabs: { id: Tab; label: string; Icon: typeof Newspaper }[] = [
     { id: "feed", label: "🗞️ The Newsstand", Icon: Newspaper },
-    { id: "wall", label: "Headline wall", Icon: Newspaper },
+    { id: "wall", label: "🧱 Headline Wall", Icon: Newspaper },
     { id: "search", label: "Search", Icon: Search },
   ];
 
