@@ -76,9 +76,7 @@ function App() {
                   <span className="hidden sm:inline font-bold">
                     COMING SOON: Desktop Suite • Super Admin • Direct Wire Rails
                   </span>
-                  <span className="sm:hidden font-bold">
-                    Desktop & Admin Soon
-                  </span>
+                  <span className="sm:hidden font-bold">Press Desktop: Crypto & Wire Rails Soon</span>
                 </div>
 
                 <div className="pointer-events-auto">
