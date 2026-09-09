@@ -40,8 +40,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/guide" component={UserManualPage} />
-      <Route path="/admin" component={AdminManualPage} />
-      <Route path="/story/:storyId/news" component={NewsDeskPage} />
+<Route path="/story/:storyId/news" component={NewsDeskPage} />
       <Route path="/story/:storyId/podcast" component={PodcastDeskPage} />
       <Route path="/story/:storyId/editor/:draftId" component={EditorPage} />
       <Route path="/story/:storyId" component={StoryDetailPage} />

@@ -426,7 +426,7 @@ export default function DashboardPage() {
                 ) : (
                   <span className="text-neon font-medium">🟢 @{(story as { author?: string }).author || "Field Reporter"}</span>
                 )}
-                {story.lane === "feed" ? <span>Pressie</span> : <span>Wall</span>}
+                {story.lane === "feed" ? <span>Newsstand</span> : <span>Wall</span>}
                 {inkLabel(story.pulse) ? <span>{inkLabel(story.pulse)}</span> : null}
               </div>
               {layout === "wall" && photos[0] ? (
@@ -560,9 +560,7 @@ export default function DashboardPage() {
             <Dialog open={feedOpen} onOpenChange={setFeedOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <PressyMark className="h-4 w-4 mr-2" />
-                  POST PRESSIE
-                </Button>
+                  <PressyMark className="h-4 w-4 mr-2" />POST PRESSIE TO NEWSSTAND</Button>
               </DialogTrigger>
               <DialogContent className="bg-terminal border-border">
                 <DialogHeader>
@@ -615,7 +613,7 @@ export default function DashboardPage() {
                     <Button variant="ghost">CANCEL</Button>
                   </DialogClose>
                   <Button onClick={() => void postToFeed()} disabled={!feedTitle.trim()}>
-                    {signedIn ? "POST PRESSIE" : "SIGN IN TO POST"}
+                    {signedIn ? "POST PRESSIE TO NEWSSTAND" : "SIGN IN TO POST"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -832,7 +830,7 @@ export default function DashboardPage() {
                     className="font-semibold tracking-wide"
                   >
                     <PressyMark className="h-4 w-4 mr-1.5" />
-                    {signedIn ? "POST PRESSIE" : "SIGN IN TO POST"}
+                    {signedIn ? "POST PRESSIE TO NEWSSTAND" : "SIGN IN TO POST"}
                   </Button>
                 </div>
               </CardContent>
