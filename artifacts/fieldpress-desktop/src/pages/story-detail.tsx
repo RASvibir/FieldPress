@@ -1,3 +1,4 @@
+import { PressieArticleRenderer } from '../components/PressieEditions';
 import React, { useState } from 'react';
 import { useRoute } from 'wouter';
 import { useGetStory } from '@workspace/api-client-react';
@@ -98,75 +99,23 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
       </div>
 
       {/* Story Card */}
-      <article className="p-6 rounded-lg border border-zinc-800 bg-zinc-950 mb-6">
-        {/* Immutable Original Creator Provenance */}
-        <PressieOwnershipBanner
-          originalCreatorHandle={creatorHandle}
-          originalCreatorName={(story as any).author}
-          sharedByHandle={(story as any).sharedByHandle}
-        />
+      
+      {/* Multi-Edition Pressie Article Presentation (Tactical, Vintage, Comic, 8-Bit, Sleek) */}
+      <PressieArticleRenderer
+        story={{
+          id: story.id,
+          title: story.title,
+          author: authorHandle,
+          originalCreatorHandle: creatorHandle,
+          location: (story as any).location || 'Field Bureau Desk',
+          formattedDate,
+          lane: (story as any).lane,
+          items: story.items,
+        }}
+        inkCounts={inkCounts}
+        initialEdition="tactical"
+      />
 
-        <div className="flex items-center space-x-2 text-[11px] text-emerald-400 mb-2">
-          <span>📍 {(story as any).location || 'Field Bureau Desk'}</span>
-          <span>•</span>
-          <span className="text-zinc-500">Filed at {formattedDate}</span>
-          <span>•</span>
-          <span className="text-zinc-500 uppercase">{(story as any).lane || "Pressie"}</span>
-        </div>
-
-        {/* Real Story Title */}
-        <h1 className="text-xl font-bold text-white mb-3 leading-snug">
-          {story.title}
-        </h1>
-
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800 text-xs text-zinc-400">
-          <span>Reporter: <strong className="text-zinc-200">@{authorHandle}</strong></span>
-          <div className="flex items-center space-x-2">
-            <span className="text-zinc-500">Credibility:</span>
-            <PeerReactions
-              storyId={story.id}
-              initialCounts={{
-                signal: inkCounts['signal'] || 0,
-                heat: inkCounts['heat'] || 0,
-                iconic: inkCounts['iconic'] || 0,
-              }}
-              initialUserReactions={(story as any).myInk ? [(story as any).myInk] : []}
-            />
-          </div>
-        </div>
-
-        {/* Real Story Items & Photos */}
-        <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
-          {story.items && story.items.length > 0 ? (
-            story.items.map((item: any) => {
-              const isPhoto =
-                item.type === 'photo' ||
-                item.content?.startsWith('data:image') ||
-                item.content?.startsWith('http');
-
-              if (isPhoto) {
-                return (
-                  <div key={item.id} className="rounded-lg overflow-hidden border border-zinc-800 my-3 bg-black">
-                    <img
-                      src={item.content}
-                      alt="Field Proof Capture"
-                      className="w-full max-h-[460px] object-contain"
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <p key={item.id} className="whitespace-pre-wrap leading-relaxed">
-                  {item.content}
-                </p>
-              );
-            })
-          ) : (
-            <p className="text-zinc-500 italic text-xs">No extended body filed for this dispatch.</p>
-          )}
-        </div>
-      </article>
 
       {/* Community Verification Notes for this specific story */}
       <CommunityNotes storyId={story.id} currentUserHandle="ras.ip" />
