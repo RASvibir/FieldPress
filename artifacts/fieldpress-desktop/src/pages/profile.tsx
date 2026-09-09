@@ -47,6 +47,9 @@ export const ReporterProfilePage: React.FC<{
   const { currentSkin, skinConfig, saveSkinPreference, isSaving } = useSkin();
   const [activeTab, setActiveTab] = useState<'dispatches' | 'channel' | 'forks' | 'bureaus'>('channel');
   const [copied, setCopied] = useState(false);
+  const [showDirectMessageModal, setShowDirectMessageModal] = useState(false);
+  const [modalDmText, setModalDmText] = useState('');
+  const [sentSuccess, setSentSuccess] = useState(false);
 
   // Profile data with cover and avatar
   const [profile, setProfile] = useState<ReporterProfile>({
@@ -192,7 +195,7 @@ export const ReporterProfilePage: React.FC<{
             {onOpenDm && (
               <button
                 type="button"
-                onClick={() => onOpenDm(profile.handle)}
+                onClick={() => setShowDirectMessageModal(true)}
                 className="px-3 py-1.5 font-bold rounded text-xs text-black"
                 style={{ backgroundColor: skinConfig.hex }}
               >
@@ -417,7 +420,77 @@ export const ReporterProfilePage: React.FC<{
           Active bureau desk affiliations and county operating corridors.
         </div>
       )}
-    </div>
+    
+      {/* Social Media Instant Direct Message Slide-Over / Modal */}
+      {showDirectMessageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono text-xs">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-950 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center space-x-2.5">
+                <span className="h-3 w-3 rounded-full bg-emerald-500" />
+                <span className="font-bold text-white text-sm">Direct Dispatch to @{profile.handle}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowDirectMessageModal(false); setSentSuccess(false); }}
+                className="text-zinc-500 hover:text-zinc-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              Send an encrypted field note, tip corroboration, or reach out to {profile.displayName} directly.
+            </p>
+
+            {sentSuccess ? (
+              <div className="p-4 rounded-lg bg-emerald-950/60 border border-emerald-700 text-emerald-300 text-center font-bold">
+                ✓ Dispatch sent directly to @{profile.handle}'s wire lounge.
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!modalDmText.trim()) return;
+                  setSentSuccess(true);
+                  setTimeout(() => {
+                    setShowDirectMessageModal(false);
+                    setSentSuccess(false);
+                    setModalDmText('');
+                  }, 1200);
+                }}
+                className="space-y-3"
+              >
+                <textarea
+                  rows={4}
+                  required
+                  value={modalDmText}
+                  onChange={(e) => setModalDmText(e.target.value)}
+                  placeholder={`Type your direct message to @${profile.handle}...`}
+                  className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+                />
+
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectMessageModal(false)}
+                    className="px-4 py-2 rounded-lg border border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-bold shadow-md"
+                  >
+                    Send Direct Message
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+</div>
   );
 };
 

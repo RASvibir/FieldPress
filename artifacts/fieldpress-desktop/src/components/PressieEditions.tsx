@@ -203,6 +203,7 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
               ✓ PEER CORROBORATED
             </div>
           </div>
+          <ReporterBioFooter author={author} location={location} />
         </article>
       )}
 
@@ -393,10 +394,68 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
               </div>
             </div>
           )}
+          <ReporterBioFooter author={author} location={location} />
         </article>
       )}
     </div>
   );
 };
+
+
+export const ReporterBioFooter: React.FC<{
+  author: string;
+  location?: string;
+  onOpenDm?: (handle: string) => void;
+}> = ({ author, location = 'Danville Junction Bureau', onOpenDm }) => {
+  return (
+    <div className="mt-8 pt-6 border-t-2 border-zinc-800/80 font-mono">
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mb-3">
+        ABOUT THE REPORTER
+      </div>
+      <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 backdrop-blur flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div className="flex items-start space-x-3.5">
+          <div className="relative">
+            <div className="h-12 w-12 rounded-xl bg-zinc-800 border-2 border-cyan-400 flex items-center justify-center font-bold text-cyan-300 text-sm shadow-[0_0_12px_rgba(6,182,212,0.25)]">
+              @{author.slice(0, 2).toUpperCase()}
+            </div>
+            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 border-2 border-black" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="font-bold text-white text-sm">@{author}</span>
+              <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-emerald-400 font-bold text-[10px]">
+                🎖️ Frontline Scout
+              </span>
+            </div>
+            <div className="text-[11px] text-emerald-400 mt-0.5">
+              📍 {location}
+            </div>
+            <p className="text-xs text-zinc-400 mt-1.5 max-w-lg leading-relaxed">
+              Boots-on-the-ground corridor reporter and independent newsroom desk contributor. Tracking municipal infrastructure, scanner feeds, and grassroots logistics.
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Social Actions */}
+        <div className="flex sm:flex-col items-center sm:items-end gap-2 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={() => onOpenDm ? onOpenDm(author) : (window.location.href = '/wire')}
+            className="flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs shadow-md transition"
+          >
+            💬 Message Fieldy
+          </button>
+          <a
+            href="/profile"
+            className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 text-center text-xs"
+          >
+            View Desk →
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 export default PressieArticleRenderer;
