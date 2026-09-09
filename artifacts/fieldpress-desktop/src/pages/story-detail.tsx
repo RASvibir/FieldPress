@@ -1,3 +1,4 @@
+import { PressieEditorModal } from "../components/PressieEditorModal";
 import { PressieArticleRenderer } from '../components/PressieEditions';
 import React, { useState, useEffect } from 'react';
 import { useRoute } from 'wouter';
@@ -133,7 +134,7 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
       {/* Story Card */}
       
       {/* Multi-Edition Pressie Article Presentation (Tactical, Vintage, Comic, 8-Bit, Sleek) */}
-      <PressieArticleRenderer onEdit={() => setIsEditOpen(true)} canEdit={true}
+      <PressieArticleRenderer onEdit={() => setIsEditOpen(true)} canEdit={true} onEdit={() => setIsEditOpen(true)} canEdit={true}
         story={{
           id: story.id,
           title: story.title,
@@ -223,6 +224,8 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
           </div>
         </div>
       )}
+
+      <PressieEditorModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} story={story} onSaved={() => window.location.reload()} />
 </div>
   );
 };
