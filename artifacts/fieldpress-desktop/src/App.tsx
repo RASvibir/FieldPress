@@ -73,10 +73,10 @@ function App() {
                 <div className="pointer-events-auto flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-800/80 text-[10px] font-mono text-cyan-300 shadow-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
                   <span className="hidden sm:inline font-bold">
-                    COMING SOON: Dedicated Desktop App • Live Scanner Radio • Community Reporter Tips
+                    COMING SOON: Dedicated Desktop App • Fielder Audio Capture Rendering • Community Reporter Tips
                   </span>
                   <span className="sm:hidden font-bold">
-                    Desktop App & Live Radio Soon
+                    Desktop App & Fielder Audio Capture Rendering Soon
                   </span>
                 </div>
 
