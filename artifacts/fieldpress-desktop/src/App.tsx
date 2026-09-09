@@ -1,3 +1,4 @@
+import PressPassPage from "@/pages/press-pass";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -44,6 +45,8 @@ function Router() {
       <Route path="/story/:storyId/podcast" component={PodcastDeskPage} />
       <Route path="/story/:storyId/editor/:draftId" component={EditorPage} />
       <Route path="/story/:storyId" component={StoryDetailPage} />
+      <Route path="/pass/:handle" component={PressPassPage} />
+      <Route path="/pass" component={PressPassPage} />
       <Route component={NotFound} />
     </Switch>
   );
