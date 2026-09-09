@@ -1,3 +1,4 @@
+import ClassifiedsPage from "@/pages/classifieds";
 import PressPassPage from "@/pages/press-pass";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/story/:storyId" component={StoryDetailPage} />
       <Route path="/pass/:handle" component={PressPassPage} />
       <Route path="/pass" component={PressPassPage} />
+      <Route path="/classifieds" component={ClassifiedsPage} />
       <Route component={NotFound} />
     </Switch>
   );
