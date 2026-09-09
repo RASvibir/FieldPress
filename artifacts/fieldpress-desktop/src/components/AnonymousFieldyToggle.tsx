@@ -12,12 +12,12 @@ export const AnonymousFieldyToggle: React.FC<AnonymousModeProps> = ({
   currentUserHandle,
 }) => {
   return (
-    <div className="p-2.5 rounded border border-zinc-800 bg-zinc-900/50 font-mono text-xs mb-3">
+    <div className="p-2.5 rounded border border-border bg-card font-mono text-xs mb-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <span className="text-base">{isAnonymous ? '🎭' : '🟢'}</span>
           <div>
-            <div className="font-bold text-zinc-200">
+            <div className="font-bold text-foreground">
               {isAnonymous ? 'Anonymous Fieldy Shield Active' : `Filing as @${currentUserHandle}`}
             </div>
             <div className="text-[10px] text-zinc-500 leading-tight">
@@ -34,7 +34,7 @@ export const AnonymousFieldyToggle: React.FC<AnonymousModeProps> = ({
           className={`px-2.5 py-1 rounded text-[11px] font-bold border transition ${
             isAnonymous
               ? 'bg-purple-950/80 border-purple-600 text-purple-200'
-              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+              : 'bg-muted border-border text-muted-foreground hover:text-zinc-200'
           }`}
         >
           {isAnonymous ? 'Masked 🔒' : 'Mask Identity'}

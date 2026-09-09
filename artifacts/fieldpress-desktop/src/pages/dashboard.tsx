@@ -75,23 +75,21 @@ export function DashboardPage() {
             <div className="text-[10px] tracking-[0.25em] text-emerald-400 uppercase font-bold mb-1 flex items-center space-x-1.5">
               <span>📍 DANVILLE JUNCTION & VERMILION CORRIDOR DESK</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black font-serif tracking-tight text-white">
+            <h1 className="text-3xl sm:text-4xl font-black font-serif tracking-tight text-foreground dark:text-white">
               FIELDPRESS NEWSROOM
             </h1>
-            <p className="text-xs text-zinc-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Decentralized boots-on-the-ground reporting. Verified peer corroboration across county lines.
             </p>
           </div>
 
           {/* Clean 3-Tab View Switcher */}
-          <div className="flex rounded-xl bg-zinc-950 p-1 border border-zinc-800 self-start sm:self-auto">
+          <div className="flex rounded-xl bg-muted/70 p-1 border border-border rounded-xl shadow-sm self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setTab('feed')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition ${
-                tab === 'feed'
-                  ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                tab === 'feed' ? 'bg-card text-foreground shadow-sm border border-border font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Newspaper className="h-4 w-4 text-amber-400" />
@@ -101,9 +99,7 @@ export function DashboardPage() {
               type="button"
               onClick={() => setTab('wire')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition ${
-                tab === 'wire'
-                  ? 'bg-zinc-800 text-cyan-300 shadow-md border border-cyan-700'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                tab === 'wire' ? 'bg-card text-cyan-600 dark:text-cyan-300 shadow-sm border border-cyan-500/50 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Radio className="h-4 w-4 text-cyan-400" />
@@ -113,9 +109,7 @@ export function DashboardPage() {
               type="button"
               onClick={() => setTab('bounties')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition ${
-                tab === 'bounties'
-                  ? 'bg-zinc-800 text-emerald-300 shadow-md border border-emerald-700'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                tab === 'bounties' ? 'bg-card text-emerald-600 dark:text-emerald-300 shadow-sm border border-emerald-500/50 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Target className="h-4 w-4 text-emerald-400" />
@@ -132,10 +126,10 @@ export function DashboardPage() {
             {/* The Newsstand Dispatch Composer */}
             <form
               onSubmit={handlePostToNewsstand}
-              className="p-5 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl space-y-3"
+              className="p-6 rounded-2xl border-2 border-border bg-[#fdfcf9] dark:bg-zinc-950 dark:border-zinc-800 shadow-sm space-y-3"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80 text-[11px] text-zinc-400">
-                <span className="font-bold text-white uppercase flex items-center space-x-1.5">
+              <div className="flex items-center justify-between pb-2 border-b border-border pb-2 text-[11px] text-muted-foreground">
+                <span className="font-bold text-foreground uppercase flex items-center space-x-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
                   <span>File Live Ground Dispatch</span>
                 </span>
@@ -148,7 +142,7 @@ export function DashboardPage() {
                 value={composerTitle}
                 onChange={(e) => setComposerTitle(e.target.value)}
                 placeholder="Headline or breaking news hook (e.g. Danville switch delay confirmed)..."
-                className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white text-sm font-bold placeholder-zinc-500 focus:outline-none focus:border-cyan-500 font-serif"
+                className="w-full bg-background border-2 border-border/80 rounded-xl p-3 text-foreground text-sm font-bold placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary font-serif"
               />
 
               <textarea
@@ -156,7 +150,7 @@ export function DashboardPage() {
                 value={composerNote}
                 onChange={(e) => setComposerNote(e.target.value)}
                 placeholder="Field notes, scanner audio transcripts, or ground observations..."
-                className="w-full bg-black border border-zinc-800 rounded-xl p-3 text-zinc-300 text-xs placeholder-zinc-500 focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full bg-background border border-border rounded-xl p-3 text-foreground text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary font-mono"
               />
 
               {photoPreview && (
@@ -172,9 +166,9 @@ export function DashboardPage() {
                 </div>
               )}
 
-              <div className="pt-2 border-t border-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="pt-2 border-t border-border pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center space-x-2">
-                  <label className="cursor-pointer px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white flex items-center space-x-1.5 text-xs">
+                  <label className="cursor-pointer px-3 py-1.5 rounded-lg border border-border bg-muted/60 text-muted-foreground hover:text-foreground flex items-center space-x-1.5 text-xs">
                     <Camera className="h-3.5 w-3.5" />
                     <span>Attach Photo</span>
                     <input type="file" accept="image/*" className="hidden" onChange={handleCameraCapture} />
