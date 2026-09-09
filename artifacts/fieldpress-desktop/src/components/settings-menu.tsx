@@ -269,14 +269,6 @@ export function SettingsMenu() {
           <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase font-bold mb-2">GOVERNANCE & ADMIN</h3>
           <button
             type="button"
-            onClick={() => go("/admin")}
-            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900 text-zinc-300 hover:text-white"
-          >
-            <span>Super Admin & Desk Oversight</span>
-            <span className="text-[10px] text-zinc-500 font-mono">/admin ↗</span>
-          </button>
-          <button
-            type="button"
             onClick={() => go("/guide")}
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900 text-zinc-300 hover:text-white"
           >
