@@ -68,14 +68,14 @@ export const BeatBounties: React.FC<{
   };
 
   return (
-    <div className="font-mono text-xs rounded-lg border border-zinc-800 bg-zinc-950 p-4 my-4">
+    <div className="font-mono text-xs rounded-lg border border-border dark:border-border dark:border-zinc-800 bg-card dark:bg-card dark:bg-zinc-950 p-4 my-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
+      <div className="flex items-center justify-between pb-3 border-b border-border dark:border-border dark:border-zinc-800 mb-4">
         <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+          <h3 className="text-sm font-bold text-foreground dark:text-foreground dark:text-white uppercase tracking-wider flex items-center space-x-2">
             <span>🎯 Beat Bounties & Community Sponsorships</span>
           </h3>
-          <p className="text-[11px] text-zinc-400 mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             Peer-funded field assignments settled directly via Stripe Connect Express.
           </p>
         </div>
@@ -90,22 +90,22 @@ export const BeatBounties: React.FC<{
 
       {/* Bounty Creation Modal Drawer */}
       {showCreateModal && (
-        <form onSubmit={handleCreateBounty} className="mb-4 p-4 rounded bg-zinc-900/80 border border-zinc-700 space-y-3">
-          <div className="text-xs font-bold text-zinc-200 uppercase">Define Field Assignment & Reward</div>
+        <form onSubmit={handleCreateBounty} className="mb-4 p-4 rounded bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 border border-border dark:border-border dark:border-zinc-700 space-y-3">
+          <div className="text-xs font-bold text-foreground dark:text-foreground dark:text-zinc-200 uppercase">Define Field Assignment & Reward</div>
           <input
             type="text"
             required
             value={newTitle}
             onChange={e => setNewTitle(e.target.value)}
             placeholder="Assignment title (e.g. 'Photo verification of transit relay')..."
-            className="w-full bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs"
+            className="w-full bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2 text-foreground dark:text-foreground dark:text-zinc-200 text-xs"
           />
           <textarea
             rows={2}
             value={newDesc}
             onChange={e => setNewDesc(e.target.value)}
             placeholder="Specific evidence criteria (records, audio logs, photos)..."
-            className="w-full bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs"
+            className="w-full bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2 text-foreground dark:text-foreground dark:text-zinc-200 text-xs"
           />
           <div className="flex space-x-2">
             <input
@@ -113,10 +113,10 @@ export const BeatBounties: React.FC<{
               value={newLocation}
               onChange={e => setNewLocation(e.target.value)}
               placeholder="Target Location / Sector..."
-              className="flex-1 bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs"
+              className="flex-1 bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2 text-foreground dark:text-foreground dark:text-zinc-200 text-xs"
             />
-            <div className="flex items-center space-x-1 bg-black border border-zinc-700 rounded px-2">
-              <span className="text-zinc-500">$</span>
+            <div className="flex items-center space-x-1 bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded px-2">
+              <span className="text-muted-foreground/80">$</span>
               <input
                 type="number"
                 min="5"
@@ -138,7 +138,7 @@ export const BeatBounties: React.FC<{
       {/* Bounties Board */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {bounties.map(b => (
-          <div key={b.id} className="p-3.5 rounded border border-zinc-800 bg-zinc-900/40 flex flex-col justify-between">
+          <div key={b.id} className="p-3.5 rounded border border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between gap-2 mb-1.5">
                 <span className="text-[10px] text-emerald-400 font-semibold">📍 {b.locationSector}</span>
@@ -146,11 +146,11 @@ export const BeatBounties: React.FC<{
                   ${b.rewardDollars} USD
                 </span>
               </div>
-              <h4 className="font-bold text-zinc-100 text-xs mb-1">{b.title}</h4>
-              <p className="text-[11px] text-zinc-400 leading-snug mb-3">{b.description}</p>
+              <h4 className="font-bold text-foreground dark:text-foreground dark:text-zinc-100 text-xs mb-1">{b.title}</h4>
+              <p className="text-[11px] text-muted-foreground leading-snug mb-3">{b.description}</p>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-[10px] text-zinc-500">
+            <div className="flex items-center justify-between pt-2 border-t border-border dark:border-border dark:border-zinc-800/80 text-[10px] text-muted-foreground/80">
               <span>Funded by @{b.creatorHandle} • {b.createdAt}</span>
               <button
                 type="button"

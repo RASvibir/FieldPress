@@ -151,16 +151,16 @@ export const FieldyCommunications: React.FC<{
   };
 
   return (
-    <div className="flex h-[720px] border border-zinc-800 bg-zinc-950 font-mono text-xs rounded-lg overflow-hidden my-4">
+    <div className="flex h-[720px] border border-border dark:border-border dark:border-zinc-800 bg-card dark:bg-card dark:bg-zinc-950 font-mono text-xs rounded-lg overflow-hidden my-4">
       {/* Sidebar */}
-      <div className="w-64 border-r border-zinc-800 bg-zinc-900/60 flex flex-col justify-between p-3">
+      <div className="w-64 border-r border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex flex-col justify-between p-3">
         <div>
-          <div className="flex rounded bg-black border border-zinc-800 p-0.5 mb-4">
+          <div className="flex rounded bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-800 p-0.5 mb-4">
             <button
               type="button"
               onClick={() => setActiveChannelType('bureau')}
               className={`flex-1 py-1.5 text-center text-[11px] font-bold rounded ${
-                activeChannelType === 'bureau' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                activeChannelType === 'bureau' ? 'bg-zinc-800 text-foreground dark:text-foreground dark:text-zinc-100' : 'text-muted-foreground hover:text-foreground dark:text-foreground dark:text-zinc-200'
               }`}
             >
               📡 Bureau Wire
@@ -169,7 +169,7 @@ export const FieldyCommunications: React.FC<{
               type="button"
               onClick={() => setActiveChannelType('dm')}
               className={`flex-1 py-1.5 text-center text-[11px] font-bold rounded ${
-                activeChannelType === 'dm' ? 'bg-zinc-800 text-cyan-300' : 'text-zinc-400 hover:text-zinc-200'
+                activeChannelType === 'dm' ? 'bg-zinc-800 text-cyan-300' : 'text-muted-foreground hover:text-foreground dark:text-foreground dark:text-zinc-200'
               }`}
             >
               💬 DMs
@@ -178,7 +178,7 @@ export const FieldyCommunications: React.FC<{
 
           {activeChannelType === 'bureau' ? (
             <div>
-              <div className="text-zinc-500 font-bold uppercase tracking-wider text-[10px] mb-2">
+              <div className="text-muted-foreground/80 font-bold uppercase tracking-wider text-[10px] mb-2">
                 Active Desk Roster
               </div>
               <ul className="space-y-1.5">
@@ -190,10 +190,10 @@ export const FieldyCommunications: React.FC<{
                   >
                     <div className="flex items-center space-x-2">
                       <span className={`h-2 w-2 rounded-full ${rep.isBot ? 'bg-cyan-400' : 'bg-emerald-500'}`} />
-                      <span className="text-zinc-300 font-semibold">{rep.name}</span>
+                      <span className="text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 font-semibold">{rep.name}</span>
                     </div>
                     {!rep.isBot && rep.handle !== currentUserHandle && (
-                      <span className="text-[10px] text-zinc-500 group-hover:text-cyan-400">DM →</span>
+                      <span className="text-[10px] text-muted-foreground/80 group-hover:text-cyan-400">DM →</span>
                     )}
                   </li>
                 ))}
@@ -201,7 +201,7 @@ export const FieldyCommunications: React.FC<{
             </div>
           ) : (
             <div>
-              <div className="text-zinc-500 font-bold uppercase tracking-wider text-[10px] mb-2">
+              <div className="text-muted-foreground/80 font-bold uppercase tracking-wider text-[10px] mb-2">
                 Conversations
               </div>
               <ul className="space-y-1">
@@ -221,11 +221,11 @@ export const FieldyCommunications: React.FC<{
                     }`}
                   >
                     <div className="flex justify-between items-center mb-1">
-                      <span className="font-bold text-zinc-200">@{conv.recipientHandle}</span>
-                      <span className="text-[10px] text-zinc-500">{conv.lastMessageAt}</span>
+                      <span className="font-bold text-foreground dark:text-foreground dark:text-zinc-200">@{conv.recipientHandle}</span>
+                      <span className="text-[10px] text-muted-foreground/80">{conv.lastMessageAt}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <p className="truncate text-[11px] text-zinc-400 max-w-[140px]">{conv.lastMessage}</p>
+                      <p className="truncate text-[11px] text-muted-foreground max-w-[140px]">{conv.lastMessage}</p>
                       {conv.unreadCount > 0 && (
                         <span className="px-1.5 py-0.2 bg-cyan-600 text-black text-[9px] font-bold rounded-full">
                           {conv.unreadCount}
@@ -238,18 +238,18 @@ export const FieldyCommunications: React.FC<{
             </div>
           )}
         </div>
-        <div className="text-[10px] text-zinc-500 border-t border-zinc-800 pt-2">
-          Desk Auth: <span className="text-zinc-300 font-bold">@{currentUserHandle}</span>
+        <div className="text-[10px] text-muted-foreground/80 border-t border-border dark:border-border dark:border-zinc-800 pt-2">
+          Desk Auth: <span className="text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 font-bold">@{currentUserHandle}</span>
         </div>
       </div>
 
       {/* Main Chat Pane */}
-      <div className="flex-1 flex flex-col justify-between bg-black/50">
+      <div className="flex-1 flex flex-col justify-between bg-muted/40 dark:bg-background dark:bg-muted/40 dark:bg-background dark:bg-black/50">
         {activeChannelType === 'bureau' ? (
           <>
-            <div className="px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/30 flex justify-between items-center text-[11px] text-zinc-400">
-              <span>📡 Frequency: <strong className="text-zinc-200">#bureau-global</strong></span>
-              <span className="text-zinc-500">Summon bot with @pressy</span>
+            <div className="px-4 py-2.5 border-b border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex justify-between items-center text-[11px] text-muted-foreground">
+              <span>📡 Frequency: <strong className="text-foreground dark:text-foreground dark:text-zinc-200">#bureau-global</strong></span>
+              <span className="text-muted-foreground/80">Summon bot with @pressy</span>
             </div>
             <div className="p-4 overflow-y-auto space-y-3 flex-1">
               {wireMessages.map(msg => {
@@ -258,13 +258,13 @@ export const FieldyCommunications: React.FC<{
                   <div
                     key={msg.id}
                     className={`p-2.5 rounded border ${
-                      isBot ? 'bg-cyan-950/20 border-cyan-800/60 text-cyan-200' : 'bg-zinc-900/70 border-zinc-800 text-zinc-200'
+                      isBot ? 'bg-cyan-950/20 border-cyan-800/60 text-cyan-200' : 'bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 border-border dark:border-border dark:border-zinc-800 text-foreground dark:text-foreground dark:text-zinc-200'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-zinc-300">{isBot ? '🤖 ' : ''}@{msg.sender_handle}</span>
+                      <span className="font-bold text-foreground/90 dark:text-foreground/90 dark:text-zinc-300">{isBot ? '🤖 ' : ''}@{msg.sender_handle}</span>
                       <div className="flex items-center space-x-2">
-                        <span className="text-[10px] text-zinc-500">{msg.created_at}</span>
+                        <span className="text-[10px] text-muted-foreground/80">{msg.created_at}</span>
                         {!isBot && (
                           <button
                             type="button"
@@ -282,14 +282,14 @@ export const FieldyCommunications: React.FC<{
               })}
               <div ref={endRef} />
             </div>
-            <div className="p-3 border-t border-zinc-800 bg-zinc-900/60 flex items-center space-x-2">
+            <div className="p-3 border-t border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex items-center space-x-2">
               <input
                 type="text"
                 value={inputWireText}
                 onChange={e => setInputWireText(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSendWire()}
                 placeholder="Broadcast tip to wire or '@pressy [query]'..."
-                className="flex-1 bg-black border border-zinc-700 rounded px-3 py-2 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded px-3 py-2 text-foreground dark:text-foreground dark:text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
               />
               <button
                 type="button"
@@ -302,15 +302,15 @@ export const FieldyCommunications: React.FC<{
           </>
         ) : (
           <>
-            <div className="px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/30 flex justify-between items-center">
+            <div className="px-4 py-2.5 border-b border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="font-bold text-zinc-200">@{activeDmRecipient}</span>
+                <span className="font-bold text-foreground dark:text-foreground dark:text-zinc-200">@{activeDmRecipient}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveChannelType('bureau')}
-                className="text-zinc-500 hover:text-zinc-300 text-[11px]"
+                className="text-muted-foreground/80 hover:text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 text-[11px]"
               >
                 Switch to Wire ↗
               </button>
@@ -321,10 +321,10 @@ export const FieldyCommunications: React.FC<{
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className={`max-w-[75%] p-2.5 rounded border ${
-                      isMe ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-100' : 'bg-zinc-900/80 border-zinc-800 text-zinc-200'
+                      isMe ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-100' : 'bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 border-border dark:border-border dark:border-zinc-800 text-foreground dark:text-foreground dark:text-zinc-200'
                     }`}>
-                      <div className="flex items-center justify-between space-x-4 mb-1 text-[10px] text-zinc-500">
-                        <span className="font-bold text-zinc-400">@{msg.sender_handle}</span>
+                      <div className="flex items-center justify-between space-x-4 mb-1 text-[10px] text-muted-foreground/80">
+                        <span className="font-bold text-muted-foreground">@{msg.sender_handle}</span>
                         <span>{msg.created_at}</span>
                       </div>
                       <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -343,14 +343,14 @@ export const FieldyCommunications: React.FC<{
               })}
               <div ref={endRef} />
             </div>
-            <div className="p-3 border-t border-zinc-800 bg-zinc-900/60 flex items-center space-x-2">
+            <div className="p-3 border-t border-border dark:border-border dark:border-zinc-800 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 flex items-center space-x-2">
               <input
                 type="text"
                 value={inputDmText}
                 onChange={e => setInputDmText(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSendDm()}
                 placeholder={`DM to @${activeDmRecipient}...`}
-                className="flex-1 bg-black border border-zinc-700 rounded px-3 py-2 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded px-3 py-2 text-foreground dark:text-foreground dark:text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
               />
               <button
                 type="button"

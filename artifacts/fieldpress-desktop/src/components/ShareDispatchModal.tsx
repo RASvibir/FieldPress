@@ -52,13 +52,13 @@ export const ShareDispatchModal: React.FC<ShareDispatchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 font-mono text-xs p-4">
-      <div className="w-full max-w-lg rounded-lg border border-zinc-700 bg-zinc-950 p-5 space-y-4 shadow-2xl">
-        <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
-          <h3 className="text-sm font-bold text-white uppercase flex items-center space-x-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-muted/40 dark:bg-background dark:bg-muted/40 dark:bg-background dark:bg-black/50 font-mono text-xs p-4">
+      <div className="w-full max-w-lg rounded-lg border border-border dark:border-border dark:border-zinc-700 bg-card dark:bg-card dark:bg-zinc-950 p-5 space-y-4 shadow-2xl">
+        <div className="flex justify-between items-center pb-2 border-b border-border dark:border-border dark:border-zinc-800">
+          <h3 className="text-sm font-bold text-foreground dark:text-foreground dark:text-white uppercase flex items-center space-x-2">
             <span>📢 Share & Corroborate Dispatch</span>
           </h3>
-          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
+          <button type="button" onClick={onClose} className="text-muted-foreground/80 hover:text-foreground/90 dark:text-foreground/90 dark:text-zinc-300">
             ✕
           </button>
         </div>
@@ -70,13 +70,13 @@ export const ShareDispatchModal: React.FC<ShareDispatchModalProps> = ({
             originalCreatorName={story.originalCreatorName}
             sharedByHandle={currentSharerHandle}
           />
-          <h4 className="font-bold text-zinc-100 text-xs mt-2">{story.title}</h4>
-          <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2 leading-relaxed">{story.snippet}</p>
+          <h4 className="font-bold text-foreground dark:text-foreground dark:text-zinc-100 text-xs mt-2">{story.title}</h4>
+          <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{story.snippet}</p>
         </div>
 
         <form onSubmit={handleShare} className="space-y-3">
           <div>
-            <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">
+            <label className="text-[10px] text-muted-foreground uppercase font-bold block mb-1">
               Add Context / Reporter Corroboration Note
             </label>
             <textarea
@@ -84,7 +84,7 @@ export const ShareDispatchModal: React.FC<ShareDispatchModalProps> = ({
               value={comment}
               onChange={e => setComment(e.target.value)}
               placeholder="E.g., Spot-checked at Danville crossing; line is backed up..."
-              className="w-full bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
+              className="w-full bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2 text-foreground dark:text-foreground dark:text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
             />
           </div>
 
@@ -92,7 +92,7 @@ export const ShareDispatchModal: React.FC<ShareDispatchModalProps> = ({
             <button
               type="button"
               onClick={handleCopy}
-              className="px-3 py-1.5 rounded border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 font-semibold"
+              className="px-3 py-1.5 rounded border border-border dark:border-border dark:border-zinc-700 bg-muted dark:bg-muted dark:bg-zinc-900 text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 hover:border-zinc-500 font-semibold"
             >
               {copiedLink ? '✓ Copied Permlink' : '🔗 Copy Attribution Link'}
             </button>
@@ -101,7 +101,7 @@ export const ShareDispatchModal: React.FC<ShareDispatchModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-1.5 rounded border border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                className="px-3 py-1.5 rounded border border-border dark:border-border dark:border-zinc-800 text-muted-foreground hover:text-foreground dark:text-foreground dark:text-zinc-200"
               >
                 Cancel
               </button>

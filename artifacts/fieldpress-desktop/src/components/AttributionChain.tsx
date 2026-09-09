@@ -42,7 +42,7 @@ export const AttributionTreeItem: React.FC<{
           className={`flex-1 p-2.5 rounded border cursor-pointer transition ${
             node.isCurrentStory
               ? 'bg-cyan-950/40 border-cyan-500/80 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
-              : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900'
+              : 'bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 border-border dark:border-border dark:border-zinc-800 hover:border-border dark:border-border dark:border-zinc-700 hover:bg-muted dark:bg-muted dark:bg-zinc-900'
           }`}
         >
           <div className="flex items-center justify-between gap-2 mb-1">
@@ -50,21 +50,21 @@ export const AttributionTreeItem: React.FC<{
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
                 node.corroborationType === 'original'
                   ? 'bg-emerald-950 border border-emerald-800 text-emerald-400'
-                  : 'bg-zinc-800 text-zinc-300'
+                  : 'bg-zinc-800 text-foreground/90 dark:text-foreground/90 dark:text-zinc-300'
               }`}>
                 {typeIcons[node.corroborationType]}
               </span>
-              <span className="text-zinc-300 font-bold">@{node.authorHandle}</span>
+              <span className="text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 font-bold">@{node.authorHandle}</span>
             </div>
 
-            <div className="text-[10px] text-zinc-500 flex items-center space-x-1.5">
+            <div className="text-[10px] text-muted-foreground/80 flex items-center space-x-1.5">
               <span>📍 {node.location}</span>
               <span>•</span>
               <span>{node.timestamp}</span>
             </div>
           </div>
 
-          <p className="text-zinc-400 text-xs mt-0.5 leading-snug">{node.summary}</p>
+          <p className="text-muted-foreground text-xs mt-0.5 leading-snug">{node.summary}</p>
 
           {node.isCurrentStory && (
             <div className="mt-1.5 text-[9px] uppercase tracking-wider font-bold text-cyan-400">
@@ -76,7 +76,7 @@ export const AttributionTreeItem: React.FC<{
 
       {/* Recursive Children */}
       {node.children && node.children.length > 0 && (
-        <div className={`ml-${level === 0 ? '4' : '6'} pl-2 border-l border-zinc-800/80 space-y-1`}>
+        <div className={`ml-${level === 0 ? '4' : '6'} pl-2 border-l border-border dark:border-border dark:border-zinc-800/80 space-y-1`}>
           {node.children.map((child, idx) => (
             <AttributionTreeItem
               key={child.storyId}
@@ -98,13 +98,13 @@ export const AttributionChain: React.FC<{
   onForkBranch?: (storyId: string) => void;
 }> = ({ rootNode, onSelectStory, onForkBranch }) => {
   return (
-    <div className="border border-zinc-800 bg-zinc-950/80 rounded-lg p-4 font-mono">
-      <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80 mb-3">
+    <div className="border border-border dark:border-border dark:border-zinc-800 bg-card/90 dark:bg-card/90 dark:bg-zinc-950/90 rounded-lg p-4 font-mono">
+      <div className="flex items-center justify-between pb-3 border-b border-border dark:border-border dark:border-zinc-800/80 mb-3">
         <div>
-          <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center space-x-1.5">
+          <h4 className="text-xs font-bold text-foreground dark:text-foreground dark:text-zinc-200 uppercase tracking-wider flex items-center space-x-1.5">
             <span>🌳 Story Attribution Tree & Corroboration Chain</span>
           </h4>
-          <p className="text-[10px] text-zinc-500 mt-0.5">
+          <p className="text-[10px] text-muted-foreground/80 mt-0.5">
             Tracing origin reporting, on-scene evidence, and county-line corroborations.
           </p>
         </div>
