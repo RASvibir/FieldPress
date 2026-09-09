@@ -1,3 +1,4 @@
+import classifiedsRouter from "./classifieds";
 import bountiesRouter from "./bounties";
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
@@ -25,4 +26,5 @@ router.use(dashboardRouter);
 router.use(produceRouter);
 router.use(desksRouter);
 
+router.use(classifiedsRouter);
 export default router;

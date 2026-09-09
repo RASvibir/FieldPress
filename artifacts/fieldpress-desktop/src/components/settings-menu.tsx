@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "next-themes";
 import {
-  BookOpen,
+  BookOpen, Tag,
   LogIn,
   LogOut,
   Menu,
@@ -157,6 +157,17 @@ export function SettingsMenu() {
         <section className="py-4 border-b border-zinc-800/80 space-y-2">
           <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase font-bold">FIELD CHANNELS & DESK</h3>
           <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => go("/classifieds")}
+              className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-muted text-foreground"
+            >
+              <div className="flex items-center space-x-2.5">
+                <Tag className="h-4 w-4 text-amber-500" />
+                <span>The Classifieds & Peer Market</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono">Gigs & Gear ↗</span>
+            </button>
             <button
               type="button"
               onClick={() => go("/pass")}
