@@ -62,7 +62,7 @@ function App() {
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <div className="crt-scanlines min-h-screen">
-              <header className="pointer-events-none fixed inset-x-0 top-0 z-[10001] flex items-center justify-between px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+              <header className="pointer-events-none fixed inset-x-0 top-0 z-[10001] flex items-center justify-between px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 bg-background/85 backdrop-blur-md border-b border-border/40 shadow-sm">
                 <div className="pointer-events-auto">
                   <FieldPressLogo />
                 </div>

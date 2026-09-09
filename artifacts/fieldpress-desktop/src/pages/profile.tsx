@@ -128,7 +128,7 @@ export const ReporterProfilePage: React.FC<{
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 font-mono text-zinc-200">
+    <div className="max-w-5xl mx-auto px-4 pt-20 sm:pt-24 pb-16 font-mono text-zinc-200">
       {/* 1. Panoramic Cover Photo Header */}
       <div className="relative rounded-t-xl overflow-hidden border-x border-t border-zinc-800 h-52 sm:h-64 bg-zinc-900 group">
         <img
