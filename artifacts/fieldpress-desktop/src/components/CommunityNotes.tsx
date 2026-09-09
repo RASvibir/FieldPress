@@ -104,25 +104,25 @@ export const CommunityNotes: React.FC<{
         <div className={`p-4 rounded-lg border ${typeStyles[anchoredNote.noteType].border}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] uppercase font-bold text-zinc-400">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground">
                 📌 Anchored Community Note
               </span>
               <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${typeStyles[anchoredNote.noteType].badge}`}>
                 {typeStyles[anchoredNote.noteType].label}
               </span>
             </div>
-            <span className="text-[10px] text-zinc-500">by @{anchoredNote.authorHandle}</span>
+            <span className="text-[10px] text-muted-foreground/80">by @{anchoredNote.authorHandle}</span>
           </div>
 
-          <p className="text-zinc-200 text-xs leading-relaxed mb-2">{anchoredNote.content}</p>
+          <p className="text-foreground dark:text-foreground dark:text-zinc-200 text-xs leading-relaxed mb-2">{anchoredNote.content}</p>
 
           {anchoredNote.citationSource && (
-            <div className="text-[10px] text-zinc-400 bg-black/40 p-2 rounded border border-zinc-800/80 mb-2">
-              <strong className="text-zinc-300">Public Record Citation:</strong> {anchoredNote.citationSource}
+            <div className="text-[10px] text-muted-foreground bg-muted/40 dark:bg-background dark:bg-muted/40 dark:bg-background dark:bg-black/50 p-2 rounded border border-border dark:border-border dark:border-zinc-800/80 mb-2">
+              <strong className="text-foreground/90 dark:text-foreground/90 dark:text-zinc-300">Public Record Citation:</strong> {anchoredNote.citationSource}
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-[10px] text-zinc-400">
+          <div className="flex items-center justify-between pt-2 border-t border-border dark:border-border dark:border-zinc-800/80 text-[10px] text-muted-foreground">
             <span>Peer Consensus: {anchoredNote.helpfulVotes} rated helpful</span>
             <div className="flex items-center space-x-2">
               <button
@@ -146,8 +146,8 @@ export const CommunityNotes: React.FC<{
       )}
 
       {/* Note Action Trigger */}
-      <div className="flex items-center justify-between p-3 rounded bg-zinc-900/40 border border-zinc-800">
-        <span className="text-zinc-400 text-xs">
+      <div className="flex items-center justify-between p-3 rounded bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60 border border-border dark:border-border dark:border-zinc-800">
+        <span className="text-muted-foreground text-xs">
           Have official agency records, contrary scanner logs, or local context?
         </span>
         <button
@@ -161,8 +161,8 @@ export const CommunityNotes: React.FC<{
 
       {/* Verification Note Entry Drawer */}
       {isOpen && (
-        <form onSubmit={handleAddNote} className="p-4 rounded-lg bg-zinc-950 border border-zinc-700 space-y-3">
-          <div className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+        <form onSubmit={handleAddNote} className="p-4 rounded-lg bg-card dark:bg-card dark:bg-zinc-950 border border-border dark:border-border dark:border-zinc-700 space-y-3">
+          <div className="text-xs font-bold text-foreground dark:text-foreground dark:text-zinc-200 uppercase tracking-wider">
             Draft Community Verification Note
           </div>
 
@@ -173,7 +173,7 @@ export const CommunityNotes: React.FC<{
                 type="button"
                 onClick={() => setNoteType(t)}
                 className={`flex-1 py-1 text-[11px] rounded border font-semibold ${
-                  noteType === t ? typeStyles[t].badge : 'border-zinc-800 text-zinc-400'
+                  noteType === t ? typeStyles[t].badge : 'border-border dark:border-border dark:border-zinc-800 text-muted-foreground'
                 }`}
               >
                 {t.toUpperCase()}
@@ -186,7 +186,7 @@ export const CommunityNotes: React.FC<{
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="Explain the verified correction, corroboration, or missing context..."
-            className="w-full bg-black border border-zinc-700 rounded p-2.5 text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2.5 text-foreground dark:text-foreground dark:text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
           />
 
           <input
@@ -194,7 +194,7 @@ export const CommunityNotes: React.FC<{
             value={citation}
             onChange={e => setCitation(e.target.value)}
             placeholder="Agency document, budget line item #, or official log citation..."
-            className="w-full bg-black border border-zinc-700 rounded p-2 text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-background dark:bg-background dark:bg-black border border-border dark:border-border dark:border-zinc-700 rounded p-2 text-foreground dark:text-foreground dark:text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
           />
 
           <div className="flex justify-end space-x-2">
@@ -211,22 +211,22 @@ export const CommunityNotes: React.FC<{
       {/* Candidate Notes List */}
       {regularNotes.length > 0 && (
         <div className="space-y-2 pt-2">
-          <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/80">
             Candidate Notes Under Peer Review ({regularNotes.length})
           </div>
           {regularNotes.map(n => (
-            <div key={n.id} className="p-3 rounded border border-zinc-800/80 bg-zinc-900/30">
+            <div key={n.id} className="p-3 rounded border border-border dark:border-border dark:border-zinc-800/80 bg-muted/60 dark:bg-muted/60 dark:bg-zinc-900/60">
               <div className="flex justify-between items-center mb-1">
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${typeStyles[n.noteType].badge}`}>
                   {typeStyles[n.noteType].label}
                 </span>
-                <span className="text-[10px] text-zinc-500">by @{n.authorHandle} • {n.createdAt}</span>
+                <span className="text-[10px] text-muted-foreground/80">by @{n.authorHandle} • {n.createdAt}</span>
               </div>
-              <p className="text-zinc-300 text-xs my-1.5 leading-snug">{n.content}</p>
+              <p className="text-foreground/90 dark:text-foreground/90 dark:text-zinc-300 text-xs my-1.5 leading-snug">{n.content}</p>
               {n.citationSource && (
-                <p className="text-[10px] text-zinc-400 italic mb-1.5">Source: {n.citationSource}</p>
+                <p className="text-[10px] text-muted-foreground italic mb-1.5">Source: {n.citationSource}</p>
               )}
-              <div className="flex items-center space-x-3 text-[10px] text-zinc-500">
+              <div className="flex items-center space-x-3 text-[10px] text-muted-foreground/80">
                 <button type="button" onClick={() => vote(n.id, true)} className="hover:text-emerald-400">
                   👍 Helpful ({n.helpfulVotes})
                 </button>
