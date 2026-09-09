@@ -67,7 +67,7 @@ export const PressieEditorModal: React.FC<{
               <label className="text-[10px] uppercase font-bold text-muted-foreground">Dispatch Body & Notes</label>
               <button
                 type="button"
-                onClick={() => setContent(prev => prev + "\n\n[UPDATE " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + "]: ")}
+                onClick={() => setContent((prev: string) => prev + "\n\n[UPDATE " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + "]: ")}
                 className="text-[11px] text-primary hover:underline font-bold"
               >
                 + Insert Timestamp Update
