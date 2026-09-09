@@ -18,7 +18,7 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
   const timerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Watermarked Camera Capture
+  // Light, Transparent Favicon Watermarking
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -32,28 +32,51 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Draw original image (strips native EXIF)
+      // Draw original image
       ctx.drawImage(img, 0, 0);
 
-      // Render Tactical High-Contrast Watermark Bar
-      const bannerHeight = Math.max(36, Math.floor(img.height * 0.05));
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-      ctx.fillRect(0, img.height - bannerHeight, img.width, bannerHeight);
+      // Light transparent overlay badge in bottom-right corner
+      const badgeWidth = Math.max(260, Math.floor(img.width * 0.35));
+      const badgeHeight = Math.max(48, Math.floor(img.height * 0.07));
+      const x = img.width - badgeWidth - 20;
+      const y = img.height - badgeHeight - 20;
 
-      // Watermark Text
-      const fontSize = Math.max(14, Math.floor(bannerHeight * 0.45));
-      ctx.font = `bold ${fontSize}px monospace`;
-      ctx.fillStyle = '#10b981';
-      const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-      const watermark = `FIELDPROOF // ${corridor.toUpperCase()} // ${timestamp} UTC`;
-      ctx.fillText(watermark, 20, img.height - bannerHeight / 2 + fontSize / 3);
+      // Subtle translucent backdrop (light gradient)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, badgeWidth, badgeHeight, 8);
+      ctx.fill();
+      ctx.stroke();
 
-      const watermarked = canvas.toDataURL('image/jpeg', 0.88);
-      onPhotoCaptured(watermarked);
+      // Draw favicon logo
+      const icon = new Image();
+      icon.src = '/favicon.svg';
+      icon.onload = () => {
+        const iconSize = Math.floor(badgeHeight * 0.65);
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(icon, x + 12, y + (badgeHeight - iconSize) / 2, iconSize, iconSize);
+
+        // Watermark text
+        const fontSize = Math.max(12, Math.floor(badgeHeight * 0.32));
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(corridor.toUpperCase(), x + iconSize + 22, y + badgeHeight * 0.45);
+
+        ctx.font = `${Math.max(10, fontSize - 2)}px monospace`;
+        ctx.fillStyle = '#10b981';
+        const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        ctx.fillText(`FIELDPROOF // ${timestamp} UTC`, x + iconSize + 22, y + badgeHeight * 0.78);
+
+        onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      icon.onerror = () => {
+        onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.9));
+      };
     };
   };
 
-  // 2. Quick Voice Memo Recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -68,21 +91,17 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
       mr.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
-        reader.onloadend = () => {
-          onAudioRecorded(reader.result as string);
-        };
+        reader.onloadend = () => onAudioRecorded(reader.result as string);
         reader.readAsDataURL(audioBlob);
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((t) => t.stop());
       };
 
       mr.start(250);
       setIsRecording(true);
       setRecordingSeconds(0);
-      timerRef.current = setInterval(() => {
-        setRecordingSeconds((s) => s + 1);
-      }, 1000);
-    } catch (err) {
-      alert('Microphone access is required for field voice notes.');
+      timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch {
+      alert('Microphone access required for field audio memos.');
     }
   };
 
@@ -104,8 +123,6 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
         className="hidden"
         onChange={handleFileSelected}
       />
-
-      {/* Quick Camera Snap */}
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
@@ -115,7 +132,6 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
         <span>Quick Scene Snap</span>
       </button>
 
-      {/* Quick Voice Memo */}
       {!isRecording ? (
         <button
           type="button"
@@ -137,7 +153,7 @@ export const FieldQuickCapture: React.FC<FieldQuickCaptureProps> = ({
       )}
 
       <span className="text-[10px] text-zinc-500 hidden sm:inline ml-auto">
-        Auto-stamps: {corridor}
+        Watermark: {corridor}
       </span>
     </div>
   );
