@@ -34,9 +34,9 @@ export interface FieldChannelPost {
   mediaUrl?: string;
   timestamp: string;
   reactions: {
-    vibe: number;
-    cheers: number;
-    fire: number;
+    verified: number;
+    signal: number;
+    flash: number;
   };
 }
 
@@ -85,7 +85,7 @@ export const ReporterProfilePage: React.FC<{
       content: 'Tuning SDR receiver between scanning assignments. Vermilion freight frequency quiet for the afternoon. #offduty #soundtrack',
       category: 'offduty',
       timestamp: '42 mins ago',
-      reactions: { vibe: 14, cheers: 8, fire: 5 },
+      reactions: { verified: 14, signal: 8, flash: 5 },
     },
     {
       id: 'cp-2',
@@ -95,7 +95,7 @@ export const ReporterProfilePage: React.FC<{
       category: 'gear',
       mediaUrl: 'https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?auto=format&fit=crop&w=800&q=80',
       timestamp: 'Yesterday at 5:15 PM',
-      reactions: { vibe: 22, cheers: 19, fire: 11 },
+      reactions: { verified: 22, signal: 19, flash: 11 },
     },
   ]);
 
@@ -113,14 +113,14 @@ export const ReporterProfilePage: React.FC<{
       content: newPostText,
       category: postCategory,
       timestamp: 'Just now',
-      reactions: { vibe: 1, cheers: 0, fire: 0 },
+      reactions: { verified: 1, signal: 0, flash: 0 },
     };
 
     setChannelPosts([post, ...channelPosts]);
     setNewPostText('');
   };
 
-  const handleReaction = (postId: string, type: 'vibe' | 'cheers' | 'fire') => {
+  const handleReaction = (postId: string, type: 'verified' | 'signal' | 'flash') => {
     setChannelPosts(prev =>
       prev.map(p =>
         p.id === postId
@@ -371,27 +371,27 @@ export const ReporterProfilePage: React.FC<{
                 <div className="flex items-center space-x-2 pt-2 border-t border-zinc-900 text-xs">
                   <button
                     type="button"
-                    onClick={() => handleReaction(post.id, 'vibe')}
+                    onClick={() => handleReaction(post.id, 'verified')}
                     className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 flex items-center space-x-1 text-[11px]"
                   >
-                    <span>🤙 Vibe</span>
-                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.vibe}</span>
+                    <span>🛡️ Verified</span>
+                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.verified}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleReaction(post.id, 'cheers')}
+                    onClick={() => handleReaction(post.id, 'signal')}
                     className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 flex items-center space-x-1 text-[11px]"
                   >
-                    <span>☕ Cheers</span>
-                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.cheers}</span>
+                    <span>📡 Signal</span>
+                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.signal}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleReaction(post.id, 'fire')}
+                    onClick={() => handleReaction(post.id, 'flash')}
                     className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 flex items-center space-x-1 text-[11px]"
                   >
-                    <span>🔥 Fire</span>
-                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.fire}</span>
+                    <span>⚡ Flash</span>
+                    <span className="font-bold text-[10px] text-zinc-400">{post.reactions.flash}</span>
                   </button>
                 </div>
               </div>
