@@ -1,3 +1,4 @@
+import { PressieBuilderStudio } from '../components/PressieBuilderStudio';
 
 function getChicagoDateString(): string {
   try {
@@ -32,9 +33,9 @@ export function DashboardPage() {
   const [rackFilter, setRackFilter] = useState<string>('all');
 
   // Composer State
-  const [composerTitle, setComposerTitle] = useState('');
-  const [composerNote, setComposerNote] = useState('');
-  const [composerForkPolicy, setComposerForkPolicy] = useState<ForkPolicy>('open');
+  
+  
+  
 
   // Dynamically resolve real authenticated user handle
   const [activeUserHandle, setActiveUserHandle] = useState<string>(() => {
@@ -61,9 +62,9 @@ export function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isPosting, setIsPosting] = useState(false);
+  
+  
+  
 
   // Stories query from API
   const { data: storiesData, refetch } = useListStories({ status: 'active' });
@@ -79,44 +80,6 @@ export function DashboardPage() {
     } catch {}
   };
   const stories = (storiesData as any)?.stories || storiesData || [];
-
-  const handlePostToNewsstand = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!composerTitle.trim()) return;
-    setIsPosting(true);
-    try {
-      await fetch('/api/stories', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: composerTitle.trim(),
-          lane: 'feed',
-          note: composerNote.trim(),
-          photo: photoPreview || undefined,
-          forkPolicy: composerForkPolicy,
-          isAnonymous,
-        }),
-      });
-      setComposerTitle('');
-      setComposerNote('');
-      setPhotoPreview(null);
-      refetch();
-    } catch {
-      alert('Could not publish dispatch to Newsstand.');
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setPhotoPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground font-mono pb-24 md:pb-12 pt-20 sm:pt-24">
@@ -166,80 +129,10 @@ export function DashboardPage() {
         {/* ───────────────────────────────────────────────────────────── */}
         {tab === 'feed' && (
           <div className="space-y-6">
-            {/* The Newsstand Dispatch Composer */}
-            <form
-              onSubmit={handlePostToNewsstand}
-              className="p-6 rounded-2xl border-2 border-border bg-[#fdfcf9] dark:bg-zinc-950 dark:border-zinc-800 shadow-sm space-y-3"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-border pb-2 text-[11px] text-muted-foreground">
-                <span className="font-bold text-foreground uppercase flex items-center space-x-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>File Live Ground Dispatch</span>
-                </span>
-                <span className="text-[10px] text-zinc-500">Posts directly to verified Newsstand</span>
-              </div>
-
-              <input
-                type="text"
-                required
-                value={composerTitle}
-                onChange={(e) => setComposerTitle(e.target.value)}
-                placeholder="Headline or breaking news hook (e.g. Danville switch delay confirmed)..."
-                className="w-full bg-background border-2 border-border/80 rounded-xl p-3 text-foreground text-sm font-bold placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary font-serif"
-              />
-
-              <textarea
-                rows={2}
-                value={composerNote}
-                onChange={(e) => setComposerNote(e.target.value)}
-                placeholder="Field notes, scanner audio transcripts, or ground observations..."
-                className="w-full bg-background border border-border rounded-xl p-3 text-foreground text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary font-mono"
-              />
-
-              {photoPreview && (
-                <div className="relative inline-block border border-zinc-700 rounded-lg overflow-hidden max-h-32">
-                  <img src={photoPreview} alt="" className="h-32 w-auto object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setPhotoPreview(null)}
-                    className="absolute top-1 right-1 bg-black/80 text-white rounded-full p-1 text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              <div className="pt-2 border-t border-border pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-2">
-                  <label className="cursor-pointer px-3 py-1.5 rounded-lg border border-border bg-muted/60 text-muted-foreground hover:text-foreground flex items-center space-x-1.5 text-xs">
-                    <Camera className="h-3.5 w-3.5" />
-                    <span>Attach Photo</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleCameraCapture} />
-                  </label>
-                  <AnonymousFieldyToggle
-                    isAnonymous={isAnonymous}
-                    onChange={setIsAnonymous}
-                    currentUserHandle={activeUserHandle}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isPosting || !composerTitle.trim()}
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center space-x-1.5"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  <span>{isPosting ? 'Publishing...' : 'POST PRESSIE TO NEWSSTAND'}</span>
-                </button>
-              </div>
-
-              <div className="pt-2">
-                <ForkPolicySelector
-                  selectedPolicy={composerForkPolicy}
-                  onChange={setComposerForkPolicy}
-                />
-              </div>
-            </form>
+            <PressieBuilderStudio
+              currentUserHandle={activeUserHandle}
+              onStoryPublished={() => refetch()}
+            />
 
             {/* Desktop 2-Column Grid: Newsstand Broadsheet Stream + Kiosk Rack */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -284,10 +177,7 @@ export function DashboardPage() {
         {tab === 'wire' && (
           <FieldyCommunications
             currentUserHandle={activeUserHandle}
-            onPromoteTipToDesk={(tip, handle) => {
-              setComposerTitle(`[Dispatched via @${handle}]: ${tip}`);
-              setTab('feed');
-            }}
+            onPromoteTipToDesk={() => setTab('feed')}
           />
         )}
 
@@ -297,10 +187,7 @@ export function DashboardPage() {
         {tab === 'bounties' && (
           <BeatBounties
             currentUserHandle={activeUserHandle}
-            onClaimBounty={(bounty) => {
-              setComposerTitle(`[Claiming Bounty: ${bounty.title} - $${bounty.rewardDollars}]: `);
-              setTab('feed');
-            }}
+            onClaimBounty={() => setTab('feed')}
           />
         )}
       </div>
