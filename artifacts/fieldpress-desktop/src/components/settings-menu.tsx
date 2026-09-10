@@ -39,6 +39,9 @@ import {
 } from "@/lib/desk-settings";
 import { useSkin, SKINS, SkinColor } from "@/context/SkinContext";
 
+const SUPPORT_EMAIL = "support@fieldpress.studio";
+const SUPER_ADMIN_EMAIL = "vibir@fieldpress.studio";
+
 const THEMES = [
   { id: "dark", label: "Dark", hint: "Neon CRT desk", Icon: Moon },
   { id: "light", label: "Ink & Paper", hint: "Newsprint edition", Icon: Sun },
