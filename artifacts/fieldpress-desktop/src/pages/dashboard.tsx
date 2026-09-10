@@ -13,7 +13,7 @@ function getChicagoDateString(): string {
 }
 
 import { scanPressieDraft, autoRedactSensitiveData } from '../lib/auditScanner';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Camera, Radio, Target, Newspaper, Sparkles, Send } from 'lucide-react';
 import { useListStories } from '@workspace/api-client-react';
@@ -35,6 +35,32 @@ export function DashboardPage() {
   const [composerTitle, setComposerTitle] = useState('');
   const [composerNote, setComposerNote] = useState('');
   const [composerForkPolicy, setComposerForkPolicy] = useState<ForkPolicy>('open');
+
+  // Dynamically resolve real authenticated user handle
+  const [activeUserHandle, setActiveUserHandle] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('fp_user_handle') || localStorage.getItem('fp_handle');
+      if (saved) return saved;
+    }
+    return 'ras.ip';
+  });
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(res => res.json())
+      .then(user => {
+        if (user && user.displayName) {
+          setActiveUserHandle(user.displayName);
+          localStorage.setItem('fp_user_handle', user.displayName);
+        } else if (user && user.email) {
+          const handle = user.email.split('@')[0];
+          setActiveUserHandle(handle);
+          localStorage.setItem('fp_user_handle', handle);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
@@ -202,7 +228,7 @@ export function DashboardPage() {
                   <AnonymousFieldyToggle
                     isAnonymous={isAnonymous}
                     onChange={setIsAnonymous}
-                    currentUserHandle="Fieldy"
+                    currentUserHandle={activeUserHandle}
                   />
                 </div>
 
@@ -266,7 +292,7 @@ export function DashboardPage() {
         {/* ───────────────────────────────────────────────────────────── */}
         {tab === 'wire' && (
           <FieldyCommunications
-            currentUserHandle="Fieldy"
+            currentUserHandle={activeUserHandle}
             onPromoteTipToDesk={(tip, handle) => {
               setComposerTitle(`[Dispatched via @${handle}]: ${tip}`);
               setTab('feed');
@@ -279,7 +305,7 @@ export function DashboardPage() {
         {/* ───────────────────────────────────────────────────────────── */}
         {tab === 'bounties' && (
           <BeatBounties
-            currentUserHandle="Fieldy"
+            currentUserHandle={activeUserHandle}
             onClaimBounty={(bounty) => {
               setComposerTitle(`[Claiming Bounty: ${bounty.title} - $${bounty.rewardDollars}]: `);
               setTab('feed');

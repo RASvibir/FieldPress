@@ -18,7 +18,7 @@ export const AnonymousFieldyToggle: React.FC<AnonymousModeProps> = ({
           <span className="text-base">{isAnonymous ? '🎭' : '🟢'}</span>
           <div>
             <div className="font-bold text-foreground">
-              {isAnonymous ? 'Anonymous Fieldy Shield Active' : `Filing as @${currentUserHandle}`}
+              {isAnonymous ? 'Anonymous Fieldy Shield Active' : `Fielding as @${currentUserHandle}`}
             </div>
             <div className="text-[10px] text-zinc-500 leading-tight">
               {isAnonymous
