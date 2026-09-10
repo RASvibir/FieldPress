@@ -1,3 +1,10 @@
+
+export function formatDispatchCode(id: string): string {
+  if (!id) return '000001';
+  const clean = id.replace(/^(?:story_|bty_|cls_)/, '').toUpperCase();
+  return clean.length <= 10 ? clean : clean.slice(0, 8);
+}
+
 import { SocialShareModal } from './SocialShareModal';
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
@@ -90,6 +97,8 @@ export const NewsstandCard: React.FC<{
   onStampInk: (storyId: string, ink: string) => void;
 }> = ({ story, onFork, onStampInk }) => {
   const [, navigate] = useLocation();
+  const [currentCounts, setCurrentCounts] = useState<Record<string, number>>(story.inkCounts || {});
+  const [myPulse, setMyPulse] = useState<string | null | undefined>(story.myInk || story.pulse);
   const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
 
   const author = story.author || 'Field Reporter';
@@ -115,7 +124,10 @@ export const NewsstandCard: React.FC<{
         <div className="flex items-center space-x-2">
           <span className="text-emerald-600 dark:text-emerald-400 font-bold">📍 {location}</span>
           <span>•</span>
-          <span>DISPATCH #{story.id.slice(0, 8)}</span>
+          <span className="inline-flex items-center space-x-1 font-mono font-bold tracking-wider text-emerald-600 dark:text-emerald-400">
+          <img src="/favicon.svg" alt="" className="h-3.5 w-3.5 inline-block -mt-0.5 filter drop-shadow-[0_0_2px_currentColor]" />
+          <span>#{formatDispatchCode(story.id)}</span>
+        </span>
         </div>
         <div className="flex items-center space-x-2">
           <span>{formattedDate}</span>
@@ -153,10 +165,10 @@ export const NewsstandCard: React.FC<{
         {/* Ink Stamps & Reaction Totals */}
         <div className="flex items-center space-x-2">
           <div className="px-2.5 py-1 rounded-lg border border-emerald-600/40 bg-card text-emerald-700 dark:text-emerald-400 text-xs font-bold">
-            ⚡ {story.inkCounts?.['signal'] || 42} SIGNALS
+            ⚡ {story.inkCounts?.['signal'] || 0} SIGNALS
           </div>
           <div className="px-2.5 py-1 rounded-lg border border-amber-600/40 bg-card text-amber-700 dark:text-amber-400 text-xs font-bold">
-            🔥 {story.inkCounts?.['heat'] || 12} HEAT
+            🔥 {story.inkCounts?.['heat'] || 0} HEAT
           </div>
         </div>
       </div>
@@ -196,9 +208,13 @@ export const NewsstandCard: React.FC<{
         <div className="flex items-center space-x-2">
           <span className="text-[10px] uppercase font-bold text-muted-foreground">STAMP INK:</span>
           <InkPad
-            value={story.myInk || story.pulse}
-            counts={story.inkCounts}
-            onPick={(ink) => void onStampInk(story.id, ink)}
+            value={myPulse}
+            counts={currentCounts}
+            onPick={(ink) => {
+              setMyPulse(ink);
+              setCurrentCounts(prev => ({ ...prev, [ink]: (prev[ink] || 0) + 1 }));
+              onStampInk(story.id, ink);
+            }}
           />
         </div>
 
@@ -222,13 +238,7 @@ export const NewsstandCard: React.FC<{
         </div>
       </div>
 
-      {/* Physical Red Rubber Stamp on Newsprint Paper */}
-      <div className="absolute bottom-5 right-6 pointer-events-none select-none flex items-center space-x-2 px-3 py-1.5 rounded-lg border-2 border-dashed border-[#852c1e] bg-[#852c1e]/5 transform -rotate-3">
-        <img src="/favicon.svg" alt="" className="h-4 w-4 opacity-80 filter sepia" />
-        <div className="text-[9px] font-mono tracking-widest text-[#852c1e] font-black uppercase">
-          VERIFIED FIELD DISPATCH
-        </div>
-      </div>
+      
       <SocialShareModal isOpen={isSocialShareOpen} onClose={() => setIsSocialShareOpen(false)} title={story.title} summary={leadText || story.title} url={`/story/${story.id}`} type="pressie" />
     </article>
   );

@@ -27,6 +27,17 @@ export function DashboardPage() {
 
   // Stories query from API
   const { data: storiesData, refetch } = useListStories({ status: 'active' });
+
+  const handleStampInk = async (storyId: string, ink: string) => {
+    try {
+      await fetch(`/api/stories/${storyId}/ink`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ink }),
+      });
+      refetch();
+    } catch {}
+  };
   const stories = (storiesData as any)?.stories || storiesData || [];
 
   const handlePostToNewsstand = async (e: React.FormEvent) => {
@@ -218,7 +229,7 @@ export function DashboardPage() {
                       story={s}
                       editionFilter={rackFilter}
                       onFork={() => navigate(`/story/${s.id}`)}
-                      onStampInk={() => {}}
+                      onStampInk={handleStampInk}
                     />
                   ))
                 )}
