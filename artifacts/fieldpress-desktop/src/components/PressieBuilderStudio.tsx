@@ -25,6 +25,55 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
 }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
+  // Pressy'O: Celtic News Action Liaison State
+  const [showPressyAssistant, setShowPressyAssistant] = useState(false);
+  const [pressyCategory, setPressyCategory] = useState<'headlines' | 'ledes' | 'angles'>('headlines');
+  const [pressySuggestions, setPressySuggestions] = useState<{ label: string; text: string }[]>([
+    { label: 'High Voltage', text: 'Sparks on the Spur: Night Shift Halts Unscheduled Switch at Junction' },
+    { label: 'Grassroots Grit', text: 'Beyond the Wire: What the Ground Inspectors Won\'t Put in the Formal Ledger' },
+    { label: 'Breaking Alert', text: 'Rail Crossing Hold-Up: Vermilion Switch Crew Reports Unannounced Stoppage' },
+  ]);
+
+  const askPressyO = (category: 'headlines' | 'ledes' | 'angles') => {
+    setPressyCategory(category);
+    const base = (title + ' ' + note).trim();
+
+    if (category === 'headlines') {
+      if (!base) {
+        setPressySuggestions([
+          { label: 'High Voltage', text: 'Sparks on the Spur: Night Shift Halts Unscheduled Switch at Junction' },
+          { label: 'Grassroots Grit', text: 'Beyond the Wire: What the Ground Inspectors Won\'t Put in the Formal Ledger' },
+          { label: 'Breaking Alert', text: 'Rail Crossing Hold-Up: Vermilion Switch Crew Reports Unannounced Stoppage' },
+        ]);
+      } else {
+        setPressySuggestions([
+          { label: 'The Hard Scoop', text: `Aye, Break It Clean: "${title.toUpperCase() || 'UNTITLED'}" — Verified Along the Corridor` },
+          { label: 'The Human Angle', text: `Voices From the Ground: How Local Field Observers Are Tracking ${title || 'Today\'s Events'}` },
+          { label: 'Investigative Focus', text: `Under the Strobe: What the Physical Evidence Tells Us About ${title || 'This Sector'}` },
+        ]);
+      }
+    } else if (category === 'ledes') {
+      const sectorPrefix = location ? location.split('•')[0].trim().toUpperCase() : 'MIDWEST DESK';
+      setPressySuggestions([
+        {
+          label: 'Classic Wire Lede',
+          text: `${sectorPrefix} — Ground monitors confirmed an evolving situation early this shift, as local operators reported irregular activities near the rights-of-way that contradict official dispatch schedules.`,
+        },
+        {
+          label: 'Direct Action Lede',
+          text: `${sectorPrefix} — When the radio chatter abruptly cut off this morning, fieldies on the ground had already documented the switch hold-up with timestamped telemetry.`,
+        },
+      ]);
+    } else {
+      setPressySuggestions([
+        { label: 'Follow the Wire', text: 'Who authorized the delay on the municipal frequency before the shift change?' },
+        { label: 'Check the Hardware', text: 'Do the serial tags on the switch relay match the regional inspection certificates?' },
+        { label: 'Corroborate the Crew', text: 'Can a second verified scout capture photographic evidence of the signal lights?' },
+      ]);
+    }
+  };
+
+
   // Core Content State
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
@@ -38,7 +87,7 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
   const [isPublishing, setIsPublishing] = useState(false);
 
   // Pressy'o AI Assistant State
-  const [showPressyAssistant, setShowPressyAssistant] = useState(false);
+  
   const [pressyIdeas, setPressyIdeas] = useState<string[]>([]);
 
   // AI Image Generator State (13/day Chicago midnight reset)
@@ -86,23 +135,7 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
   };
 
   // 2. Pressy'o AI Idea & Lede Generator
-  const generatePressyIdeas = () => {
-    const base = note.trim() || title.trim();
-    if (!base) {
-      setPressyIdeas([
-        'Rail Crossing Hold-Up: Vermilion Switch Crew Reports Unannounced Stoppage',
-        'Curbside Grid Power: Inside the Push to Electrify Danville Commercial Spurs',
-        'Voices From the Ground: How Local Independent Hubs Are Replacing Closed Papers',
-      ]);
-      return;
-    }
-    setPressyIdeas([
-      `BREAKING: ${title ? title.toUpperCase() : 'ON-SCENE REPORT'} — Details Emerge Along Municipal Line`,
-      `Investigative Focus: What the Ground Evidence Tells Us About ${title || 'This Sector'}`,
-      `Special Dispatch: How Field Workers and Observers Are Tracking Today's Developments`,
-    ]);
-  };
-
+  
   // 3. AI Scene Generator (1-3 gens, 13/day Chicago reset)
   const handleGenerateAiImages = async () => {
     const prompt = aiGenPrompt.trim() || title.trim();
@@ -239,13 +272,13 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  generatePressyIdeas();
+                  askPressyO('headlines');
                   setShowPressyAssistant(!showPressyAssistant);
                 }}
                 className="text-[11px] text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center space-x-1"
               >
                 <Lightbulb className="h-3 w-3 text-amber-500" />
-                <span>Pressy'o AI Ideas & Hooks</span>
+                <span>Pressy'O — News Action Liaison</span>
               </button>
             </div>
 
@@ -259,27 +292,112 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
             />
 
             {/* Pressy'o Ideas Suggestions Dropdown */}
+            
+            {/* Pressy'O: Modern Celtic News Action Liaison Drawer */}
             {showPressyAssistant && (
-              <div className="p-3 mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2">
-                <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">
-                  Pressy'o Suggested Headline Angles:
+              <div className="p-4 mt-2 rounded-2xl border-2 border-amber-500/50 bg-[#fdfcf5] dark:bg-zinc-900/90 shadow-lg space-y-3.5">
+                {/* Greeting & Persona Intro */}
+                <div className="flex items-start justify-between gap-2 border-b border-border pb-3">
+                  <div className="flex items-start space-x-2.5">
+                    <div className="h-9 w-9 rounded-xl bg-amber-500/20 border border-amber-500 flex items-center justify-center text-lg font-black text-amber-600 dark:text-amber-400 shrink-0">
+                      ⚡
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-foreground flex items-center space-x-1.5">
+                        <span className="font-serif">Pressy'O</span>
+                        <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500 text-black font-mono font-black uppercase">
+                          News Action Liaison
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed font-serif italic">
+                        "Aye, scout! The wire’s hummin' and the ink is eager. Whisper me what ye saw on the ground, and we'll forge a dispatch sharp enough to split flint."
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPressyAssistant(false)}
+                    className="p-1 rounded hover:bg-muted text-muted-foreground"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  {pressyIdeas.map((idea, i) => (
+
+                {/* Liaison Action Selectors */}
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => askPressyO('headlines')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
+                      pressyCategory === 'headlines'
+                        ? 'bg-amber-500 text-black border-amber-500 shadow-sm'
+                        : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <span>⚡ Forge Hooks</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => askPressyO('ledes')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
+                      pressyCategory === 'ledes'
+                        ? 'bg-amber-500 text-black border-amber-500 shadow-sm'
+                        : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <span>📜 Stave the Lede</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => askPressyO('angles')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center space-x-1 ${
+                      pressyCategory === 'angles'
+                        ? 'bg-amber-500 text-black border-amber-500 shadow-sm'
+                        : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <span>🔍 Probe the Shadows</span>
+                  </button>
+                </div>
+
+                {/* Liaison Suggestions List */}
+                <div className="space-y-2 pt-1">
+                  {pressySuggestions.map((item, idx) => (
                     <div
-                      key={i}
-                      onClick={() => {
-                        setTitle(idea);
-                        setShowPressyAssistant(false);
-                      }}
-                      className="p-2 rounded-lg bg-card border border-border hover:border-amber-500 cursor-pointer text-xs font-serif text-foreground transition"
+                      key={idx}
+                      className="p-3 rounded-xl border border-border bg-card hover:border-amber-500/70 transition flex items-start justify-between gap-3 group"
                     >
-                      {idea}
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 font-mono">
+                          {item.label}
+                        </span>
+                        <p className="text-xs font-serif leading-relaxed text-foreground">
+                          {item.text}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (pressyCategory === 'headlines') {
+                            setTitle(item.text);
+                          } else if (pressyCategory === 'ledes') {
+                            setNote(item.text + '\n\n' + note);
+                          } else {
+                            setNote(note + '\n\n[INVESTIGATIVE ANGLE]: ' + item.text);
+                          }
+                          setShowPressyAssistant(false);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-700 hover:text-black dark:text-amber-300 dark:hover:text-black font-bold text-[10px] shrink-0 uppercase tracking-wider transition border border-amber-500/30"
+                      >
+                        Apply ✓
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
           </div>
 
           {/* Corridor Dateline Selector */}
