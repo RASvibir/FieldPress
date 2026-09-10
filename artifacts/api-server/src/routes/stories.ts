@@ -1,3 +1,21 @@
+
+function getEditionImagePrompt(basePrompt: string, edition?: string): string {
+  const ed = (edition || 'tactical').toLowerCase();
+  switch (ed) {
+    case 'vintage':
+      return `${basePrompt}, authentic vintage 1920s flashbulb black and white photograph, newspaper halftone print, silver gelatin grain, historical press photo, high contrast newsprint`;
+    case 'comic':
+      return `${basePrompt}, classic comic book panel, silver age comic art, bold black ink outlines, halftone Ben-Day dots, pop art graphic novel illustration, dynamic comic book splash`;
+    case 'pixel':
+      return `${basePrompt}, retro 8-bit pixel art scene, green phosphor CRT terminal graphics, 320x200 EGA DOS computer monitor illustration, raster scanlines`;
+    case 'sleek':
+      return `${basePrompt}, minimalist modern magazine editorial photography, clean architectural lighting, ultra-sharp 35mm Leica composition, elegant Swiss journal aesthetic`;
+    case 'tactical':
+    default:
+      return `${basePrompt}, authentic frontline photojournalism, 35mm field camera reportage, natural ambient wire lighting, breaking news press photo`;
+  }
+}
+
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { storiesTable, storyItemsTable, usersTable } from "@workspace/db";

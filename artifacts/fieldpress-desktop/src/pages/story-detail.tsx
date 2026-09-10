@@ -1,3 +1,4 @@
+import { PressieBuilderStudio } from '../components/PressieBuilderStudio';
 import { PressieEditorModal } from "../components/PressieEditorModal";
 import { PressieArticleRenderer } from '../components/PressieEditions';
 import React, { useState, useEffect } from 'react';
@@ -225,7 +226,21 @@ export const StoryDetailPage: React.FC<StoryDetailPageProps> = (props) => {
         </div>
       )}
 
-      <PressieEditorModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} story={story} onSaved={() => window.location.reload()} />
+      <div className="fixed inset-0 z-[10006] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+        <div className="w-full max-w-4xl my-auto">
+          <PressieBuilderStudio
+            currentUserHandle={authorHandle || 'ras.ip'}
+            initialStory={story}
+            mode="edit"
+            isOpenModal={true}
+            onCloseModal={() => setIsEditOpen(false)}
+            onStoryPublished={() => {
+              setIsEditOpen(false);
+              window.location.reload();
+            }}
+          />
+        </div>
+      </div>
 </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Sparkles, Camera, Plus, Eye, Edit3, Image as ImageIcon, 
-  Send, Wand2, MapPin, Users, Lightbulb, Check, X, ShieldAlert 
+  Send, Wand2, MapPin, Users, Lightbulb, Check, X, ShieldAlert, Settings, ChevronDown 
 } from 'lucide-react';
 import { PressieEdition, PressieArticleRenderer } from './PressieEditions';
 import { AnonymousFieldyToggle } from './AnonymousFieldyToggle';
@@ -16,14 +16,23 @@ const PHOTO_LAYOUTS = ['single', 'split', 'grid'] as const;
 
 export interface PressieBuilderStudioProps {
   currentUserHandle: string;
+  initialStory?: any;
+  mode?: 'create' | 'edit' | 'fork';
+  isOpenModal?: boolean;
+  onCloseModal?: () => void;
   onStoryPublished: () => void;
 }
 
 export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
   currentUserHandle,
+  initialStory,
+  mode = 'create',
+  isOpenModal = false,
+  onCloseModal,
   onStoryPublished,
 }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Pressy'O: Celtic News Action Liaison State
   const [showPressyAssistant, setShowPressyAssistant] = useState(false);
@@ -75,11 +84,15 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
 
 
   // Core Content State
-  const [title, setTitle] = useState('');
-  const [note, setNote] = useState('');
-  const [edition, setEdition] = useState<PressieEdition>('tactical');
+  const [title, setTitle] = useState(initialStory?.title || '');
+  const [note, setNote] = useState(() => {
+    return initialStory?.items?.find((i: any) => i.type === 'text' || !i.type)?.content || '';
+  });
+  const [edition, setEdition] = useState<PressieEdition>(initialStory?.edition || 'tactical');
   const [location, setLocation] = useState('Danville Junction Spur • Vermilion Line');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(() => {
+    return initialStory?.items?.filter((i: any) => i.type === 'photo' || i.content?.startsWith('data:image') || i.content?.startsWith('http'))?.map((i: any) => i.content) || [];
+  });
   const [photoArrangement, setPhotoArrangement] = useState<PhotoArrangement>('single');
   const [forkPolicy, setForkPolicy] = useState<ForkPolicy>('open');
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -153,7 +166,7 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
       const res = await fetch('/api/stories/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, count }),
+        body: JSON.stringify({ prompt, count, edition }),
       });
       const data = await res.json();
       
@@ -189,13 +202,18 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
     if (!title.trim()) return;
     setIsPublishing(true);
 
+    const isEdit = mode === 'edit' && initialStory?.id;
+    const url = isEdit ? `/api/stories/${initialStory.id}` : '/api/stories';
+    const method = isEdit ? 'PATCH' : 'POST';
+
     try {
-      const res = await fetch('/api/stories', {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           lane: 'feed',
+          content: note.trim(),
           note: note.trim(),
           photos,
           photoArrangement,
@@ -204,25 +222,27 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
           forkPolicy,
           isAnonymous,
           seekingCollab,
+          tags: selectedTags,
         }),
       });
 
       if (res.ok) {
-        setTitle('');
-        setNote('');
-        setPhotos([]);
-        setSeekingCollab(false);
+        if (!isEdit) {
+          setTitle('');
+          setNote('');
+          setPhotos([]);
+        }
         onStoryPublished();
+        if (onCloseModal) onCloseModal();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to publish pressie');
+        alert(err.error || 'Failed to save pressie');
       }
     } catch {
-      alert('Network error publishing pressie');
+      alert('Network error saving pressie');
     } finally {
       setIsPublishing(false);
-    }
-  };
+    };
 
   return (
     <form onSubmit={handlePublish} className="p-6 rounded-2xl border-2 border-border bg-[#fdfcf9] dark:bg-zinc-950 shadow-md space-y-5 font-mono text-xs text-foreground">
@@ -231,8 +251,13 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
         <div className="flex items-center space-x-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
           <h3 className="font-bold text-sm uppercase text-foreground font-serif">
-            Pressie Builder Studio
+            {mode === 'edit' ? 'Edit Verified Pressie Studio' : mode === 'fork' ? 'Fork & Corroborate Studio' : 'Pressie Builder Studio'}
           </h3>
+          {isOpenModal && onCloseModal && (
+            <button type="button" onClick={onCloseModal} className="p-1 rounded-lg hover:bg-muted text-muted-foreground ml-auto mr-2">
+              <X className="h-4 w-4" />
+            </button>
+          )}
           <span className="text-[10px] text-muted-foreground hidden sm:inline">• Live Verified Wire</span>
         </div>
 
@@ -400,43 +425,80 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
 
           </div>
 
-          {/* Corridor Dateline Selector */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center space-x-1">
-                <MapPin className="h-3 w-3 text-emerald-600" />
-                <span>REGIONAL CORRIDOR DATELINE</span>
-              </label>
-              <span className="text-[10px] text-muted-foreground">1-Tap Snapping</span>
+          {/* Top Meta Bar: Fork Appropriations, Edit Status & Settings Dropdown */}
+          <div className="flex items-center justify-between gap-2 pb-2 mb-3 border-b border-border">
+            <div className="flex items-center space-x-2">
+              {mode === "fork" && (
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-mono font-bold">
+                  <span>FORK APPROPRIATION:</span>
+                  <span className="text-foreground">@{initialStory?.author_handle || initialStory?.author || "original"} / {initialStory?.title?.slice(0, 24) || "Dispatch"}</span>
+                  <span className="text-[9px] bg-amber-500 text-black px-1.5 py-0.5 rounded uppercase font-black tracking-wider">Lineage Attached</span>
+                </div>
+              )}
+              {mode === "edit" && (
+                <div className="px-2.5 py-1 rounded-lg bg-muted border border-border text-xs font-mono text-muted-foreground flex items-center space-x-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  <span>Editing Dispatch #{initialStory?.id || ""}</span>
+                </div>
+              )}
+              {mode === "create" && (
+                <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">New Dispatch</span>
+              )}
             </div>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {[
-                'Danville Junction Spur • Vermilion Line',
-                'Vermilion Rail Corridor',
-                'Champaign-Urbana Transit Line',
-                'Chicago Loop Core',
-                'Evansville Crossing Line',
-              ].map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setLocation(p)}
-                  className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold transition ${
-                    location === p
-                      ? 'bg-emerald-950/20 border-emerald-500 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+
+            {/* Settings Dropdown: Geo Pinpointing, Dateline & Post Config */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowSettings(prev => !prev)}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-muted/40 hover:bg-muted text-xs font-mono text-muted-foreground hover:text-foreground transition"
+              >
+                <Settings className="h-3.5 w-3.5 text-amber-500" />
+                <span>Settings</span>
+                <span className="text-[10px] text-emerald-500 font-bold">• {location ? location.split("•")[0].trim() : "Geo Off"}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </button>
+
+              {showSettings && (
+                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-border bg-card p-4 shadow-2xl z-50 space-y-3 font-mono text-xs">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                    <span className="font-bold uppercase text-[10px] text-muted-foreground">Regional Dateline & Geo</span>
+                    <button type="button" onClick={() => setLocation("")} className="text-[10px] text-amber-500 hover:underline">Clear Geo</button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-muted-foreground block">Quick Corridor Snap:</label>
+                    <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                      {[
+                        "Danville Junction Spur • Vermilion Line",
+                        "Vermilion Rail Corridor",
+                        "Champaign-Urbana Transit Line",
+                        "Chicago Loop Core",
+                        "Evansville Crossing Line",
+                      ].map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setLocation(p)}
+                          className={"text-[10px] px-2 py-1 rounded border text-left transition " + (location === p ? "bg-emerald-950/20 border-emerald-500 text-emerald-400 font-bold" : "bg-muted/40 border-border text-muted-foreground hover:text-foreground")}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1 pt-2 border-t border-border">
+                    <label className="text-[10px] text-muted-foreground block">Custom Dateline / Landmark:</label>
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Enter station, mile marker, or coords..."
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full bg-background border border-border rounded-xl p-2.5 text-xs text-foreground focus:outline-none"
-            />
           </div>
 
           {/* Field Copy & Notes */}
@@ -659,7 +721,7 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
           className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center space-x-2 transition"
         >
           <Send className="h-3.5 w-3.5" />
-          <span>{isPublishing ? 'Publishing...' : 'POST PRESSIE TO NEWSSTAND'}</span>
+          <span>{isPublishing ? 'Saving...' : mode === 'edit' ? 'SAVE & UPDATE PRESSIE' : mode === 'fork' ? 'FORK & DISPATCH' : 'POST PRESSIE TO NEWSSTAND'}</span>
         </button>
       </div>
 
