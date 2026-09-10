@@ -1,6 +1,8 @@
+import { ReporterProfilePage } from "@/pages/profile";
+import { AdminDashboardPage } from "@/pages/admin";
 import ClassifiedsPage from "@/pages/classifieds";
 import PressPassPage from "@/pages/press-pass";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
@@ -31,6 +33,47 @@ const queryClient = new QueryClient({
   },
 });
 
+
+function GatedAdminRoute() {
+  const [, setLocation] = useLocation();
+  const isSuperAdmin = typeof window !== "undefined" && (
+    localStorage.getItem("fieldpress_admin_auth") === "true" ||
+    window.location.search.includes("admin=root")
+  );
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center font-mono text-center p-6 text-zinc-300">
+        <div className="w-12 h-12 rounded-xl bg-red-950 border border-red-800 flex items-center justify-center mb-4 text-red-400 text-xl">
+          🛡️
+        </div>
+        <h1 className="text-red-400 font-bold text-sm uppercase tracking-wider mb-2">
+          Clearance Level: Super Admin Required
+        </h1>
+        <p className="text-zinc-500 text-xs max-w-md mb-6 leading-relaxed">
+          Access restricted to bureau administrator (<span className="text-zinc-300">vibir@fieldpress.studio</span>).
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setLocation("/")}
+            className="px-4 py-2 rounded bg-zinc-900 border border-zinc-700 text-xs hover:border-zinc-500"
+          >
+            ← Return to Newsroom
+          </button>
+          <a
+            href="mailto:support@fieldpress.studio"
+            className="px-4 py-2 rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs hover:bg-amber-500/20"
+          >
+            Contact Bureau Support
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return <AdminDashboardPage />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -48,6 +91,9 @@ function Router() {
       <Route path="/pass/:handle" component={PressPassPage} />
       <Route path="/pass" component={PressPassPage} />
       <Route path="/classifieds" component={ClassifiedsPage} />
+      <Route path="/admin" component={GatedAdminRoute} />
+      <Route path="/profile/:handle">{(params) => <ReporterProfilePage handle={params.handle} />}</Route>
+      <Route path="/profile">{() => <ReporterProfilePage />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

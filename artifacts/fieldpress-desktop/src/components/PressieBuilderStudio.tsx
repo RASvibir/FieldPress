@@ -33,6 +33,7 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
 }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialStory?.tags || []);
 
   // Pressy'O: Celtic News Action Liaison State
   const [showPressyAssistant, setShowPressyAssistant] = useState(false);
@@ -242,7 +243,8 @@ export const PressieBuilderStudio: React.FC<PressieBuilderStudioProps> = ({
       alert('Network error saving pressie');
     } finally {
       setIsPublishing(false);
-    };
+    }
+  };
 
   return (
     <form onSubmit={handlePublish} className="p-6 rounded-2xl border-2 border-border bg-[#fdfcf9] dark:bg-zinc-950 shadow-md space-y-5 font-mono text-xs text-foreground">
