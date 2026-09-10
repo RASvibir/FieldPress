@@ -1,3 +1,17 @@
+
+function getChicagoDateString(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Chicago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
 import { scanPressieDraft, autoRedactSensitiveData } from '../lib/auditScanner';
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
