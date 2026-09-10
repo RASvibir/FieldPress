@@ -157,16 +157,7 @@ export function DashboardPage() {
               <Radio className="h-4 w-4 text-cyan-400" />
               <span>📡 Fieldy Wire & DMs</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setTab('bounties')}
-              className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition ${
-                tab === 'bounties' ? 'bg-card text-emerald-600 dark:text-emerald-300 shadow-sm border border-emerald-500/50 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Target className="h-4 w-4 text-emerald-400" />
-              <span>🎯 Beat Bounties</span>
-            </button>
+            
           </div>
         </header>
 
