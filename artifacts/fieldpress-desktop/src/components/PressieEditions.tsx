@@ -269,12 +269,7 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
                 </div>
 
                 {/* Stamped Red Ink Seal */}
-                <div className="p-3 border-2 border-dashed border-[#852c1e] text-[#852c1e] text-center font-mono font-black text-xs uppercase tracking-widest transform -rotate-2">
-                  ✓ VERIFIED DISPATCH
-                  <div className="text-[10px] font-normal tracking-normal mt-0.5">
-                    ⚡ {inkCounts['signal'] || 42} SIGNALS • 🔥 {inkCounts['heat'] || 12} HEAT
-                  </div>
-                </div>
+                
               </div>
             )}
           </div>
@@ -404,7 +399,12 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
 
           <div className="flex items-center justify-between border-b border-border pb-3 mb-4 text-[10px] text-emerald-500 tracking-wider font-bold uppercase">
             <span>📍 {location}</span>
-            <span>DISPATCH #{story.id.slice(0, 8)} • {story.formattedDate}</span>
+            <span className="inline-flex items-center space-x-1 font-mono font-bold tracking-wider text-emerald-600 dark:text-emerald-400">
+              <img src="/favicon.svg" alt="" className="h-3.5 w-3.5 inline-block -mt-0.5" />
+              <span>#{story.id.replace(/^(?:story_|bty_|cls_)/, '').toUpperCase().slice(0, 8)}</span>
+            </span>
+            <span>•</span>
+            <span>{story.formattedDate}</span>
           </div>
 
           <h1
@@ -435,10 +435,10 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
 
             <div className="flex items-center space-x-2">
               <div className="px-2.5 py-1 rounded-lg bg-card border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-                ⚡ {inkCounts['signal'] || 42} SIGNALS
+                ⚡ {inkCounts['signal'] || 0} SIGNALS
               </div>
               <div className="px-2.5 py-1 rounded-lg bg-card border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-bold">
-                🔥 {inkCounts['heat'] || 12} HEAT
+                🔥 {inkCounts['heat'] || 0} HEAT
               </div>
             </div>
           </div>
@@ -465,13 +465,7 @@ export const PressieArticleRenderer: React.FC<PressieArticleProps> = ({
             </div>
           ))}
 
-          {/* Translucent Watermark Seal */}
-          <div className="absolute bottom-6 right-8 pointer-events-none select-none flex items-center space-x-2.5 px-3.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 backdrop-blur-[1px] transform -rotate-3">
-            <img src="/favicon.svg" alt="" className="h-5 w-5 opacity-80" />
-            <div className="text-[10px] font-mono tracking-widest text-emerald-600 dark:text-emerald-400 font-bold uppercase">
-              VERIFIED FIELD DISPATCH
-            </div>
-          </div>
+          
 
           <ReporterBioFooter author={author} location={location} />
         </article>
