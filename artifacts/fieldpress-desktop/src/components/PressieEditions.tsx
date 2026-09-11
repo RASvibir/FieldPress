@@ -44,7 +44,7 @@ export function getResolvedFontFamily(font: PressieFont, edition: PressieEdition
     return found ? found.family : 'inherit';
   }
   switch (edition) {
-    case 'vintage': return '"Playfair Display", serif';
+    case 'vintage': return '"Playfair Display", "Source Serif 4", serif';
     case 'comic': return '"Bangers", cursive';
     case 'pixel': return '"VT323", monospace';
     case 'sleek': return '"Space Grotesk", sans-serif';
