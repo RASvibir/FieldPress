@@ -127,7 +127,7 @@ Please fact-check the statements, identify any missing agency records, and sugge
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-[9990] flex flex-col items-start gap-3 sm:left-auto sm:right-[max(1rem,env(safe-area-inset-right))] sm:items-end">
+    <div className="pointer-events-none relative">
       {/* 3X HOVER MAGNIFICATION MODAL */}
       {hovered && !open && (
         <div className="pointer-events-none animate-in fade-in zoom-in-95 duration-150 flex flex-col items-center rounded-2xl border-2 border-[#39ff14]/70 bg-card/95 p-4 shadow-[0_0_35px_rgba(57,255,20,0.4)] backdrop-blur-md">
@@ -313,20 +313,21 @@ Please fact-check the statements, identify any missing agency records, and sugge
         </div>
       )}
 
-      {/* FLOATING TRIGGER BUTTON */}
+      {/* HEADER TRIGGER BUTTON */}
       <button
         type="button"
-        className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#39ff14] bg-card p-1.5 shadow-[0_0_20px_rgba(57,255,20,0.35)] hover:scale-105 hover:shadow-[0_0_30px_rgba(57,255,20,0.55)] transition-all"
-        onClick={() => {
-          setOpen((v) => !v);
-          setHovered(false);
-        }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        className={`h-8 px-2.5 rounded-lg border font-mono text-xs flex items-center gap-1.5 transition-all shadow-sm ${
+          open
+            ? "bg-[#39ff14]/20 border-[#39ff14] text-[#39ff14] shadow-[0_0_12px_rgba(57,255,20,0.3)]"
+            : "bg-zinc-950/80 border-zinc-800 hover:border-[#39ff14]/60 text-zinc-300 hover:text-[#39ff14]"
+        }`}
+        onClick={() => setOpen((v) => !v)}
         aria-label="Open Pressy'O"
         title="Pressy'O Desk Co-Pilot"
       >
-        <img src="/pressy-o.png" alt="Pressy'O" className="h-full w-full object-contain" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse" />
+        <img src="/pressy-o.png" alt="Pressy'O" className="h-4 w-4 object-contain" />
+        <span className="hidden sm:inline font-bold text-[11px]">PRESSY'O</span>
       </button>
     </div>
   );
