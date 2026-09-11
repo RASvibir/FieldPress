@@ -19,11 +19,13 @@ import {
   Sliders,
   Trash2,
   Camera,
-  Upload
+  Upload,
+  Archive,
+  Download
 } from "lucide-react";
 import * as maplibregl from "maplibre-gl";
 
-// Exact FieldPress "Pressie" Favicon Mark (Neon-green linework on dark rounded plate)
+// Exact FieldPress "Pressie" Favicon Mark
 export const PressieMark: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
   <svg
     viewBox="0 0 32 32"
@@ -142,10 +144,12 @@ export const FieldPressMaster: React.FC = () => {
   const [watermarkVisible, setWatermarkVisible] = useState(true);
 
   const [activeTab, setActiveTab] = useState<"edition" | "wire" | "map" | "classifieds">("edition");
-  const [showPressPassModal, setShowPressPassModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showCreatePressieModal, setShowCreatePressieModal] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // Settings Active Tab: profile, archives, appearance, system
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"profile" | "archives" | "appearance" | "system">("profile");
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -191,7 +195,6 @@ export const FieldPressMaster: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
 
-  // 1-Click Image Selector: Loads immediately into state without third-party upload servers
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -206,7 +209,7 @@ export const FieldPressMaster: React.FC = () => {
       const base64 = event.target?.result as string;
       if (base64) {
         setEditPassForm((prev) => ({ ...prev, avatarUrl: base64 }));
-        setSavedSuccessToast("Photo attached. Click 'Save & Update Pass' to commit.");
+        setSavedSuccessToast("Photo attached to Pressie. Click 'Issue & Save Pressie' to commit.");
         setTimeout(() => setSavedSuccessToast(""), 3000);
       }
     };
@@ -218,7 +221,7 @@ export const FieldPressMaster: React.FC = () => {
     try {
       localStorage.setItem("fieldpress_press_pass", JSON.stringify(newData));
     } catch {}
-    setSavedSuccessToast("Press Pass credentials & photo saved.");
+    setSavedSuccessToast("Pressie credentials & photo saved.");
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
@@ -259,6 +262,24 @@ export const FieldPressMaster: React.FC = () => {
     setNewContent("");
     setShowPublishModal(false);
     setTimeout(() => setSavedSuccessToast(""), 3500);
+  };
+
+  const exportUserArchives = () => {
+    const archiveData = {
+      reporter: pressPass,
+      dispatches: dispatches.filter((d) => d.author === pressPass.name || d.callsign === pressPass.callsign),
+      pressRoll: pressRoll,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(archiveData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fieldpress-archive-${pressPass.callsign}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSavedSuccessToast("User archive downloaded.");
+    setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
   useEffect(() => {
@@ -419,19 +440,13 @@ export const FieldPressMaster: React.FC = () => {
                 FieldPress
               </span>
             </button>
-
-            <span className={`hidden md:inline-block px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest rounded border ${
-              theme === "dark" ? "bg-zinc-900 text-zinc-400 border-zinc-800" : "bg-zinc-200 text-zinc-600 border-zinc-300"
-            }`}>
-              FP_ Workstation
-            </span>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden sm:flex items-center gap-1 font-mono text-xs">
+          {/* Navigation Tabs + Dedicated "Create Pressie" Tab */}
+          <nav className="flex items-center gap-1 sm:gap-2 font-mono text-xs">
             <button
               onClick={() => setActiveTab("edition")}
-              className={`px-3 py-1.5 rounded transition ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded transition ${
                 activeTab === "edition"
                   ? theme === "dark"
                     ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
@@ -443,7 +458,7 @@ export const FieldPressMaster: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab("wire")}
-              className={`px-3 py-1.5 rounded transition ${
+              className={`hidden md:inline-block px-3 py-1.5 rounded transition ${
                 activeTab === "wire"
                   ? theme === "dark"
                     ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
@@ -455,7 +470,7 @@ export const FieldPressMaster: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab("map")}
-              className={`px-3 py-1.5 rounded transition ${
+              className={`hidden sm:inline-block px-3 py-1.5 rounded transition ${
                 activeTab === "map"
                   ? theme === "dark"
                     ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
@@ -467,7 +482,7 @@ export const FieldPressMaster: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab("classifieds")}
-              className={`px-3 py-1.5 rounded transition ${
+              className={`hidden lg:inline-block px-3 py-1.5 rounded transition ${
                 activeTab === "classifieds"
                   ? theme === "dark"
                     ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
@@ -476,6 +491,19 @@ export const FieldPressMaster: React.FC = () => {
               }`}
             >
               Classifieds
+            </button>
+
+            {/* DEDICATED HEADER TAB: CREATE PRESSIE */}
+            <button
+              onClick={() => {
+                setEditPassForm(pressPass);
+                setShowCreatePressieModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold shadow-xs hover:border-emerald-400"
+              title="Create or Customize your Press Pass (Pressie)"
+            >
+              <PressieMark className="h-4 w-4" />
+              <span>Create Pressie</span>
             </button>
           </nav>
 
@@ -490,14 +518,14 @@ export const FieldPressMaster: React.FC = () => {
               <span className="hidden sm:inline">Dispatch</span>
             </button>
 
-            {/* Header Badge with Instant Photo or Callsign */}
+            {/* Header Badge */}
             <button
               onClick={() => {
                 setEditPassForm(pressPass);
-                setShowPressPassModal(true);
+                setShowCreatePressieModal(true);
               }}
               className={`flex items-center gap-2 px-2.5 py-1 rounded border text-xs font-mono transition ${currentAccent.badge} hover:brightness-110`}
-              title="Open Press Pass Customizer"
+              title="Your Pressie Badge"
             >
               {pressPass.avatarUrl ? (
                 <img
@@ -512,18 +540,7 @@ export const FieldPressMaster: React.FC = () => {
               <span>{pressPass.callsign}</span>
             </button>
 
-            <button
-              onClick={() => setShowProfileModal(true)}
-              className={`p-2 rounded border transition ${
-                theme === "dark"
-                  ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-                  : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:text-zinc-900 hover:bg-zinc-200"
-              }`}
-              title="User Profile"
-            >
-              <User className="h-4 w-4" />
-            </button>
-
+            {/* Settings Trigger */}
             <button
               onClick={() => setShowSettingsDrawer(true)}
               className={`p-2 rounded border transition ${
@@ -536,6 +553,7 @@ export const FieldPressMaster: React.FC = () => {
               <Settings className="h-4 w-4" />
             </button>
 
+            {/* Theme Toggle */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className={`p-2 rounded border transition ${
@@ -775,8 +793,8 @@ export const FieldPressMaster: React.FC = () => {
         )}
       </main>
 
-      {/* 5. PRESS PASS CUSTOMIZER (WITH 1-CLICK DEVICE PHOTO UPLOAD) */}
-      {showPressPassModal && (
+      {/* 5. CREATE / EDIT PRESSIE MODAL (ACCESSIBLE DIRECTLY FROM HEADER TAB) */}
+      {showCreatePressieModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className={`w-full max-w-2xl rounded-xl border p-6 shadow-2xl transition ${
             theme === "dark" ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
@@ -784,17 +802,16 @@ export const FieldPressMaster: React.FC = () => {
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-2 font-mono">
                 <PressieMark className="h-5 w-5" />
-                <h3 className="font-bold text-base">Press Pass Credential & Photo Customizer</h3>
+                <h3 className="font-bold text-base">Create & Issue Your Pressie</h3>
               </div>
               <button 
-                onClick={() => setShowPressPassModal(false)}
+                onClick={() => setShowCreatePressieModal(false)}
                 className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Hidden Input for Instant Image Picking */}
             <input
               ref={avatarInputRef}
               type="file"
@@ -900,18 +917,18 @@ export const FieldPressMaster: React.FC = () => {
 
               <p className="text-[11px] font-mono text-zinc-400 mt-2 flex items-center gap-1.5">
                 <Camera className="h-3.5 w-3.5 text-amber-400" />
-                <span>Click the photo frame above to choose an image from your device.</span>
+                <span>Click the photo frame on the badge above to add your profile image.</span>
               </p>
             </div>
 
             <form onSubmit={(e) => {
               e.preventDefault();
               savePass(editPassForm);
-              setShowPressPassModal(false);
+              setShowCreatePressieModal(false);
             }} className="space-y-4 font-mono text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-zinc-400 mb-1">Full Byline Name</label>
+                  <label className="block text-zinc-400 mb-1">Full Legal / Byline Name</label>
                   <input
                     type="text"
                     value={editPassForm.name}
@@ -982,7 +999,7 @@ export const FieldPressMaster: React.FC = () => {
               <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowPressPassModal(false)}
+                  onClick={() => setShowCreatePressieModal(false)}
                   className="px-4 py-2 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition"
                 >
                   Cancel
@@ -992,7 +1009,7 @@ export const FieldPressMaster: React.FC = () => {
                   className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5"
                 >
                   <Save className="h-4 w-4" />
-                  <span>Save & Update Pass</span>
+                  <span>Issue & Save Pressie</span>
                 </button>
               </div>
             </form>
@@ -1000,230 +1017,288 @@ export const FieldPressMaster: React.FC = () => {
         </div>
       )}
 
-      {/* 6. USER PROFILE MODAL */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`w-full max-w-lg rounded-xl border p-6 shadow-2xl transition ${
-            theme === "dark" ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+      {/* 6. SETTINGS DRAWER WITH TABBED SECTIONS (PROFILE, ARCHIVES, DISPLAY, SYSTEM) */}
+      {showSettingsDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
+          <div className={`w-full max-w-lg h-full border-l shadow-2xl flex flex-col justify-between overflow-hidden ${
+            theme === "dark" ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+            
+            {/* Drawer Header */}
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2 font-mono">
-                <User className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-base">Reporter Profile & Fingerprint</h3>
+                <Sliders className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-base">Workstation Settings</h3>
               </div>
               <button 
-                onClick={() => setShowProfileModal(false)}
+                onClick={() => setShowSettingsDrawer(false)}
                 className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="my-5 space-y-4 font-mono text-xs">
-              <div className="flex items-center gap-4">
-                {pressPass.avatarUrl ? (
-                  <img
-                    src={pressPass.avatarUrl}
-                    alt={pressPass.name}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 shadow-md"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-xl">
-                    {pressPass.name.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <h4 className="font-extrabold text-base text-zinc-100">{pressPass.name}</h4>
-                  <p className="text-amber-500 font-bold">@{pressPass.callsign}</p>
-                  <p className="text-zinc-400 text-[11px]">{pressPass.role} • {pressPass.bureau}</p>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded bg-zinc-950/60 border border-zinc-800 space-y-2">
-                <div className="text-zinc-500 font-bold uppercase text-[10px]">Contributor Bio</div>
-                <p className="text-zinc-300 leading-relaxed">{pressPass.bio}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="p-3 rounded bg-zinc-950/60 border border-zinc-800">
-                  <div className="text-zinc-500 text-[10px] font-bold">PGP FINGERPRINT</div>
-                  <div className="text-zinc-300 font-mono text-[11px] mt-1">{pressPass.pgpKey}</div>
-                </div>
-                <div className="p-3 rounded bg-zinc-950/60 border border-zinc-800">
-                  <div className="text-zinc-500 text-[10px] font-bold">SECURE CHANNEL</div>
-                  <div className="text-amber-400 font-mono text-[11px] mt-1">{pressPass.contactSignal}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded bg-zinc-950/40 border border-zinc-800 text-[11px]">
-                <span className="text-zinc-400">Total Published Dispatches:</span>
-                <span className="font-bold text-amber-400">{dispatches.length}</span>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-zinc-800 flex justify-between items-center">
+            {/* Standard Settings Tabs */}
+            <div className="flex border-b border-zinc-800 px-5 pt-2 font-mono text-xs bg-zinc-900/40">
               <button
-                type="button"
-                onClick={() => {
-                  setShowProfileModal(false);
-                  setShowPressPassModal(true);
-                }}
-                className="font-mono text-xs text-amber-500 hover:underline"
+                onClick={() => setSettingsActiveTab("profile")}
+                className={`pb-2.5 px-3 border-b-2 font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === "profile"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200"
+                }`}
               >
-                Edit Press Pass & Photo →
+                <User className="h-3.5 w-3.5" />
+                <span>Profile</span>
               </button>
+
               <button
-                type="button"
-                onClick={() => setShowProfileModal(false)}
-                className="px-4 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-xs"
+                onClick={() => setSettingsActiveTab("archives")}
+                className={`pb-2.5 px-3 border-b-2 font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === "archives"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200"
+                }`}
               >
-                Close
+                <Archive className="h-3.5 w-3.5" />
+                <span>Archives</span>
+              </button>
+
+              <button
+                onClick={() => setSettingsActiveTab("appearance")}
+                className={`pb-2.5 px-3 border-b-2 font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === "appearance"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Sun className="h-3.5 w-3.5" />
+                <span>Display</span>
+              </button>
+
+              <button
+                onClick={() => setSettingsActiveTab("system")}
+                className={`pb-2.5 px-3 border-b-2 font-bold transition flex items-center gap-1.5 ${
+                  settingsActiveTab === "system"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>System</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* 7. SETTINGS DRAWER */}
-      {showSettingsDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
-          <div className={`w-full max-w-md h-full border-l p-6 shadow-2xl flex flex-col justify-between overflow-y-auto ${
-            theme === "dark" ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
-          }`}>
-            <div className="space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-                <div className="flex items-center gap-2 font-mono">
-                  <Sliders className="h-5 w-5 text-amber-500" />
-                  <h3 className="font-bold text-base">Workstation Settings</h3>
-                </div>
-                <button 
-                  onClick={() => setShowSettingsDrawer(false)}
-                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
-                  Appearance & Watermark
-                </h4>
-                
-                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
-                  <div>
-                    <div className="font-bold">Interface Theme</div>
-                    <div className="text-[11px] text-zinc-400">Toggle dark noir vs. light broadsheet</div>
-                  </div>
-                  <button
-                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                    className="px-3 py-1.5 rounded bg-zinc-800 border border-zinc-700 text-amber-400 font-bold"
-                  >
-                    {theme.toUpperCase()}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
-                  <div>
-                    <div className="font-bold">Background Watermark</div>
-                    <div className="text-[11px] text-zinc-400">FIELDPRESS canvas watermark</div>
-                  </div>
-                  <button
-                    onClick={() => setWatermarkVisible(!watermarkVisible)}
-                    className={`px-3 py-1.5 rounded border font-bold ${
-                      watermarkVisible 
-                        ? "bg-amber-500/20 text-amber-400 border-amber-500/40" 
-                        : "bg-zinc-800 text-zinc-500 border-zinc-700"
-                    }`}
-                  >
-                    {watermarkVisible ? "VISIBLE" : "HIDDEN"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
-                  Editorial & Beat Radar
-                </h4>
-
-                <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-2">
-                  <div className="font-bold">Default Beat Region</div>
-                  <select
-                    value={defaultBeat}
-                    onChange={(e) => setDefaultBeat(e.target.value)}
-                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-2.5 py-1.5 text-zinc-200 text-xs"
-                  >
-                    <option value="Midwest Corridor (IL / IN)">Midwest Corridor (IL / IN)</option>
-                    <option value="Great Lakes Basin">Great Lakes Basin</option>
-                    <option value="Appalachian Dispatch">Appalachian Dispatch</option>
-                    <option value="National Wire Network">National Wire Network</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
-                  <div>
-                    <div className="font-bold">Feed Auto-Sync</div>
-                    <div className="text-[11px] text-zinc-400">Polling interval for edge dispatches</div>
-                  </div>
-                  <select
-                    value={autoRefreshInterval}
-                    onChange={(e) => setAutoRefreshInterval(e.target.value)}
-                    className="rounded bg-zinc-950 border border-zinc-700 px-2 py-1 text-zinc-200 text-xs"
-                  >
-                    <option value="15s">15s (Realtime)</option>
-                    <option value="30s">30s</option>
-                    <option value="1m">1m</option>
-                    <option value="manual">Manual</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
-                  Field Storage & Cache
-                </h4>
-
-                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
-                  <div>
-                    <div className="font-bold">Offline Staging Queue</div>
-                    <div className="text-[11px] text-zinc-400">Cache drafts when network is degraded</div>
-                  </div>
-                  <button
-                    onClick={() => setOfflineCacheEnabled(!offlineCacheEnabled)}
-                    className={`px-3 py-1.5 rounded border font-bold ${
-                      offlineCacheEnabled 
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
-                        : "bg-zinc-800 text-zinc-500 border-zinc-700"
-                    }`}
-                  >
-                    {offlineCacheEnabled ? "ENABLED" : "OFF"}
-                  </button>
-                </div>
-
-                <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold">Edge API Gateway</div>
-                    <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Connected: fieldpress.studio
+            {/* Tabbed Content Body */}
+            <div className="flex-1 p-6 overflow-y-auto space-y-6 font-mono text-xs">
+              
+              {/* TAB A: PROFILE */}
+              {settingsActiveTab === "profile" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 rounded bg-zinc-900/60 border border-zinc-800">
+                    {pressPass.avatarUrl ? (
+                      <img
+                        src={pressPass.avatarUrl}
+                        alt={pressPass.name}
+                        className="w-14 h-14 rounded-full object-cover border-2 border-amber-500"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-zinc-800 border-2 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-lg">
+                        {pressPass.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-extrabold text-sm text-zinc-100">{pressPass.name}</div>
+                      <div className="text-amber-500 font-bold">@{pressPass.callsign}</div>
+                      <div className="text-zinc-400 text-[11px]">{pressPass.role}</div>
                     </div>
                   </div>
+
+                  <div className="p-3.5 rounded bg-zinc-900/40 border border-zinc-800 space-y-1">
+                    <div className="text-zinc-500 font-bold uppercase text-[10px]">Bio & Field Beat</div>
+                    <p className="text-zinc-300 leading-relaxed">{pressPass.bio}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded bg-zinc-900/40 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px] font-bold">PGP FINGERPRINT</div>
+                      <div className="text-zinc-300 font-mono text-[11px] mt-1 truncate">{pressPass.pgpKey}</div>
+                    </div>
+                    <div className="p-3 rounded bg-zinc-900/40 border border-zinc-800">
+                      <div className="text-zinc-500 text-[10px] font-bold">SECURE CHANNEL</div>
+                      <div className="text-amber-400 font-mono text-[11px] mt-1 truncate">{pressPass.contactSignal}</div>
+                    </div>
+                  </div>
+
                   <button
+                    type="button"
                     onClick={() => {
-                      localStorage.removeItem("fieldpress_dispatches");
-                      localStorage.removeItem("fieldpress_pressroll");
-                      setSavedSuccessToast("Local cache reset to defaults.");
-                      setTimeout(() => setSavedSuccessToast(""), 3000);
+                      setShowSettingsDrawer(false);
+                      setEditPassForm(pressPass);
+                      setShowCreatePressieModal(true);
                     }}
-                    className="p-2 rounded hover:bg-zinc-800 text-zinc-400 hover:text-rose-400"
-                    title="Clear Local Cache"
+                    className="w-full py-2.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-bold transition flex items-center justify-center gap-2"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <PressieMark className="h-4 w-4" />
+                    <span>Open Pressie Card & Photo Customizer</span>
                   </button>
                 </div>
-              </div>
+              )}
+
+              {/* TAB B: USER ARCHIVES */}
+              {settingsActiveTab === "archives" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <span className="text-zinc-400">Stored Historical Records</span>
+                    <button
+                      onClick={exportUserArchives}
+                      className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-400 flex items-center gap-1 font-bold"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Export JSON
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-zinc-500 text-[10px] uppercase font-bold">Active Bureau Dispatches ({dispatches.length})</div>
+                    {dispatches.slice(0, 4).map((d) => (
+                      <div key={d.id} className="p-2.5 rounded bg-zinc-900/40 border border-zinc-800 flex items-center justify-between">
+                        <div className="truncate max-w-[260px]">
+                          <div className="font-bold truncate text-zinc-200">{d.title}</div>
+                          <div className="text-[10px] text-zinc-500">{d.location} • {d.timestamp}</div>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-amber-500">{d.category}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {pressRoll.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-zinc-800">
+                      <div className="text-zinc-500 text-[10px] uppercase font-bold">Press Roll Staged Drafts ({pressRoll.length})</div>
+                      {pressRoll.map((p) => (
+                        <div key={p.id} className="p-2 rounded bg-zinc-900/30 border border-zinc-800 text-[11px] flex justify-between">
+                          <span className="text-zinc-300 truncate">{p.title}</span>
+                          <span className="text-amber-400">Staged</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB C: APPEARANCE & DISPLAY */}
+              {settingsActiveTab === "appearance" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                    <div>
+                      <div className="font-bold">Interface Theme</div>
+                      <div className="text-[11px] text-zinc-400">Toggle dark noir vs. light broadsheet</div>
+                    </div>
+                    <button
+                      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                      className="px-3 py-1.5 rounded bg-zinc-800 border border-zinc-700 text-amber-400 font-bold"
+                    >
+                      {theme.toUpperCase()}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                    <div>
+                      <div className="font-bold">Background Watermark</div>
+                      <div className="text-[11px] text-zinc-400">FIELDPRESS canvas watermark</div>
+                    </div>
+                    <button
+                      onClick={() => setWatermarkVisible(!watermarkVisible)}
+                      className={`px-3 py-1.5 rounded border font-bold ${
+                        watermarkVisible 
+                          ? "bg-amber-500/20 text-amber-400 border-amber-500/40" 
+                          : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                      }`}
+                    >
+                      {watermarkVisible ? "VISIBLE" : "HIDDEN"}
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-2">
+                    <div className="font-bold">Default Beat Region</div>
+                    <select
+                      value={defaultBeat}
+                      onChange={(e) => setDefaultBeat(e.target.value)}
+                      className="w-full rounded bg-zinc-950 border border-zinc-700 px-2.5 py-1.5 text-zinc-200 text-xs"
+                    >
+                      <option value="Midwest Corridor (IL / IN)">Midwest Corridor (IL / IN)</option>
+                      <option value="Great Lakes Basin">Great Lakes Basin</option>
+                      <option value="Appalachian Dispatch">Appalachian Dispatch</option>
+                      <option value="National Wire Network">National Wire Network</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB D: SYSTEM & STORAGE */}
+              {settingsActiveTab === "system" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                    <div>
+                      <div className="font-bold">Offline Staging Queue</div>
+                      <div className="text-[11px] text-zinc-400">Cache drafts when network is degraded</div>
+                    </div>
+                    <button
+                      onClick={() => setOfflineCacheEnabled(!offlineCacheEnabled)}
+                      className={`px-3 py-1.5 rounded border font-bold ${
+                        offlineCacheEnabled 
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                          : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                      }`}
+                    >
+                      {offlineCacheEnabled ? "ENABLED" : "OFF"}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                    <div>
+                      <div className="font-bold">Feed Auto-Sync</div>
+                      <div className="text-[11px] text-zinc-400">Polling interval for edge dispatches</div>
+                    </div>
+                    <select
+                      value={autoRefreshInterval}
+                      onChange={(e) => setAutoRefreshInterval(e.target.value)}
+                      className="rounded bg-zinc-950 border border-zinc-700 px-2 py-1 text-zinc-200 text-xs"
+                    >
+                      <option value="15s">15s (Realtime)</option>
+                      <option value="30s">30s</option>
+                      <option value="1m">1m</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </div>
+
+                  <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold">Edge API Gateway</div>
+                      <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Connected: fieldpress.studio
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("fieldpress_dispatches");
+                        localStorage.removeItem("fieldpress_pressroll");
+                        setSavedSuccessToast("Local cache reset to defaults.");
+                        setTimeout(() => setSavedSuccessToast(""), 3000);
+                      }}
+                      className="p-2 rounded hover:bg-zinc-800 text-zinc-400 hover:text-rose-400"
+                      title="Clear Local Cache"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            <div className="pt-4 border-t border-zinc-800 font-mono text-xs flex justify-between items-center text-zinc-500">
-              <span>FP_ Workstation v2.4.2</span>
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-zinc-800 font-mono text-xs flex justify-between items-center text-zinc-500 bg-zinc-950">
+              <span>FP_ Workstation v2.5.0</span>
               <button
                 onClick={() => setShowSettingsDrawer(false)}
                 className="px-4 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition"
@@ -1235,7 +1310,7 @@ export const FieldPressMaster: React.FC = () => {
         </div>
       )}
 
-      {/* 8. COMPOSE / PUBLISH MODAL */}
+      {/* 7. COMPOSE / PUBLISH MODAL */}
       {showPublishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`w-full max-w-2xl rounded-xl border p-6 shadow-2xl transition ${
