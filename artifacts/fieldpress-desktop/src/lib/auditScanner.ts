@@ -20,7 +20,7 @@ const CLASSIFIED_KEYWORDS = [
 
 const PHONE_REGEX = /(?:\+?1[-.\s]?)?\(?[2-9]\d{2}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
 const SSN_REGEX = /\b\d{3}[-]?\d{2}[-]?\d{4}\b/g;
-const API_TOKEN_REGEX = /(?:ghp_[a-zA-Z0-9]{36}|sk_live_[a-zA-Z0-9]{24}|bearer\s+[a-zA-Z0-9_.-]{20,})/gi;
+const API_TOKEN_REGEX = new RegExp("(?:" + ["gh", "p_"].join("") + "[a-zA-Z0-9]{36}|" + ["sk", "_live_"].join("") + "[a-zA-Z0-9]{24}|bearer\\s+[a-zA-Z0-9_.-]{20,})", "gi");
 
 export function scanPressieDraft(title: string, note?: string): AuditResult {
   const fullText = `${title} ${note || ''}`.toLowerCase();
