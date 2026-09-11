@@ -1,3 +1,4 @@
+import { CustomizePressPassModal } from '../components/CustomizePressPassModal';
 import React, { useState } from 'react';
 import { useSkin, SKINS, SkinColor } from '../context/SkinContext';
 
@@ -13,7 +14,7 @@ export interface ReporterProfile {
   signalScore: number;
   bureaus: string[];
   badges: {
-    id: 'frontline' | 'proof' | 'anchor' | 'pillar';
+    id: string;
     name: string;
     icon: string;
     desc: string;
@@ -47,6 +48,7 @@ export const ReporterProfilePage: React.FC<{
   const { currentSkin, skinConfig, saveSkinPreference, isSaving } = useSkin();
   const [activeTab, setActiveTab] = useState<'dispatches' | 'channel' | 'forks' | 'bureaus'>('channel');
   const [copied, setCopied] = useState(false);
+  const [isCustomizingPass, setIsCustomizingPass] = useState(false);
   const [showDirectMessageModal, setShowDirectMessageModal] = useState(false);
   const [modalDmText, setModalDmText] = useState('');
   const [sentSuccess, setSentSuccess] = useState(false);
@@ -181,6 +183,14 @@ export const ReporterProfilePage: React.FC<{
 
           {/* Quick Portfolio Controls */}
           <div className="flex items-center space-x-2 pb-1">
+            <button
+              type="button"
+              onClick={() => setIsCustomizingPass(true)}
+              className="px-3 py-1.5 border border-amber-500/60 hover:border-amber-400 rounded text-xs font-bold text-amber-300 bg-amber-950/40 flex items-center space-x-1.5 shadow-sm"
+            >
+              <span>⚙️</span>
+              <span>Customize Pass & Clearance</span>
+            </button>
             <button
               type="button"
               onClick={() => {
