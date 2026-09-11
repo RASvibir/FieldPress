@@ -133,7 +133,8 @@ function App() {
                   
                 </div>
 
-                <div className="pointer-events-auto">
+                <div className="pointer-events-auto flex items-center gap-2">
+                  <PressyBubble />
                   <SettingsMenu />
                 </div>
               </header>
