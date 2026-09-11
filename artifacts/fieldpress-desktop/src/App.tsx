@@ -19,7 +19,7 @@ import {
   Sliders,
   Trash2
 } from "lucide-react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 interface PressPassData {
   name: string;
