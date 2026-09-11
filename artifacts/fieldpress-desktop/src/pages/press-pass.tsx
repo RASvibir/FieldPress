@@ -1,3 +1,4 @@
+import { CustomizePressPassModal } from "../components/CustomizePressPassModal";
 import React, { useState, useEffect } from 'react';
 import { useRoute } from 'wouter';
 import { useSkin } from '../context/SkinContext';
@@ -11,6 +12,32 @@ export const PressPassPage: React.FC<PressPassProps> = (props) => {
   const handle = routeParams?.handle || props.params?.handle || 'ras.ip';
   const { skinConfig } = useSkin();
   const [passIssueTime, setPassIssueTime] = useState('');
+  const [isCustomizingPass, setIsCustomizingPass] = useState(false);
+  const [profile, setProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fieldpress_profile_' + handle);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      handle,
+      displayName: handle === 'ras.ip' ? 'Victor Birkle' : 'Pamela Black',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
+      coverPhotoUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=1400&q=80',
+      bio: 'Boots-on-the-ground field reporter & newsroom architect.',
+      corridor: 'Danville • Vermilion Desk',
+      rankTier: 'Senior Frontline Vanguard',
+      corridorRank: 'Top 3% Sector Rank',
+      signalScore: 842,
+      bureaus: ['Danville Junction Bureau'],
+      badges: [
+        { id: 'frontline', name: 'Frontline Scout', icon: '🎖️', desc: 'First verified dispatch' },
+        { id: 'proof', name: 'Proof of Scene', icon: '📸', desc: 'Authentic photo proof' },
+        { id: 'anchor', name: 'Fact Anchor', icon: '🛡️', desc: 'Agency citations' },
+        { id: 'pillar', name: 'Bureau Pillar', icon: '🌲', desc: 'Desk coordinator' },
+      ],
+      stats: { verifiedDispatches: 38, downstreamForks: 114, corroborationRate: '98.4%' },
+    };
+  });
 
   const [isCohort, setIsCohort] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -76,25 +103,34 @@ export const PressPassPage: React.FC<PressPassProps> = (props) => {
           {/* Portrait & Core Info */}
           <div className="flex items-center space-x-4">
             <div className="relative">
-              <div
-                className="h-24 w-24 rounded-xl bg-zinc-900 border-2 flex items-center justify-center text-xl font-bold text-cyan-300 shadow-inner"
-                style={{ borderColor: skinConfig.hex }}
-              >
-                @{handle.slice(0, 2).toUpperCase()}
-              </div>
+              {profile.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.displayName}
+                  className="h-24 w-24 rounded-xl object-cover border-2 shadow-md"
+                  style={{ borderColor: skinConfig.hex }}
+                />
+              ) : (
+                <div
+                  className="h-24 w-24 rounded-xl bg-zinc-900 border-2 flex items-center justify-center text-xl font-bold text-cyan-300 shadow-inner"
+                  style={{ borderColor: skinConfig.hex }}
+                >
+                  @{profile.handle.slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-black" />
             </div>
 
             <div className="space-y-1">
               <div className="text-base font-bold text-white leading-tight">
-                {handle === 'ras.ip' ? 'Victor Birkle' : 'Pamela Black'}
+                {profile.displayName}
               </div>
               <div className="text-xs text-cyan-400 font-semibold">@{handle}</div>
               <div className="text-[10px] text-zinc-400">
-                Corridor: <span className="text-zinc-200 font-bold">Danville • Vermilion Desk</span>
+                Corridor: <span className="text-zinc-200 font-bold">{profile.corridor}</span>
               </div>
-              <div className="inline-block px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[10px] font-bold">
-                🎖️ Frontline Scout
+              <div className="inline-block px-2.5 py-1 rounded bg-amber-950/80 border border-amber-600 text-amber-300 text-[11px] font-bold">
+                {profile.rankTier}
               </div>
             </div>
           </div>
@@ -190,6 +226,32 @@ export const PressPassPage: React.FC<PressPassProps> = (props) => {
               ))}
             </div>
           </div>
+
+          
+          {/* In-Place Customize Pass Action */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setIsCustomizingPass(true)}
+              className="w-full py-2.5 rounded-xl border border-amber-500/70 bg-amber-950/30 hover:bg-amber-950/60 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow"
+            >
+              <span>⚙️</span>
+              <span>Customize Pass & Clearance Tiers</span>
+            </button>
+          </div>
+
+          <CustomizePressPassModal
+            isOpen={isCustomizingPass}
+            onClose={() => setIsCustomizingPass(false)}
+            profile={profile as any}
+            onSave={(updated) => {
+              setProfile(updated);
+              try {
+                localStorage.setItem("fieldpress_profile_" + updated.handle, JSON.stringify(updated));
+              } catch {}
+              setIsCustomizingPass(false);
+            }}
+          />
 
           {/* Legal Rights Callout */}
           <div className="text-[9px] text-zinc-500 leading-relaxed border-t border-zinc-800/80 pt-3 text-center">
