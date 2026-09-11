@@ -1,933 +1,1250 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Map as MapLibreMap, NavigationControl, Marker } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Menu,
   X,
+  Settings,
+  User,
+  Send,
+  FolderLock,
   Sun,
   Moon,
-  Flame,
-  MessageSquare,
-  MapPin,
-  Map as MapIcon,
-  BookOpen,
-  User,
-  Radio,
-  ExternalLink,
   ShieldCheck,
-  Send,
-  Camera,
-  Heart,
-  MessageCircle,
+  Radio,
+  MapPin,
+  RefreshCw,
+  Save,
+  Check,
   Share2,
-  CheckCircle2,
-  ChevronDown,
-  Award,
-  Compass,
-  Clock,
-  Tag,
-  Bot,
-  Sparkles,
   Bookmark,
-  FolderLock,
-  Layers,
+  Sliders,
+  Trash2
 } from "lucide-react";
+import maplibregl from "maplibre-gl";
 
-type Tab = "front-page" | "back-page" | "radar-map" | "press-pass";
-
-interface Scoop {
-  id: string;
-  author: string;
-  avatar: string;
-  anchorLevel: string;
-  location: string;
-  time: string;
-  headline: string;
-  body: string;
-  stamp: "BREAKING" | "SCOOP" | "SPOTTED" | "LOCAL VIBE";
-  imageUrl?: string;
-  likes: number;
-  comments: number;
-  isLiked?: boolean;
-  isBookmarked?: boolean;
+interface PressPassData {
+  name: string;
+  callsign: string;
+  role: string;
+  bureau: string;
+  badgeId: string;
+  issueDate: string;
+  accentColor: string;
+  bio: string;
+  pgpKey: string;
+  contactSignal: string;
 }
 
-interface Classified {
-  id: string;
-  category: "Gear & Tools" | "Gigs & Collabs" | "Community & Trades";
-  title: string;
-  priceOrTrade: string;
-  location: string;
-  author: string;
-  body: string;
-}
-
-interface ArchivedMedia {
-  id: string;
-  url: string;
-  label: string;
-  style: string;
-}
-
-const EDITIONS = [
-  { id: "morning", name: "The Morning Courier", curator: "Danville Desk", vol: "Vol. 48", time: "Daily 7 AM" },
-  { id: "night", name: "The Night Wire", curator: "ChloReform Audio", vol: "Late Issue", time: "Nightly 9 PM" },
-  { id: "corridor", name: "Corridor Dispatch", curator: "Tri-City Press", vol: "Special Beat", time: "Weekly" },
-];
-
-const INITIAL_SCOOPS: Scoop[] = [
-  {
-    id: "sc-1",
-    author: "Elena Rostova",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-    anchorLevel: "Senior Correspondent",
-    location: "Downtown Danville",
-    time: "14m",
-    headline: "Downtown Bakery Queue Stretches Across 3rd Street",
-    body: "Morning crowd gathering early as the first fresh cinnamon batches pull out of the brick ovens. Local transit line 4 running right on time.",
-    stamp: "SPOTTED",
-    imageUrl: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&auto=format&fit=crop&q=80",
-    likes: 42,
-    comments: 6,
-  },
-  {
-    id: "sc-2",
-    author: "Victor Birkle",
-    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    anchorLevel: "Press Editor",
-    location: "Broad Ripple, Indy",
-    time: "48m",
-    headline: "Underground Acoustic Pop-up Setting Up Under Canal Bridge",
-    body: "Independent sound collective setting up an analog tape playback rig with low-frequency acoustic baffles. Live broadcast session starts tonight at 8 PM.",
-    stamp: "SCOOP",
-    imageUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80",
-    likes: 89,
-    comments: 15,
-  },
-  {
-    id: "sc-3",
-    author: "Marcus Vance",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-    anchorLevel: "Street Anchor",
-    location: "Evansville Waterfront",
-    time: "2h",
-    headline: "Riverfront Fog Lifting Over South Terminal Barges",
-    body: "Cargo manifest handoffs underway along the south dock. Clean water monitors online with steady signals across the river boundary.",
-    stamp: "LOCAL VIBE",
-    imageUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80",
-    likes: 31,
-    comments: 4,
-  },
-];
-
-const INITIAL_CLASSIFIEDS: Classified[] = [
-  {
-    id: "cl-1",
-    category: "Gear & Tools",
-    title: "Vintage Fender Bass Amplifier",
-    priceOrTrade: "$220 / Trade for Synth",
-    location: "Danville, IL",
-    author: "DanvilleAudio",
-    body: "Tested last night at the rehearsal hall. Clean channels, solid state vintage tone. Local pickup downtown.",
-  },
-  {
-    id: "cl-2",
-    category: "Gigs & Collabs",
-    title: "Field Audio Tech Seeking Podcast Partner",
-    priceOrTrade: "Collaboration / Rev-Share",
-    location: "Indianapolis, IN",
-    author: "IndySoundGuy",
-    body: "Documenting grassroots rail corridor oral history. Looking for an energetic local co-interviewer.",
-  },
-];
-
-const USER_PRIVATE_ARCHIVE: ArchivedMedia[] = [
-  {
-    id: "m-1",
-    url: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80",
-    label: "Bakery Street Queue",
-    style: "35mm Documentary",
-  },
-  {
-    id: "m-2",
-    url: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
-    label: "Canal Sound Rig",
-    style: "Neon Noir",
-  },
-];
-
-const IMAGE_STYLES = [
-  { id: "35mm", name: "🎞️ 35mm Street", sampleUrl: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=800&auto=format&fit=crop&q=80" },
-  { id: "halftone", name: "📰 Newsprint", sampleUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80" },
-  { id: "noir", name: "🌆 Neon Noir", sampleUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80" },
-];
-
-const MAP_STYLES = {
-  dark: "https://tiles.openfreemap.org/styles/dark",
-  light: "https://tiles.openfreemap.org/styles/liberty",
+const DEFAULT_PRESS_PASS: PressPassData = {
+  name: "Victor Birkle",
+  callsign: "ras.ip",
+  role: "Bureau Chief & Field Lead",
+  bureau: "Midwest Corridor Dispatch",
+  badgeId: "FP-8492-X",
+  issueDate: "2026-2027",
+  accentColor: "amber",
+  bio: "Independent field journalist covering regional infrastructure, autonomous tech, and community affairs along the IL/IN corridor.",
+  pgpKey: "4A8F 90B2 31CD E840 92F1",
+  contactSignal: "@rasip.01"
 };
 
+interface Dispatch {
+  id: string;
+  title: string;
+  category: string;
+  author: string;
+  callsign: string;
+  bureau: string;
+  timestamp: string;
+  location: string;
+  coordinates?: [number, number];
+  content: string;
+  isLead?: boolean;
+  isPressRoll?: boolean;
+}
+
+const INITIAL_DISPATCHES: Dispatch[] = [
+  {
+    id: "d-1",
+    title: "Regional Grid Resiliency: Autonomous Micro-Substations Go Live Across Wabash Valley",
+    category: "Infrastructure",
+    author: "Victor Birkle",
+    callsign: "ras.ip",
+    bureau: "Midwest Corridor",
+    timestamp: "12m ago",
+    location: "Danville, IL",
+    coordinates: [-87.6298, 40.1245],
+    content: "Local cooperative power authorities today commissioned three self-healing modular distribution nodes along the central rail corridor, securing redundant municipal telemetry against severe autumn weather fronts.",
+    isLead: true
+  },
+  {
+    id: "d-2",
+    title: "County Open Data Initiative Publishes Full Historical Drainage & Watershed Maps",
+    category: "Civic Wire",
+    author: "Elena Rostova",
+    callsign: "elena.wire",
+    bureau: "Tippecanoe Desk",
+    timestamp: "48m ago",
+    location: "Lafayette, IN",
+    coordinates: [-86.8753, 40.4173],
+    content: "Over 80 years of high-resolution watershed topographical surveys were digitized and released under public domain archives this morning, opening critical environmental data to citizen hydrologists."
+  },
+  {
+    id: "d-3",
+    title: "Independent Transit Co-op Tests Battery-Electric Shuttles on State Route 63",
+    category: "Transit",
+    author: "Marcus Vance",
+    callsign: "mvance",
+    bureau: "Wabash Valley",
+    timestamp: "2h ago",
+    location: "Covington, IN",
+    coordinates: [-87.3928, 40.1406],
+    content: "Early metrics from the 100-day freight and commuter corridor pilot show a 68% drop in fleet operating expenses, paving the way for expanded multi-county commuter routes next spring."
+  },
+  {
+    id: "d-4",
+    title: "Community Fiber Exchange Deploys Optical Splice Ring Across Vermilion County",
+    category: "Telecom",
+    author: "Victor Birkle",
+    callsign: "ras.ip",
+    bureau: "Midwest Corridor",
+    timestamp: "4h ago",
+    location: "Catlin, IL",
+    coordinates: [-87.7056, 40.0664],
+    content: "A volunteer-backed telecommunications collective has completed the final segment of a 40-mile dark fiber loop connecting municipal emergency shelters and public library networks."
+  }
+];
+
 export const FieldPressMaster: React.FC = () => {
-  const [isDark, setIsDark] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("front-page");
-  const [activeFilter, setActiveFilter] = useState<string>("All");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isEditionMenuOpen, setIsEditionMenuOpen] = useState(false);
-  const [activeEdition, setActiveEdition] = useState(EDITIONS[0]);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [watermarkVisible, setWatermarkVisible] = useState(true);
 
-  const [scoops, setScoops] = useState<Scoop[]>(INITIAL_SCOOPS);
-  const [classifieds] = useState<Classified[]>(INITIAL_CLASSIFIEDS);
-  const [myArchive, setMyArchive] = useState<ArchivedMedia[]>(USER_PRIVATE_ARCHIVE);
+  const [activeTab, setActiveTab] = useState<"edition" | "wire" | "map" | "classifieds">("edition");
+  const [showPressPassModal, setShowPressPassModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
-  // Pressy'O State
-  const [pressyMode, setPressyMode] = useState(false);
+  const [pressPass, setPressPass] = useState<PressPassData>(() => {
+    try {
+      const saved = localStorage.getItem("fieldpress_press_pass");
+      return saved ? JSON.parse(saved) : DEFAULT_PRESS_PASS;
+    } catch {
+      return DEFAULT_PRESS_PASS;
+    }
+  });
 
-  // Compose State
-  const [isComposeOpen, setIsComposeOpen] = useState(false);
-  const [headline, setHeadline] = useState("");
-  const [bodyText, setBodyText] = useState("");
-  const [selectedStamp, setSelectedStamp] = useState<"SCOOP" | "SPOTTED" | "BREAKING" | "LOCAL VIBE">("SCOOP");
-  const [attachedImageUrl, setAttachedImageUrl] = useState<string | null>(null);
+  const [editPassForm, setEditPassForm] = useState<PressPassData>(pressPass);
+  const [savedSuccessToast, setSavedSuccessToast] = useState("");
 
-  // Media Drawer in Composer
-  const [mediaDrawer, setMediaDrawer] = useState<"none" | "gen" | "archive">("none");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [dispatches, setDispatches] = useState<Dispatch[]>(() => {
+    try {
+      const saved = localStorage.getItem("fieldpress_dispatches");
+      return saved ? JSON.parse(saved) : INITIAL_DISPATCHES;
+    } catch {
+      return INITIAL_DISPATCHES;
+    }
+  });
 
-  // Map Ref
-  const mapDesktopContainer = useRef<HTMLDivElement>(null);
-  const desktopMapRef = useRef<MapLibreMap | null>(null);
+  const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
+    try {
+      const saved = localStorage.getItem("fieldpress_pressroll");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const toggleLike = (id: string) => {
-    setScoops((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, likes: s.isLiked ? s.likes - 1 : s.likes + 1, isLiked: !s.isLiked } : s
-      )
-    );
+  const [newTitle, setNewTitle] = useState("");
+  const [newCategory, setNewCategory] = useState("Field Dispatch");
+  const [newLocation, setNewLocation] = useState("Midwest Corridor");
+  const [newContent, setNewContent] = useState("");
+
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState("30s");
+  const [defaultBeat, setDefaultBeat] = useState("Midwest Corridor (IL / IN)");
+  const [offlineCacheEnabled, setOfflineCacheEnabled] = useState(true);
+
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<maplibregl.Map | null>(null);
+
+  const savePass = (newData: PressPassData) => {
+    setPressPass(newData);
+    try {
+      localStorage.setItem("fieldpress_press_pass", JSON.stringify(newData));
+    } catch {}
+    setSavedSuccessToast("Press Pass credentials updated.");
+    setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
-  const toggleBookmark = (id: string) => {
-    setScoops((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, isBookmarked: !s.isBookmarked } : s))
-    );
-  };
-
-  const handleGenerateImage = (styleSample: string, styleName: string) => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      setAttachedImageUrl(styleSample);
-      const newMedia: ArchivedMedia = {
-        id: `m-${Date.now()}`,
-        url: styleSample,
-        label: headline.trim() ? headline.slice(0, 20) : "Street Dispatch",
-        style: styleName,
-      };
-      setMyArchive([newMedia, ...myArchive]);
-      setIsGenerating(false);
-      setMediaDrawer("none");
-    }, 1000);
-  };
-
-  const handlePublish = (e: React.FormEvent) => {
+  const handlePublish = (e: React.FormEvent, isPressRollOnly = false) => {
     e.preventDefault();
-    if (!headline.trim()) return;
+    if (!newTitle.trim() || !newContent.trim()) return;
 
-    const newScoop: Scoop = {
-      id: `sc-${Date.now()}`,
-      author: "Victor Birkle",
-      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-      anchorLevel: "Press Editor",
-      location: "Danville, IL",
-      time: "1m",
-      headline,
-      body: bodyText,
-      stamp: selectedStamp,
-      imageUrl: attachedImageUrl || undefined,
-      likes: 0,
-      comments: 0,
+    const item: Dispatch = {
+      id: `disp-${Date.now()}`,
+      title: newTitle.trim(),
+      category: newCategory,
+      author: pressPass.name,
+      callsign: pressPass.callsign,
+      bureau: pressPass.bureau,
+      timestamp: "Just now",
+      location: newLocation.trim() || "Field Beat",
+      content: newContent.trim(),
+      isPressRoll: isPressRollOnly
     };
 
-    setScoops([newScoop, ...scoops]);
-    setHeadline("");
-    setBodyText("");
-    setAttachedImageUrl(null);
-    setMediaDrawer("none");
-    setIsComposeOpen(false);
+    if (isPressRollOnly) {
+      const updated = [item, ...pressRoll];
+      setPressRoll(updated);
+      try {
+        localStorage.setItem("fieldpress_pressroll", JSON.stringify(updated));
+      } catch {}
+      setSavedSuccessToast("Staged to Press Roll queue.");
+    } else {
+      const updated = [item, ...dispatches];
+      setDispatches(updated);
+      try {
+        localStorage.setItem("fieldpress_dispatches", JSON.stringify(updated));
+      } catch {}
+      setSavedSuccessToast("Dispatch published to live feed.");
+    }
+
+    setNewTitle("");
+    setNewContent("");
+    setShowPublishModal(false);
+    setTimeout(() => setSavedSuccessToast(""), 3500);
   };
 
-  const filteredScoops =
-    activeFilter === "All"
-      ? scoops
-      : scoops.filter((s) => s.stamp === activeFilter);
-
-  // Map Initialization
   useEffect(() => {
-    if (!mapDesktopContainer.current || desktopMapRef.current) return;
+    if (activeTab === "map" && mapContainerRef.current && !mapInstanceRef.current) {
+      try {
+        const map = new maplibregl.Map({
+          container: mapContainerRef.current,
+          style: {
+            version: 8,
+            sources: {
+              osm: {
+                type: "raster",
+                tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+                tileSize: 256,
+                attribution: "&copy; OpenStreetMap contributors"
+              }
+            },
+            layers: [
+              {
+                id: "osm-tiles",
+                type: "raster",
+                source: "osm",
+                minzoom: 0,
+                maxzoom: 19
+              }
+            ]
+          },
+          center: [-87.6298, 40.1245],
+          zoom: 7.5
+        });
 
-    const map = new MapLibreMap({
-      container: mapDesktopContainer.current,
-      style: isDark ? MAP_STYLES.dark : MAP_STYLES.light,
-      center: [-86.9, 39.5],
-      zoom: 6.2,
-      attributionControl: false,
-    });
+        dispatches.forEach((d) => {
+          if (d.coordinates) {
+            new maplibregl.Marker({ color: "#f59e0b" })
+              .setLngLat(d.coordinates)
+              .setPopup(
+                new maplibregl.Popup({ offset: 25 }).setHTML(
+                  `<div style="font-family: monospace; font-size: 12px; color: #09090b; padding: 4px;">
+                    <strong>${d.title}</strong><br/>
+                    <span style="color:#d97706;">[${d.location}]</span> - ${d.author}
+                  </div>`
+                )
+              )
+              .addTo(map);
+          }
+        });
 
-    map.addControl(new NavigationControl({ showCompass: false }), "bottom-right");
-    desktopMapRef.current = map;
-
-    const pins = [
-      { coords: [-87.6306, 40.1245] as [number, number] },
-      { coords: [-86.1581, 39.7684] as [number, number] },
-      { coords: [-87.5711, 37.9716] as [number, number] },
-    ];
-
-    pins.forEach((p) => {
-      const el = document.createElement("div");
-      el.className = "flex items-center justify-center p-1";
-      el.innerHTML = `<div class="h-3 w-3 rounded-full bg-amber-500 ring-4 ring-amber-500/40 animate-pulse"></div>`;
-      new Marker({ element: el }).setLngLat(p.coords).addTo(map);
-    });
+        mapInstanceRef.current = map;
+      } catch (err) {
+        console.warn("MapLibre initialization fallback:", err);
+      }
+    }
 
     return () => {
-      map.remove();
-      desktopMapRef.current = null;
+      if (activeTab !== "map" && mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
     };
-  }, [isDark]);
+  }, [activeTab, dispatches]);
+
+  const getAccentColorClasses = (color: string) => {
+    switch (color) {
+      case "emerald":
+        return {
+          bar: "bg-emerald-500",
+          text: "text-emerald-400",
+          border: "border-emerald-500/50",
+          badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+        };
+      case "cyan":
+        return {
+          bar: "bg-cyan-500",
+          text: "text-cyan-400",
+          border: "border-cyan-500/50",
+          badge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+        };
+      case "rose":
+        return {
+          bar: "bg-rose-500",
+          text: "text-rose-400",
+          border: "border-rose-500/50",
+          badge: "bg-rose-500/10 text-rose-400 border-rose-500/30"
+        };
+      case "zinc":
+        return {
+          bar: "bg-zinc-400",
+          text: "text-zinc-300",
+          border: "border-zinc-500/50",
+          badge: "bg-zinc-800 text-zinc-300 border-zinc-600"
+        };
+      case "amber":
+      default:
+        return {
+          bar: "bg-amber-500",
+          text: "text-amber-400",
+          border: "border-amber-500/50",
+          badge: "bg-amber-500/10 text-amber-400 border-amber-500/30"
+        };
+    }
+  };
+
+  const currentAccent = getAccentColorClasses(pressPass.accentColor);
 
   return (
-    <div
-      className={`min-h-screen w-full transition-colors duration-200 antialiased ${
-        isDark ? "bg-black text-zinc-100" : "bg-stone-50 text-zinc-900"
-      }`}
-    >
-      {/* ================= 1. CLEAN CONSOLIDATED HEADER (NO CONGESTION) ================= */}
-      <header
-        className={`sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b px-4 lg:px-8 backdrop-blur-md transition-colors ${
-          isDark ? "border-zinc-800/80 bg-black/80" : "border-zinc-200/90 bg-white/80"
-        }`}
-      >
-        {/* Left: Brand + Edition Dropdown */}
-        <div className="flex items-center gap-3 relative">
-          <button
-            onClick={() => setActiveTab("front-page")}
-            className="flex items-center gap-2 text-left focus:outline-hidden"
-          >
-            <span className="font-serif text-lg font-black tracking-tight">FIELDPRESS</span>
-          </button>
+    <div className={`min-h-screen relative font-sans transition-colors duration-200 ${
+      theme === "dark" ? "bg-zinc-950 text-zinc-100" : "bg-zinc-100 text-zinc-900"
+    }`}>
 
-          <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800" />
-
-          {/* Clean Edition Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsEditionMenuOpen(!isEditionMenuOpen)}
-              className="flex items-center gap-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-xs font-mono font-medium hover:border-amber-500 transition"
-            >
-              <span className="truncate max-w-[150px] sm:max-w-none">{activeEdition.name}</span>
-              <ChevronDown className="h-3 w-3 text-zinc-400" />
-            </button>
-
-            {isEditionMenuOpen && (
-              <div
-                className={`absolute left-0 top-9 z-50 w-60 rounded-xl border p-1.5 shadow-2xl backdrop-blur-md transition-all ${
-                  isDark ? "border-zinc-800 bg-zinc-900/95" : "border-zinc-200 bg-white/95"
-                }`}
-              >
-                <div className="px-2.5 py-1 text-2xs font-mono uppercase text-zinc-400 font-bold">
-                  Select Edition
-                </div>
-                {EDITIONS.map((ed) => (
-                  <button
-                    key={ed.id}
-                    onClick={() => {
-                      setActiveEdition(ed);
-                      setIsEditionMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition flex items-center justify-between ${
-                      activeEdition.id === ed.id
-                        ? "bg-amber-500 text-zinc-950 font-bold"
-                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    <span>{ed.name}</span>
-                    <span className="text-[10px] opacity-75">{ed.vol}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* 1. BACKGROUND WATERMARK */}
+      {watermarkVisible && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden opacity-[0.035] select-none"
+        >
+          <div className="transform -rotate-12 flex flex-col items-center">
+            <span className={`font-mono text-[14vw] font-black tracking-widest uppercase leading-none ${
+              theme === "dark" ? "text-zinc-100" : "text-zinc-900"
+            }`}>
+              FIELDPRESS
+            </span>
+            <span className={`font-mono text-sm sm:text-lg md:text-xl tracking-[0.45em] font-bold mt-2 ${
+              theme === "dark" ? "text-zinc-300" : "text-zinc-700"
+            }`}>
+              VERIFIED INDEPENDENT DISPATCH
+            </span>
           </div>
         </div>
+      )}
 
-        {/* Right: Only Press Pass + Hamburger Menu */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("press-pass")}
-            className="flex items-center gap-2 focus:outline-hidden"
-            title="My Press Pass"
-          >
-            <img
-              src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80"
-              alt="Victor"
-              className="h-8 w-8 rounded-full object-cover ring-2 ring-amber-500"
-            />
-          </button>
+      {/* 2. TOAST NOTIFICATION */}
+      {savedSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-amber-500 text-zinc-950 font-mono text-xs font-bold px-4 py-2.5 rounded shadow-lg border border-amber-300 animate-bounce">
+          <Check className="h-4 w-4" />
+          <span>{savedSuccessToast}</span>
+        </div>
+      )}
 
-          <button
-            onClick={() => setIsDrawerOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-            title="Settings & Control Deck"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+      {/* 3. MAIN HEADER BAR */}
+      <header className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors ${
+        theme === "dark" 
+          ? "bg-zinc-950/90 border-zinc-800/80" 
+          : "bg-zinc-50/90 border-zinc-200/80"
+      }`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          
+          {/* Logo Header Lockup: FP_* FieldPress */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setActiveTab("edition")}
+              className="flex items-center gap-1 font-mono text-base font-bold tracking-tight select-none hover:opacity-85 transition group"
+            >
+              <span className="text-amber-500 font-extrabold text-lg">FP_</span>
+              <img
+                src="/favicon.ico"
+                alt="*"
+                className="h-4 w-4 inline-block object-contain group-hover:rotate-12 transition-transform"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = "none";
+                  const fallback = document.getElementById("pressie-fallback-header");
+                  if (fallback) fallback.style.display = "inline-flex";
+                }}
+              />
+              <span
+                id="pressie-fallback-header"
+                style={{ display: "none" }}
+                className="text-amber-400 font-black text-sm"
+              >
+                ★
+              </span>
+              <span className={`font-sans tracking-wide font-extrabold ml-0.5 text-base ${
+                theme === "dark" ? "text-zinc-100" : "text-zinc-900"
+              }`}>
+                FieldPress
+              </span>
+            </button>
+
+            <span className={`hidden md:inline-block px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest rounded border ${
+              theme === "dark" ? "bg-zinc-900 text-zinc-400 border-zinc-800" : "bg-zinc-200 text-zinc-600 border-zinc-300"
+            }`}>
+              Desk Workstation
+            </span>
+          </div>
+
+          {/* Navigation Tabs */}
+          <nav className="hidden sm:flex items-center gap-1 font-mono text-xs">
+            <button
+              onClick={() => setActiveTab("edition")}
+              className={`px-3 py-1.5 rounded transition ${
+                activeTab === "edition"
+                  ? theme === "dark"
+                    ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
+                    : "bg-zinc-200 text-amber-600 font-semibold shadow-sm"
+                  : theme === "dark" ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Edition
+            </button>
+            <button
+              onClick={() => setActiveTab("wire")}
+              className={`px-3 py-1.5 rounded transition ${
+                activeTab === "wire"
+                  ? theme === "dark"
+                    ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
+                    : "bg-zinc-200 text-amber-600 font-semibold shadow-sm"
+                  : theme === "dark" ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Live Wire
+            </button>
+            <button
+              onClick={() => setActiveTab("map")}
+              className={`px-3 py-1.5 rounded transition ${
+                activeTab === "map"
+                  ? theme === "dark"
+                    ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
+                    : "bg-zinc-200 text-amber-600 font-semibold shadow-sm"
+                  : theme === "dark" ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Beat Map
+            </button>
+            <button
+              onClick={() => setActiveTab("classifieds")}
+              className={`px-3 py-1.5 rounded transition ${
+                activeTab === "classifieds"
+                  ? theme === "dark"
+                    ? "bg-zinc-800 text-amber-400 font-semibold shadow-sm"
+                    : "bg-zinc-200 text-amber-600 font-semibold shadow-sm"
+                  : theme === "dark" ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Classifieds
+            </button>
+          </nav>
+
+          {/* Action Tools */}
+          <div className="flex items-center gap-2">
+            
+            {/* Dispatch Button */}
+            <button
+              onClick={() => setShowPublishModal(true)}
+              className="flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-amber-400 shadow-sm transition"
+              title="Compose Dispatch or Press Roll"
+            >
+              <Send className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Dispatch</span>
+            </button>
+
+            {/* Dynamic Press Pass Badge Trigger */}
+            <button
+              onClick={() => {
+                setEditPassForm(pressPass);
+                setShowPressPassModal(true);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-mono transition ${currentAccent.badge} hover:brightness-110`}
+              title="Open Press Pass Customizer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span className="hidden md:inline font-bold">PASS:</span>
+              <span>{pressPass.callsign}</span>
+            </button>
+
+            {/* Profile Trigger */}
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className={`p-2 rounded border transition ${
+                theme === "dark"
+                  ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                  : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:text-zinc-900 hover:bg-zinc-200"
+              }`}
+              title="User Profile"
+            >
+              <User className="h-4 w-4" />
+            </button>
+
+            {/* Settings Trigger */}
+            <button
+              onClick={() => setShowSettingsDrawer(true)}
+              className={`p-2 rounded border transition ${
+                theme === "dark"
+                  ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                  : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:text-zinc-900 hover:bg-zinc-200"
+              }`}
+              title="Workstation Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className={`p-2 rounded border transition ${
+                theme === "dark"
+                  ? "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-amber-400"
+                  : "border-zinc-200 bg-zinc-100 text-zinc-600 hover:text-amber-600"
+              }`}
+              title="Toggle Theme"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* ================= 2. DESKTOP 3-COLUMN WORKSTATION ================= */}
-      <div className="mx-auto max-w-7xl px-0 sm:px-4 lg:px-8 py-0 lg:py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-8 items-start">
-          
-          {/* LEFT COLUMN: Clean Nav Rail (3 cols) */}
-          <aside className="hidden lg:flex lg:col-span-3 lg:flex-col lg:sticky lg:top-20 space-y-4">
-            
-            <nav className={`p-2 rounded-2xl border font-mono text-xs space-y-1 ${isDark ? "border-zinc-800/80 bg-zinc-900/30" : "border-zinc-200 bg-white"}`}>
-              <button
-                onClick={() => setActiveTab("front-page")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition ${
-                  activeTab === "front-page" ? "bg-amber-500 text-zinc-950 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                }`}
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>Front Page</span>
-              </button>
+      {/* 4. MAIN CONTENT AREA */}
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        
+        {/* Edition Subheader */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-zinc-800/60 gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-mono text-xl sm:text-2xl font-black uppercase tracking-tight">
+                {activeTab === "edition" && "Daily Broadsheet Edition"}
+                {activeTab === "wire" && "Live Dispatch Wire"}
+                {activeTab === "map" && "Geospatial Beat Radar"}
+                {activeTab === "classifieds" && "Community Classifieds Wire"}
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Radio className="h-2.5 w-2.5 animate-pulse" /> LIVE
+              </span>
+            </div>
+            <p className={`font-mono text-xs mt-0.5 ${theme === "dark" ? "text-zinc-400" : "text-zinc-600"}`}>
+              Bureau: <span className="text-amber-500 font-semibold">{pressPass.bureau}</span> • Verified Feed • Synchronized
+            </p>
+          </div>
 
-              <button
-                onClick={() => setActiveTab("back-page")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition ${
-                  activeTab === "back-page" ? "bg-amber-500 text-zinc-950 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                }`}
-              >
-                <Tag className="h-4 w-4" />
-                <span>The Back Page</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab("press-pass")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition ${
-                  activeTab === "press-pass" ? "bg-amber-500 text-zinc-950 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                }`}
-              >
-                <User className="h-4 w-4" />
-                <span>My Press Pass</span>
-              </button>
-            </nav>
-
+          <div className="flex items-center gap-2">
+            {pressRoll.length > 0 && (
+              <span className="font-mono text-xs px-2.5 py-1 rounded bg-zinc-800/80 text-amber-400 border border-zinc-700/50 flex items-center gap-1.5">
+                <FolderLock className="h-3.5 w-3.5" />
+                <span>{pressRoll.length} in Press Roll</span>
+              </span>
+            )}
             <button
-              onClick={() => setIsComposeOpen(true)}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-bold text-zinc-950 shadow-md hover:bg-amber-400 transition"
+              onClick={() => {
+                setSavedSuccessToast("Feeds refreshed from edge gateway.");
+                setTimeout(() => setSavedSuccessToast(""), 2500);
+              }}
+              className={`p-1.5 rounded border font-mono text-xs flex items-center gap-1.5 transition ${
+                theme === "dark" 
+                  ? "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200" 
+                  : "border-zinc-200 bg-zinc-100 text-zinc-600 hover:text-zinc-900"
+              }`}
             >
-              <Flame className="h-4 w-4 fill-zinc-950" />
-              <span>Drop a Scoop</span>
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sync</span>
             </button>
+          </div>
+        </div>
 
-            {/* Pressie Pass Mini Card */}
-            <div className={`p-4 rounded-2xl border ${isDark ? "border-zinc-800/80 bg-zinc-900/30" : "border-zinc-200 bg-white"}`}>
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80"
-                  alt="Victor"
-                  className="h-10 w-10 rounded-xl object-cover ring-1 ring-amber-500"
-                />
-                <div>
-                  <h4 className="font-serif font-bold text-sm">Victor Birkle</h4>
-                  <span className="font-mono text-2xs text-amber-500 font-semibold block">FP-9284-IL · Editor</span>
+        {/* TAB 1: EDITION (BROADSHEET) */}
+        {activeTab === "edition" && (
+          <div className="space-y-8">
+            {dispatches[0] && (
+              <div className={`p-6 sm:p-8 rounded-lg border relative overflow-hidden transition ${
+                theme === "dark" ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"
+              }`}>
+                <div className="flex items-center gap-2 font-mono text-xs mb-3">
+                  <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30 uppercase tracking-wider text-[10px]">
+                    {dispatches[0].category}
+                  </span>
+                  <span className={theme === "dark" ? "text-zinc-500" : "text-zinc-400"}>•</span>
+                  <span className="flex items-center gap-1 text-zinc-400">
+                    <MapPin className="h-3 w-3 text-amber-500" /> {dispatches[0].location}
+                  </span>
+                  <span className={theme === "dark" ? "text-zinc-500" : "text-zinc-400"}>•</span>
+                  <span className="text-zinc-500">{dispatches[0].timestamp}</span>
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-4 leading-snug">
+                  {dispatches[0].title}
+                </h2>
+
+                <p className={`text-sm sm:text-base leading-relaxed max-w-4xl ${
+                  theme === "dark" ? "text-zinc-300" : "text-zinc-700"
+                }`}>
+                  {dispatches[0].content}
+                </p>
+
+                <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">By</span>
+                    <span className="font-bold text-zinc-200">{dispatches[0].author}</span>
+                    <span className="text-amber-500">(@{dispatches[0].callsign})</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-zinc-500">
+                    <button className="hover:text-amber-400 transition flex items-center gap-1">
+                      <Share2 className="h-3.5 w-3.5" /> Share
+                    </button>
+                    <button className="hover:text-amber-400 transition flex items-center gap-1">
+                      <Bookmark className="h-3.5 w-3.5" /> Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {dispatches.slice(1).map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-5 rounded-lg border flex flex-col justify-between transition hover:border-zinc-700 ${
+                    theme === "dark" ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200 shadow-sm"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between font-mono text-[11px] mb-2 text-zinc-400">
+                      <span className="text-amber-500 font-semibold">{item.category}</span>
+                      <span>{item.timestamp}</span>
+                    </div>
+
+                    <h3 className="font-bold text-base leading-snug mb-2.5">
+                      {item.title}
+                    </h3>
+
+                    <p className={`text-xs leading-relaxed line-clamp-4 ${
+                      theme === "dark" ? "text-zinc-400" : "text-zinc-600"
+                    }`}>
+                      {item.content}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 pt-3 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-500">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-zinc-400" /> {item.location}
+                    </span>
+                    <span className="text-zinc-400 font-semibold">{item.author}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: LIVE WIRE */}
+        {activeTab === "wire" && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-mono text-xs text-zinc-400">
+                Streaming live dispatches from field bureaus
+              </span>
+              <span className="font-mono text-xs text-amber-500 font-bold">
+                {dispatches.length} Entries Active
+              </span>
+            </div>
+
+            {dispatches.map((disp) => (
+              <div
+                key={disp.id}
+                className={`p-5 rounded-lg border flex flex-col gap-2 transition ${
+                  theme === "dark" ? "bg-zinc-900/50 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"
+                }`}
+              >
+                <div className="flex items-center justify-between font-mono text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-amber-400 font-bold text-[10px] uppercase">
+                      {disp.category}
+                    </span>
+                    <span className="text-zinc-400">{disp.bureau}</span>
+                  </div>
+                  <span className="text-zinc-500">{disp.timestamp}</span>
+                </div>
+
+                <h3 className="font-bold text-lg">{disp.title}</h3>
+                <p className={`text-sm leading-relaxed ${theme === "dark" ? "text-zinc-300" : "text-zinc-700"}`}>
+                  {disp.content}
+                </p>
+
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-500 pt-2 border-t border-zinc-800/50 mt-1">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 text-amber-500" /> {disp.location}
+                  </span>
+                  <span>By {disp.author} (@{disp.callsign})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* TAB 3: BEAT MAP */}
+        {activeTab === "map" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between font-mono text-xs text-zinc-400">
+              <span>Interactive MapLibre Vector Beat Radar</span>
+              <span className="text-amber-500">Center: Wabash Valley Corridor</span>
+            </div>
+
+            <div 
+              ref={mapContainerRef} 
+              className="w-full h-[600px] rounded-lg border border-zinc-800 overflow-hidden relative shadow-inner bg-zinc-900"
+            >
+              <div className="absolute top-4 left-4 z-10 bg-zinc-950/90 border border-zinc-800 p-3 rounded font-mono text-xs space-y-1 shadow-lg backdrop-blur">
+                <div className="font-bold text-amber-400">FIELDPRESS BEAT RADAR</div>
+                <div className="text-zinc-400">Showing active localized dispatches</div>
+                <div className="flex items-center gap-2 pt-1 text-[11px]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                  <span className="text-zinc-200">Verified Dispatch</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: CLASSIFIEDS */}
+        {activeTab === "classifieds" && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className={`p-6 rounded-lg border ${
+              theme === "dark" ? "bg-zinc-900/60 border-zinc-800" : "bg-white border-zinc-200"
+            }`}>
+              <h2 className="font-mono text-lg font-bold mb-2">Community Classifieds & Notices</h2>
+              <p className="text-xs text-zinc-400 font-mono mb-4">
+                Public bulletin board for regional initiatives, co-op notices, and citizen requests.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded border border-zinc-800 bg-zinc-950/40">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">NOTICE</span>
+                  <h4 className="font-bold text-sm mt-2">Municipal Solar Siting Public Hearing</h4>
+                  <p className="text-xs text-zinc-400 mt-1">County Board Room B • Sep 18, 6:00 PM</p>
+                </div>
+                <div className="p-4 rounded border border-zinc-800 bg-zinc-950/40">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">EQUIPMENT</span>
+                  <h4 className="font-bold text-sm mt-2">Mobile Broadcast Transceiver Testing</h4>
+                  <p className="text-xs text-zinc-400 mt-1">Volunteer field operators wanted for packet radio check-in.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* 5. PRESS PASS CUSTOMIZER MODAL */}
+      {showPressPassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className={`w-full max-w-2xl rounded-xl border p-6 shadow-2xl transition ${
+            theme === "dark" ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2 font-mono">
+                <ShieldCheck className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-base">Press Pass Credential & Customizer</h3>
+              </div>
+              <button 
+                onClick={() => setShowPressPassModal(false)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="my-6 flex flex-col items-center">
+              <div 
+                className={`w-full max-w-md rounded-xl border-2 p-5 relative overflow-hidden shadow-2xl transition-all duration-300 ${
+                  currentAccent.border
+                } ${theme === "dark" ? "bg-zinc-950" : "bg-zinc-50"}`}
+              >
+                <div className={`absolute top-0 left-0 right-0 h-2.5 ${currentAccent.bar}`} />
+
+                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 pt-1">
+                  <div className="flex items-center gap-1.5 font-mono text-xs font-black tracking-tight">
+                    <span className="text-amber-500">FP_</span>
+                    <span className="font-bold text-zinc-100">FIELDPRESS</span>
+                    <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 ml-1">PRESS CORPS</span>
+                  </div>
+                  <span className="font-mono text-[10px] font-bold text-zinc-500 tracking-wider">
+                    {editPassForm.badgeId}
+                  </span>
+                </div>
+
+                <div className="flex gap-4 my-4 items-center">
+                  <div className={`w-20 h-24 rounded border flex flex-col items-center justify-center relative overflow-hidden ${
+                    theme === "dark" ? "bg-zinc-900 border-zinc-700" : "bg-zinc-200 border-zinc-300"
+                  }`}>
+                    <User className="h-10 w-10 text-zinc-400" />
+                    <span className="font-mono text-[9px] text-zinc-500 mt-1 uppercase font-bold">VERIFIED</span>
+                  </div>
+
+                  <div className="flex-1 space-y-1">
+                    <div className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+                      ISSUED CREDENTIAL
+                    </div>
+                    <div className="font-extrabold text-lg leading-tight">
+                      {editPassForm.name || "Reporter Name"}
+                    </div>
+                    <div className="font-mono text-xs text-amber-500 font-bold">
+                      @{editPassForm.callsign || "callsign"}
+                    </div>
+                    <div className="font-mono text-xs text-zinc-400 pt-0.5">
+                      {editPassForm.role}
+                    </div>
+                    <div className="font-mono text-[11px] text-zinc-500">
+                      {editPassForm.bureau}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between font-mono text-[10px]">
+                  <span className="text-zinc-500">VALID: {editPassForm.issueDate}</span>
+                  <span className={`px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase ${currentAccent.badge}`}>
+                    ACTIVE CREDENTIAL
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Press Suite Operator Desk Gateway */}
-            <div className={`p-4 rounded-2xl border ${isDark ? "border-zinc-800/80 bg-zinc-900/20" : "border-zinc-200 bg-white"}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <Award className="h-4 w-4 text-amber-500" />
-                <h5 className="font-serif text-xs font-bold">Press Suite Agency</h5>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              savePass(editPassForm);
+              setShowPressPassModal(false);
+            }} className="space-y-4 font-mono text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-400 mb-1">Full Byline Name</label>
+                  <input
+                    type="text"
+                    value={editPassForm.name}
+                    onChange={(e) => setEditPassForm({ ...editPassForm, name: e.target.value })}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Reporter Callsign (@handle)</label>
+                  <input
+                    type="text"
+                    value={editPassForm.callsign}
+                    onChange={(e) => setEditPassForm({ ...editPassForm, callsign: e.target.value })}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Role / Clearance Level</label>
+                  <select
+                    value={editPassForm.role}
+                    onChange={(e) => setEditPassForm({ ...editPassForm, role: e.target.value })}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="Bureau Chief & Field Lead">Bureau Chief & Field Lead</option>
+                    <option value="Senior Investigative Correspondent">Senior Investigative Correspondent</option>
+                    <option value="Field Reporter & Photographer">Field Reporter & Photographer</option>
+                    <option value="Independent Wire Dispatcher">Independent Wire Dispatcher</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Bureau / Outlet Affiliation</label>
+                  <input
+                    type="text"
+                    value={editPassForm.bureau}
+                    onChange={(e) => setEditPassForm({ ...editPassForm, bureau: e.target.value })}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
-              <p className="text-[11px] text-zinc-500 leading-tight">
-                Curate custom branded editions and manage Stripe passes.
-              </p>
-              <a
-                href="/preview/FieldPressApp"
-                className="mt-2.5 inline-flex items-center gap-1 font-mono text-2xs text-amber-500 font-bold hover:underline"
-              >
-                <span>Launch Desk →</span>
-              </a>
-            </div>
 
-          </aside>
-
-          {/* ================= CENTER COLUMN (6 cols) ================= */}
-          <main className={`col-span-1 lg:col-span-6 border-x min-h-screen pb-24 lg:pb-12 ${
-            isDark ? "border-zinc-800/80 bg-zinc-950" : "border-zinc-200 bg-white"
-          }`}>
-            
-            {/* Mobile Section Nav Tabs (< 1024px) */}
-            <div className={`flex border-b font-mono text-xs lg:hidden ${
-              isDark ? "border-zinc-800 bg-black/60" : "border-zinc-200 bg-stone-50"
-            }`}>
-              <button
-                onClick={() => setActiveTab("front-page")}
-                className={`flex-1 py-3 text-center font-bold border-b-2 transition ${
-                  activeTab === "front-page" ? "border-amber-500 text-amber-500" : "border-transparent text-zinc-500"
-                }`}
-              >
-                Front Page
-              </button>
-              <button
-                onClick={() => setActiveTab("back-page")}
-                className={`flex-1 py-3 text-center font-bold border-b-2 transition ${
-                  activeTab === "back-page" ? "border-amber-500 text-amber-500" : "border-transparent text-zinc-500"
-                }`}
-              >
-                The Back Page
-              </button>
-              <button
-                onClick={() => setActiveTab("press-pass")}
-                className={`flex-1 py-3 text-center font-bold border-b-2 transition ${
-                  activeTab === "press-pass" ? "border-amber-500 text-amber-500" : "border-transparent text-zinc-500"
-                }`}
-              >
-                Press Pass
-              </button>
-            </div>
-
-            {/* TAB 1: FRONT PAGE */}
-            {activeTab === "front-page" && (
               <div>
-                {/* Horizontal Stamp Filter Carousel (Zero Congestion) */}
-                <div className={`flex items-center gap-2 p-3 border-b overflow-x-auto no-scrollbar font-mono text-xs ${
-                  isDark ? "border-zinc-800/80 bg-zinc-950" : "border-zinc-100 bg-stone-50"
-                }`}>
-                  {["All", "SCOOP", "SPOTTED", "BREAKING", "LOCAL VIBE"].map((filter) => (
+                <label className="block text-zinc-400 mb-2">Badge Accent Trim</label>
+                <div className="flex items-center gap-3">
+                  {[
+                    { id: "amber", label: "Amber Gold", class: "bg-amber-500" },
+                    { id: "emerald", label: "Emerald Press", class: "bg-emerald-500" },
+                    { id: "cyan", label: "Cyber Cyan", class: "bg-cyan-500" },
+                    { id: "rose", label: "Wire Crimson", class: "bg-rose-500" },
+                    { id: "zinc", label: "Monoprint", class: "bg-zinc-400" }
+                  ].map((col) => (
                     <button
-                      key={filter}
-                      onClick={() => setActiveFilter(filter)}
-                      className={`px-3 py-1 rounded-full shrink-0 transition ${
-                        activeFilter === filter
-                          ? "bg-amber-500 text-zinc-950 font-bold"
-                          : "border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                      key={col.id}
+                      type="button"
+                      onClick={() => setEditPassForm({ ...editPassForm, accentColor: col.id })}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] transition ${
+                        editPassForm.accentColor === col.id
+                          ? "border-white bg-zinc-800 text-white font-bold"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-200"
                       }`}
                     >
-                      {filter}
+                      <span className={`w-2.5 h-2.5 rounded-full ${col.class}`} />
+                      <span>{col.label}</span>
                     </button>
                   ))}
                 </div>
-
-                {/* Inline Composer Prompt (Desktop) */}
-                <div className={`p-4 border-b hidden sm:flex items-center gap-3 ${
-                  isDark ? "border-zinc-800/80 bg-zinc-900/20" : "border-zinc-100 bg-stone-50/60"
-                }`}>
-                  <img
-                    src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80"
-                    alt="Victor"
-                    className="h-8 w-8 rounded-full object-cover shrink-0"
-                  />
-                  <button
-                    onClick={() => setIsComposeOpen(true)}
-                    className="flex-1 text-left rounded-full border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-xs text-zinc-400 hover:border-amber-500 transition"
-                  >
-                    Drop a scoop or street report to {activeEdition.name}...
-                  </button>
-                </div>
-
-                {/* Scoops Stream */}
-                {filteredScoops.map((item) => (
-                  <article
-                    key={item.id}
-                    className={`border-b p-5 transition ${
-                      isDark ? "border-zinc-800/80 hover:bg-zinc-900/30" : "border-zinc-100 hover:bg-stone-50/50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <div className="flex items-center gap-2">
-                        <img src={item.avatar} alt={item.author} className="h-6 w-6 rounded-full object-cover" />
-                        <span className="font-semibold">{item.author}</span>
-                        <span className="rounded bg-amber-500/10 text-amber-500 px-1.5 py-0.2 text-[9px] font-mono font-bold">
-                          {item.stamp}
-                        </span>
-                      </div>
-                      <span className="text-2xs font-mono text-zinc-400">{item.time} · {item.location}</span>
-                    </div>
-
-                    <h3 className="font-serif text-lg font-bold leading-snug mb-1.5 tracking-tight">
-                      {item.headline}
-                    </h3>
-                    <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 mb-3 font-sans">
-                      {item.body}
-                    </p>
-
-                    {item.imageUrl && (
-                      <div className="mb-3.5 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <img src={item.imageUrl} alt={item.headline} className="h-64 w-full object-cover" />
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-2 text-zinc-500 text-xs font-mono">
-                      <div className="flex items-center gap-5">
-                        <button
-                          onClick={() => toggleLike(item.id)}
-                          className={`flex items-center gap-1.5 transition ${
-                            item.isLiked ? "text-red-500 font-bold" : "hover:text-red-500"
-                          }`}
-                        >
-                          <Heart className={`h-4 w-4 ${item.isLiked ? "fill-red-500" : ""}`} />
-                          <span>{item.likes}</span>
-                        </button>
-
-                        <button className="flex items-center gap-1.5 hover:text-amber-500 transition">
-                          <MessageCircle className="h-4 w-4" />
-                          <span>{item.comments}</span>
-                        </button>
-
-                        <button
-                          onClick={() => toggleBookmark(item.id)}
-                          className={`flex items-center gap-1.5 transition ${
-                            item.isBookmarked ? "text-amber-500" : "hover:text-amber-500"
-                          }`}
-                        >
-                          <Bookmark className={`h-4 w-4 ${item.isBookmarked ? "fill-amber-500" : ""}`} />
-                        </button>
-                      </div>
-
-                      <button className="hover:text-zinc-900 dark:hover:text-zinc-100 transition">
-                        <Share2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </article>
-                ))}
               </div>
-            )}
 
-            {/* TAB 2: BACK PAGE */}
-            {activeTab === "back-page" && (
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <div>
-                    <span className="text-2xs font-mono uppercase text-zinc-400 block">Notice Board</span>
-                    <h2 className="font-serif text-2xl font-bold">The Back Page</h2>
-                  </div>
-                  <span className="font-mono text-xs text-amber-500 font-bold">Community Trades</span>
+              <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPressPassModal(false)}
+                  className="px-4 py-2 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>Save & Update Pass</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. USER PROFILE MODAL */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`w-full max-w-lg rounded-xl border p-6 shadow-2xl transition ${
+            theme === "dark" ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2 font-mono">
+                <User className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-base">Reporter Profile & Fingerprint</h3>
+              </div>
+              <button 
+                onClick={() => setShowProfileModal(false)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="my-5 space-y-4 font-mono text-xs">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-xl">
+                  {pressPass.name.slice(0, 2).toUpperCase()}
                 </div>
-
-                <div className="space-y-3">
-                  {classifieds.map((cl) => (
-                    <div
-                      key={cl.id}
-                      className={`p-4 rounded-xl border ${
-                        isDark ? "border-zinc-800 bg-zinc-900/40" : "border-zinc-200 bg-stone-50/60"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-2xs font-mono mb-1">
-                        <span className="font-bold uppercase text-zinc-500">{cl.category}</span>
-                        <span className="font-bold text-amber-500 text-xs">{cl.priceOrTrade}</span>
-                      </div>
-                      <h4 className="font-serif text-base font-bold">{cl.title}</h4>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">{cl.body}</p>
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-2xs font-mono text-zinc-400">
-                        <span>📍 {cl.location} · @{cl.author}</span>
-                        <button className="font-semibold text-amber-500 hover:underline">
-                          Send Inquiry →
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <h4 className="font-extrabold text-base text-zinc-100">{pressPass.name}</h4>
+                  <p className="text-amber-500 font-bold">@{pressPass.callsign}</p>
+                  <p className="text-zinc-400 text-[11px]">{pressPass.role} • {pressPass.bureau}</p>
                 </div>
               </div>
-            )}
 
-            {/* TAB 3: PRESS PASS */}
-            {activeTab === "press-pass" && (
-              <div className="p-6 flex flex-col items-center">
-                <div className="w-full max-w-sm rounded-3xl border-2 border-amber-500 bg-stone-50 dark:bg-zinc-950 p-6 shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 font-mono text-2xs">
-                    <span className="font-serif font-black text-sm">FIELDPRESS PASS</span>
-                    <span className="font-bold text-amber-500">FP-9284-IL</span>
-                  </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <img
-                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80"
-                      alt="Victor"
-                      className="h-16 w-16 rounded-xl object-cover border-2"
-                    />
-                    <div>
-                      <h3 className="font-serif font-bold text-base">Victor Birkle</h3>
-                      <p className="font-mono text-xs text-zinc-500">@ras.ip</p>
-                      <span className="inline-block mt-1 rounded bg-amber-500 px-2 py-0.2 text-[9px] font-mono font-bold text-zinc-950 uppercase">
-                        Press Editor
-                      </span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 text-2xs font-mono text-emerald-500 flex items-center justify-between">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <ShieldCheck className="h-3.5 w-3.5" /> VERIFIED CREDENTIAL
-                    </span>
-                    <span className="text-zinc-400">EXP: SEP 2026</span>
-                  </div>
+              <div className="p-3.5 rounded bg-zinc-950/60 border border-zinc-800 space-y-2">
+                <div className="text-zinc-500 font-bold uppercase text-[10px]">Contributor Bio</div>
+                <p className="text-zinc-300 leading-relaxed">{pressPass.bio}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="p-3 rounded bg-zinc-950/60 border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] font-bold">PGP FINGERPRINT</div>
+                  <div className="text-zinc-300 font-mono text-[11px] mt-1">{pressPass.pgpKey}</div>
+                </div>
+                <div className="p-3 rounded bg-zinc-950/60 border border-zinc-800">
+                  <div className="text-zinc-500 text-[10px] font-bold">SECURE CHANNEL</div>
+                  <div className="text-amber-400 font-mono text-[11px] mt-1">{pressPass.contactSignal}</div>
                 </div>
               </div>
-            )}
 
-          </main>
-
-          {/* ================= RIGHT RAIL (3 cols) ================= */}
-          <aside className="hidden lg:flex lg:col-span-3 lg:flex-col lg:sticky lg:top-20 space-y-4">
-            
-            <div className={`rounded-2xl border overflow-hidden ${isDark ? "border-zinc-800/80 bg-zinc-900/30" : "border-zinc-200 bg-white"}`}>
-              <div className="p-3 border-b flex items-center justify-between font-mono text-2xs font-bold uppercase">
-                <span className="flex items-center gap-1.5"><Compass className="h-3.5 w-3.5 text-amber-500" /> Radar</span>
-                <span className="text-emerald-500">3 Live Nodes</span>
-              </div>
-              <div className="relative h-56 w-full bg-zinc-950">
-                <div ref={mapDesktopContainer} className="h-full w-full" />
+              <div className="flex items-center justify-between p-3 rounded bg-zinc-950/40 border border-zinc-800 text-[11px]">
+                <span className="text-zinc-400">Total Published Dispatches:</span>
+                <span className="font-bold text-amber-400">{dispatches.length}</span>
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${isDark ? "border-zinc-800/80 bg-zinc-900/30" : "border-zinc-200 bg-white"}`}>
-              <span className="font-mono text-2xs uppercase text-zinc-400 font-bold block border-b pb-2">
-                Incoming Wire
-              </span>
-              <div className="space-y-2.5 text-xs">
-                {scoops.map((s) => (
-                  <div key={s.id} className="cursor-pointer group">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
-                      <span className="text-amber-500">{s.location}</span>
-                      <span>{s.time}</span>
-                    </div>
-                    <h5 className="font-serif font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-amber-500 transition line-clamp-1">
-                      {s.headline}
-                    </h5>
-                  </div>
-                ))}
-              </div>
+            <div className="pt-4 border-t border-zinc-800 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setShowPressPassModal(true);
+                }}
+                className="font-mono text-xs text-amber-500 hover:underline"
+              >
+                Edit Press Pass Details →
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(false)}
+                className="px-4 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-xs"
+              >
+                Close
+              </button>
             </div>
-
-          </aside>
-
+          </div>
         </div>
+      )}
 
-        {/* ================= MOBILE FLOATING ACTION ================= */}
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 lg:hidden">
-          <button
-            onClick={() => setIsComposeOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-bold text-zinc-950 shadow-2xl hover:bg-amber-400 transition"
-          >
-            <Flame className="h-5 w-5 fill-zinc-950" />
-            <span className="text-sm font-semibold">Drop a Scoop</span>
-          </button>
-        </div>
-
-        {/* ================= EDITORIAL HAMBURGER DRAWER (WITH THEME TOGGLE) ================= */}
-        {isDrawerOpen && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs" onClick={() => setIsDrawerOpen(false)} />
-            <aside className={`fixed inset-y-0 right-0 z-50 w-full max-w-xs flex flex-col border-l p-5 shadow-2xl ${
-              isDark ? "border-zinc-800 bg-zinc-950" : "border-zinc-200 bg-white"
-            }`}>
-              <div className="flex items-center justify-between border-b pb-3 mb-4">
-                <span className="font-mono text-xs uppercase font-bold text-amber-500">Control Deck</span>
-                <button onClick={() => setIsDrawerOpen(false)} className="rounded-full p-1 text-zinc-400 hover:text-zinc-100">
+      {/* 7. SETTINGS DRAWER */}
+      {showSettingsDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
+          <div className={`w-full max-w-md h-full border-l p-6 shadow-2xl flex flex-col justify-between overflow-y-auto ${
+            theme === "dark" ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+                <div className="flex items-center gap-2 font-mono">
+                  <Sliders className="h-5 w-5 text-amber-500" />
+                  <h3 className="font-bold text-base">Workstation Settings</h3>
+                </div>
+                <button 
+                  onClick={() => setShowSettingsDrawer(false)}
+                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="space-y-4 font-mono text-xs flex-1 overflow-y-auto">
+              <div className="space-y-3 font-mono text-xs">
+                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
+                  Appearance & Watermark
+                </h4>
                 
-                {/* 1. THEME TOGGLE IN HAMBURGER */}
-                <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                  isDark ? "border-zinc-800 bg-zinc-900/40" : "border-zinc-200 bg-stone-50"
-                }`}>
-                  <div className="flex items-center gap-2 text-xs">
-                    {isDark ? <Moon className="h-4 w-4 text-amber-500" /> : <Sun className="h-4 w-4 text-amber-500" />}
-                    <span className="font-semibold">Appearance</span>
+                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                  <div>
+                    <div className="font-bold">Interface Theme</div>
+                    <div className="text-[11px] text-zinc-400">Toggle dark noir vs. light broadsheet</div>
                   </div>
                   <button
-                    onClick={() => setIsDark(!isDark)}
-                    className="px-3 py-1 rounded-full border border-zinc-300 dark:border-zinc-700 font-bold hover:border-amber-500 transition"
+                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    className="px-3 py-1.5 rounded bg-zinc-800 border border-zinc-700 text-amber-400 font-bold"
                   >
-                    {isDark ? "Dark Mode" : "Light Mode"}
+                    {theme.toUpperCase()}
                   </button>
                 </div>
 
-                {/* 2. Pressy'O Toggle */}
-                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold">
-                      <Bot className="h-4 w-4" />
-                      <span>Pressy'O Liaison</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={pressyMode}
-                      onChange={(e) => setPressyMode(e.target.checked)}
-                      className="cursor-pointer accent-emerald-500"
-                    />
+                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                  <div>
+                    <div className="font-bold">Background Watermark</div>
+                    <div className="text-[11px] text-zinc-400">FIELDPRESS canvas watermark</div>
                   </div>
-                  <p className="text-[11px] text-zinc-500 leading-tight">
-                    Hold-your-hand guide for filing scoops and polishing headlines.
-                  </p>
-                </div>
-
-                {/* 3. Operator Desk Gateway */}
-                <div className="border-t pt-3 border-zinc-200 dark:border-zinc-800">
-                  <a
-                    href="/preview/FieldPressApp"
-                    className="flex items-center justify-between w-full p-3 rounded-xl bg-amber-500/10 text-amber-500 font-bold hover:bg-amber-500/20 transition"
-                  >
-                    <span>Open Operator Desk</span>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </aside>
-          </>
-        )}
-
-        {/* ================= SCOOP COMPOSER ================= */}
-        {isComposeOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4 backdrop-blur-xs">
-            <div className={`w-full max-w-lg rounded-t-3xl sm:rounded-2xl border p-5 shadow-2xl ${
-              isDark ? "border-zinc-800 bg-zinc-900 text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"
-            }`}>
-              
-              <div className="flex items-center justify-between border-b pb-3 mb-3 border-zinc-200 dark:border-zinc-800">
-                <span className="font-serif text-sm font-bold">File Scoop to {activeEdition.name}</span>
-                <button onClick={() => setIsComposeOpen(false)} className="rounded-full p-1 text-zinc-400">✕</button>
-              </div>
-
-              <form onSubmit={handlePublish} className="space-y-3">
-                <div className="flex gap-1.5">
-                  {(["SCOOP", "SPOTTED", "BREAKING", "LOCAL VIBE"] as const).map((s) => (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => setSelectedStamp(s)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-mono font-bold transition ${
-                        selectedStamp === s ? "bg-amber-500 text-zinc-950" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-
-                <input
-                  autoFocus
-                  required
-                  value={headline}
-                  onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="Headline (What happened?)"
-                  className="w-full bg-transparent font-serif text-base font-bold placeholder-zinc-400 focus:outline-hidden"
-                />
-
-                <textarea
-                  rows={3}
-                  value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
-                  placeholder="Street details..."
-                  className="w-full resize-none bg-transparent text-xs sm:text-sm placeholder-zinc-400 focus:outline-hidden"
-                />
-
-                {attachedImageUrl && (
-                  <div className="relative rounded-xl overflow-hidden border border-amber-500/40">
-                    <img src={attachedImageUrl} alt="Attached" className="h-40 w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setAttachedImageUrl(null)}
-                      className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1 hover:bg-black"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-
-                {mediaDrawer === "gen" && (
-                  <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950 space-y-2">
-                    <div className="flex items-center justify-between text-2xs font-mono text-zinc-400">
-                      <span>Select AI Aesthetic Filter:</span>
-                      {isGenerating && <span className="text-amber-500 animate-pulse">Generating...</span>}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {IMAGE_STYLES.map((st) => (
-                        <button
-                          type="button"
-                          key={st.id}
-                          onClick={() => handleGenerateImage(st.sampleUrl, st.name)}
-                          disabled={isGenerating}
-                          className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 font-mono text-xs text-left hover:border-amber-500 transition"
-                        >
-                          {st.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {mediaDrawer === "archive" && (
-                  <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950 space-y-2">
-                    <span className="text-2xs font-mono text-zinc-400 block">Pick from your private Press Roll:</span>
-                    <div className="grid grid-cols-3 gap-2">
-                      {myArchive.map((m) => (
-                        <button
-                          type="button"
-                          key={m.id}
-                          onClick={() => {
-                            setAttachedImageUrl(m.url);
-                            setMediaDrawer("none");
-                          }}
-                          className="h-16 rounded-lg overflow-hidden border hover:border-amber-500 transition"
-                        >
-                          <img src={m.url} alt={m.label} className="h-full w-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMediaDrawer(mediaDrawer === "gen" ? "none" : "gen")}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono transition ${
-                        mediaDrawer === "gen" ? "bg-amber-500 text-zinc-950 font-bold" : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
-                      }`}
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span>AI Shot</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setMediaDrawer(mediaDrawer === "archive" ? "none" : "archive")}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono transition ${
-                        mediaDrawer === "archive" ? "bg-amber-500 text-zinc-950 font-bold" : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
-                      }`}
-                    >
-                      <FolderLock className="h-3.5 w-3.5" />
-                      <span>Press Roll</span>
-                    </button>
-                  </div>
-
                   <button
-                    type="submit"
-                    className="flex items-center gap-1.5 rounded-full bg-amber-500 px-5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-amber-400 shadow-sm transition"
+                    onClick={() => setWatermarkVisible(!watermarkVisible)}
+                    className={`px-3 py-1.5 rounded border font-bold ${
+                      watermarkVisible 
+                        ? "bg-amber-500/20 text-amber-400 border-amber-500/40" 
+                        : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                    }`}
                   >
-                    <Send className="h-3 w-3" />
-                    <span>Publish</span>
+                    {watermarkVisible ? "VISIBLE" : "HIDDEN"}
                   </button>
                 </div>
-              </form>
+              </div>
+
+              <div className="space-y-3 font-mono text-xs">
+                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
+                  Editorial & Beat Radar
+                </h4>
+
+                <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-2">
+                  <div className="font-bold">Default Beat Region</div>
+                  <select
+                    value={defaultBeat}
+                    onChange={(e) => setDefaultBeat(e.target.value)}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-2.5 py-1.5 text-zinc-200 text-xs"
+                  >
+                    <option value="Midwest Corridor (IL / IN)">Midwest Corridor (IL / IN)</option>
+                    <option value="Great Lakes Basin">Great Lakes Basin</option>
+                    <option value="Appalachian Dispatch">Appalachian Dispatch</option>
+                    <option value="National Wire Network">National Wire Network</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                  <div>
+                    <div className="font-bold">Feed Auto-Sync</div>
+                    <div className="text-[11px] text-zinc-400">Polling interval for edge dispatches</div>
+                  </div>
+                  <select
+                    value={autoRefreshInterval}
+                    onChange={(e) => setAutoRefreshInterval(e.target.value)}
+                    className="rounded bg-zinc-950 border border-zinc-700 px-2 py-1 text-zinc-200 text-xs"
+                  >
+                    <option value="15s">15s (Realtime)</option>
+                    <option value="30s">30s</option>
+                    <option value="1m">1m</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-3 font-mono text-xs">
+                <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">
+                  Field Storage & Cache
+                </h4>
+
+                <div className="flex items-center justify-between p-3 rounded bg-zinc-900/60 border border-zinc-800">
+                  <div>
+                    <div className="font-bold">Offline Staging Queue</div>
+                    <div className="text-[11px] text-zinc-400">Cache drafts when network is degraded</div>
+                  </div>
+                  <button
+                    onClick={() => setOfflineCacheEnabled(!offlineCacheEnabled)}
+                    className={`px-3 py-1.5 rounded border font-bold ${
+                      offlineCacheEnabled 
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" 
+                        : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                    }`}
+                  >
+                    {offlineCacheEnabled ? "ENABLED" : "OFF"}
+                  </button>
+                </div>
+
+                <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold">Edge API Gateway</div>
+                    <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Connected: fieldpress.studio
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem("fieldpress_dispatches");
+                      localStorage.removeItem("fieldpress_pressroll");
+                      setSavedSuccessToast("Local cache reset to defaults.");
+                      setTimeout(() => setSavedSuccessToast(""), 3000);
+                    }}
+                    className="p-2 rounded hover:bg-zinc-800 text-zinc-400 hover:text-rose-400"
+                    title="Clear Local Cache"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-zinc-800 font-mono text-xs flex justify-between items-center text-zinc-500">
+              <span>FP Workstation v2.4.0</span>
+              <button
+                onClick={() => setShowSettingsDrawer(false)}
+                className="px-4 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition"
+              >
+                Close Settings
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-      </div>
+      {/* 8. COMPOSE / PUBLISH MODAL */}
+      {showPublishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`w-full max-w-2xl rounded-xl border p-6 shadow-2xl transition ${
+            theme === "dark" ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2 font-mono">
+                <Send className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-base">New Field Dispatch or Press Roll</h3>
+              </div>
+              <button 
+                onClick={() => setShowPublishModal(false)}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form className="my-5 space-y-4 font-mono text-xs">
+              <div>
+                <label className="block text-zinc-400 mb-1">Headline / Dispatch Title</label>
+                <input
+                  type="text"
+                  placeholder="Enter headline..."
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  required
+                  className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-400 mb-1">Category</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="Field Dispatch">Field Dispatch</option>
+                    <option value="Breaking Wire">Breaking Wire</option>
+                    <option value="Infrastructure">Infrastructure</option>
+                    <option value="Civic Affairs">Civic Affairs</option>
+                    <option value="Editorial">Editorial</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Location / Beat Anchor</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Danville, IL"
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-zinc-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-zinc-400 mb-1">Dispatch Body</label>
+                <textarea
+                  rows={5}
+                  placeholder="Write dispatch copy..."
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  required
+                  className="w-full rounded bg-zinc-950 border border-zinc-700 p-3 text-zinc-200 focus:outline-none focus:border-amber-500 leading-relaxed font-sans"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={(e) => handlePublish(e, true)}
+                  className="px-4 py-2 rounded border border-zinc-700 bg-zinc-800 text-amber-400 hover:bg-zinc-700 transition flex items-center gap-1.5"
+                >
+                  <FolderLock className="h-4 w-4" />
+                  <span>Stage to Press Roll</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPublishModal(false)}
+                    className="px-4 py-2 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handlePublish(e, false)}
+                    className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5"
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>Publish to Live Feed</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
