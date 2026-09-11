@@ -17,9 +17,31 @@ import {
   Share2,
   Bookmark,
   Sliders,
-  Trash2
+  Trash2,
+  Camera,
+  Upload
 } from "lucide-react";
 import * as maplibregl from "maplibre-gl";
+
+// Exact FieldPress "Pressie" Favicon Mark (Neon-green linework on dark rounded plate)
+export const PressieMark: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+  <svg
+    viewBox="0 0 32 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={`inline-block flex-shrink-0 ${className}`}
+  >
+    <rect width="32" height="32" rx="7" fill="#09090b" />
+    <rect x="10" y="5" width="12" height="3.5" rx="1.5" stroke="#22c55e" strokeWidth="1.5" />
+    <line x1="16" y1="8.5" x2="16" y2="12" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="16" cy="10.5" r="1" fill="#22c55e" />
+    <rect x="11" y="12" width="10" height="2.5" rx="0.5" stroke="#22c55e" strokeWidth="1.5" />
+    <rect x="7.5" y="14.5" width="17" height="4" rx="1.5" stroke="#22c55e" strokeWidth="1.5" />
+    <circle cx="16" cy="22" r="4" stroke="#22c55e" strokeWidth="1.5" />
+    <circle cx="16" cy="22" r="1.5" stroke="#22c55e" strokeWidth="1.2" strokeDasharray="1 1" />
+    <line x1="6" y1="27.5" x2="26" y2="27.5" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
 
 interface PressPassData {
   name: string;
@@ -29,6 +51,7 @@ interface PressPassData {
   badgeId: string;
   issueDate: string;
   accentColor: string;
+  avatarUrl?: string;
   bio: string;
   pgpKey: string;
   contactSignal: string;
@@ -124,6 +147,8 @@ export const FieldPressMaster: React.FC = () => {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
 
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [pressPass, setPressPass] = useState<PressPassData>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_press_pass");
@@ -166,12 +191,34 @@ export const FieldPressMaster: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
 
+  // 1-Click Image Selector: Loads immediately into state without third-party upload servers
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please choose a valid image file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        setEditPassForm((prev) => ({ ...prev, avatarUrl: base64 }));
+        setSavedSuccessToast("Photo attached. Click 'Save & Update Pass' to commit.");
+        setTimeout(() => setSavedSuccessToast(""), 3000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const savePass = (newData: PressPassData) => {
     setPressPass(newData);
     try {
       localStorage.setItem("fieldpress_press_pass", JSON.stringify(newData));
     } catch {}
-    setSavedSuccessToast("Press Pass credentials updated.");
+    setSavedSuccessToast("Press Pass credentials & photo saved.");
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
@@ -261,7 +308,7 @@ export const FieldPressMaster: React.FC = () => {
 
         mapInstanceRef.current = map;
       } catch (err) {
-        console.warn("MapLibre initialization fallback:", err);
+        console.warn("MapLibre fallback:", err);
       }
     }
 
@@ -358,31 +405,15 @@ export const FieldPressMaster: React.FC = () => {
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           
-          {/* Logo Header Lockup: FP_* FieldPress */}
+          {/* Logo Header: FP_* FieldPress */}
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setActiveTab("edition")}
-              className="flex items-center gap-1 font-mono text-base font-bold tracking-tight select-none hover:opacity-85 transition group"
+              className="flex items-center gap-1.5 font-mono text-base font-bold tracking-tight select-none hover:opacity-90 transition group"
             >
-              <span className="text-amber-500 font-extrabold text-lg">FP_</span>
-              <img
-                src="/favicon.ico"
-                alt="*"
-                className="h-4 w-4 inline-block object-contain group-hover:rotate-12 transition-transform"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = "none";
-                  const fallback = document.getElementById("pressie-fallback-header");
-                  if (fallback) fallback.style.display = "inline-flex";
-                }}
-              />
-              <span
-                id="pressie-fallback-header"
-                style={{ display: "none" }}
-                className="text-amber-400 font-black text-sm"
-              >
-                ★
-              </span>
-              <span className={`font-sans tracking-wide font-extrabold ml-0.5 text-base ${
+              <span className="text-amber-500 font-black text-lg">FP_</span>
+              <PressieMark className="h-5 w-5 group-hover:scale-105 transition-transform" />
+              <span className={`font-sans tracking-wide font-extrabold ml-1 text-base ${
                 theme === "dark" ? "text-zinc-100" : "text-zinc-900"
               }`}>
                 FieldPress
@@ -392,7 +423,7 @@ export const FieldPressMaster: React.FC = () => {
             <span className={`hidden md:inline-block px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest rounded border ${
               theme === "dark" ? "bg-zinc-900 text-zinc-400 border-zinc-800" : "bg-zinc-200 text-zinc-600 border-zinc-300"
             }`}>
-              Desk Workstation
+              FP_ Workstation
             </span>
           </div>
 
@@ -450,8 +481,6 @@ export const FieldPressMaster: React.FC = () => {
 
           {/* Action Tools */}
           <div className="flex items-center gap-2">
-            
-            {/* Dispatch Button */}
             <button
               onClick={() => setShowPublishModal(true)}
               className="flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-amber-400 shadow-sm transition"
@@ -461,21 +490,28 @@ export const FieldPressMaster: React.FC = () => {
               <span className="hidden sm:inline">Dispatch</span>
             </button>
 
-            {/* Dynamic Press Pass Badge Trigger */}
+            {/* Header Badge with Instant Photo or Callsign */}
             <button
               onClick={() => {
                 setEditPassForm(pressPass);
                 setShowPressPassModal(true);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-mono transition ${currentAccent.badge} hover:brightness-110`}
+              className={`flex items-center gap-2 px-2.5 py-1 rounded border text-xs font-mono transition ${currentAccent.badge} hover:brightness-110`}
               title="Open Press Pass Customizer"
             >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span className="hidden md:inline font-bold">PASS:</span>
+              {pressPass.avatarUrl ? (
+                <img
+                  src={pressPass.avatarUrl}
+                  alt={pressPass.callsign}
+                  className="w-5 h-5 rounded-full object-cover border border-amber-400/60"
+                />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" />
+              )}
+              <span className="hidden md:inline font-bold">FP_PASS:</span>
               <span>{pressPass.callsign}</span>
             </button>
 
-            {/* Profile Trigger */}
             <button
               onClick={() => setShowProfileModal(true)}
               className={`p-2 rounded border transition ${
@@ -488,7 +524,6 @@ export const FieldPressMaster: React.FC = () => {
               <User className="h-4 w-4" />
             </button>
 
-            {/* Settings Trigger */}
             <button
               onClick={() => setShowSettingsDrawer(true)}
               className={`p-2 rounded border transition ${
@@ -501,7 +536,6 @@ export const FieldPressMaster: React.FC = () => {
               <Settings className="h-4 w-4" />
             </button>
 
-            {/* Theme Toggle */}
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className={`p-2 rounded border transition ${
@@ -519,8 +553,6 @@ export const FieldPressMaster: React.FC = () => {
 
       {/* 4. MAIN CONTENT AREA */}
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        
-        {/* Edition Subheader */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-zinc-800/60 gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -535,7 +567,7 @@ export const FieldPressMaster: React.FC = () => {
               </span>
             </div>
             <p className={`font-mono text-xs mt-0.5 ${theme === "dark" ? "text-zinc-400" : "text-zinc-600"}`}>
-              Bureau: <span className="text-amber-500 font-semibold">{pressPass.bureau}</span> • Verified Feed • Synchronized
+              Bureau: <span className="text-amber-500 font-semibold">{pressPass.bureau}</span> • Verified FP_ Feed • Synchronized
             </p>
           </div>
 
@@ -563,7 +595,7 @@ export const FieldPressMaster: React.FC = () => {
           </div>
         </div>
 
-        {/* TAB 1: EDITION (BROADSHEET) */}
+        {/* TAB 1: EDITION */}
         {activeTab === "edition" && (
           <div className="space-y-8">
             {dispatches[0] && (
@@ -651,12 +683,8 @@ export const FieldPressMaster: React.FC = () => {
         {activeTab === "wire" && (
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex items-center justify-between mb-4">
-              <span className="font-mono text-xs text-zinc-400">
-                Streaming live dispatches from field bureaus
-              </span>
-              <span className="font-mono text-xs text-amber-500 font-bold">
-                {dispatches.length} Entries Active
-              </span>
+              <span className="font-mono text-xs text-zinc-400">Streaming live dispatches</span>
+              <span className="font-mono text-xs text-amber-500 font-bold">{dispatches.length} Entries Active</span>
             </div>
 
             {dispatches.map((disp) => (
@@ -705,7 +733,10 @@ export const FieldPressMaster: React.FC = () => {
               className="w-full h-[600px] rounded-lg border border-zinc-800 overflow-hidden relative shadow-inner bg-zinc-900"
             >
               <div className="absolute top-4 left-4 z-10 bg-zinc-950/90 border border-zinc-800 p-3 rounded font-mono text-xs space-y-1 shadow-lg backdrop-blur">
-                <div className="font-bold text-amber-400">FIELDPRESS BEAT RADAR</div>
+                <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                  <PressieMark className="h-4 w-4" />
+                  <span>FIELDPRESS BEAT RADAR</span>
+                </div>
                 <div className="text-zinc-400">Showing active localized dispatches</div>
                 <div className="flex items-center gap-2 pt-1 text-[11px]">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
@@ -744,7 +775,7 @@ export const FieldPressMaster: React.FC = () => {
         )}
       </main>
 
-      {/* 5. PRESS PASS CUSTOMIZER MODAL */}
+      {/* 5. PRESS PASS CUSTOMIZER (WITH 1-CLICK DEVICE PHOTO UPLOAD) */}
       {showPressPassModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className={`w-full max-w-2xl rounded-xl border p-6 shadow-2xl transition ${
@@ -752,8 +783,8 @@ export const FieldPressMaster: React.FC = () => {
           }`}>
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-2 font-mono">
-                <ShieldCheck className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-base">Press Pass Credential & Customizer</h3>
+                <PressieMark className="h-5 w-5" />
+                <h3 className="font-bold text-base">Press Pass Credential & Photo Customizer</h3>
               </div>
               <button 
                 onClick={() => setShowPressPassModal(false)}
@@ -763,6 +794,16 @@ export const FieldPressMaster: React.FC = () => {
               </button>
             </div>
 
+            {/* Hidden Input for Instant Image Picking */}
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+
+            {/* Interactive Live Pass Badge Preview */}
             <div className="my-6 flex flex-col items-center">
               <div 
                 className={`w-full max-w-md rounded-xl border-2 p-5 relative overflow-hidden shadow-2xl transition-all duration-300 ${
@@ -774,7 +815,8 @@ export const FieldPressMaster: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 pt-1">
                   <div className="flex items-center gap-1.5 font-mono text-xs font-black tracking-tight">
                     <span className="text-amber-500">FP_</span>
-                    <span className="font-bold text-zinc-100">FIELDPRESS</span>
+                    <PressieMark className="h-4 w-4" />
+                    <span className="font-bold text-zinc-100 ml-0.5">FIELDPRESS</span>
                     <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 ml-1">PRESS CORPS</span>
                   </div>
                   <span className="font-mono text-[10px] font-bold text-zinc-500 tracking-wider">
@@ -783,11 +825,50 @@ export const FieldPressMaster: React.FC = () => {
                 </div>
 
                 <div className="flex gap-4 my-4 items-center">
-                  <div className={`w-20 h-24 rounded border flex flex-col items-center justify-center relative overflow-hidden ${
-                    theme === "dark" ? "bg-zinc-900 border-zinc-700" : "bg-zinc-200 border-zinc-300"
-                  }`}>
-                    <User className="h-10 w-10 text-zinc-400" />
-                    <span className="font-mono text-[9px] text-zinc-500 mt-1 uppercase font-bold">VERIFIED</span>
+                  
+                  {/* Photo Frame with 1-Click Upload */}
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className={`w-20 h-24 rounded border-2 flex flex-col items-center justify-center relative overflow-hidden cursor-pointer group transition hover:border-amber-400 shadow-md ${
+                        theme === "dark" ? "bg-zinc-900 border-zinc-700" : "bg-zinc-200 border-zinc-300"
+                      }`}
+                      title="Click to select or change photo from your device"
+                    >
+                      {editPassForm.avatarUrl ? (
+                        <>
+                          <img
+                            src={editPassForm.avatarUrl}
+                            alt={editPassForm.name}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition text-[9px] font-mono font-bold">
+                            <Camera className="h-4 w-4 mb-0.5 text-amber-400" />
+                            <span>CHANGE</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <User className="h-8 w-8 text-zinc-400 group-hover:text-amber-400 transition mb-1" />
+                          <div className="font-mono text-[8px] text-amber-500 font-bold uppercase tracking-tight flex items-center gap-0.5">
+                            <Upload className="h-2.5 w-2.5" /> ADD PHOTO
+                          </div>
+                        </>
+                      )}
+                    </button>
+                    {editPassForm.avatarUrl && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditPassForm({ ...editPassForm, avatarUrl: undefined });
+                        }}
+                        className="mt-1 text-[10px] font-mono text-zinc-500 hover:text-rose-400"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 space-y-1">
@@ -816,6 +897,11 @@ export const FieldPressMaster: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              <p className="text-[11px] font-mono text-zinc-400 mt-2 flex items-center gap-1.5">
+                <Camera className="h-3.5 w-3.5 text-amber-400" />
+                <span>Click the photo frame above to choose an image from your device.</span>
+              </p>
             </div>
 
             <form onSubmit={(e) => {
@@ -935,9 +1021,17 @@ export const FieldPressMaster: React.FC = () => {
 
             <div className="my-5 space-y-4 font-mono text-xs">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-xl">
-                  {pressPass.name.slice(0, 2).toUpperCase()}
-                </div>
+                {pressPass.avatarUrl ? (
+                  <img
+                    src={pressPass.avatarUrl}
+                    alt={pressPass.name}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 shadow-md"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-amber-500 flex items-center justify-center font-bold text-amber-400 text-xl">
+                    {pressPass.name.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h4 className="font-extrabold text-base text-zinc-100">{pressPass.name}</h4>
                   <p className="text-amber-500 font-bold">@{pressPass.callsign}</p>
@@ -976,7 +1070,7 @@ export const FieldPressMaster: React.FC = () => {
                 }}
                 className="font-mono text-xs text-amber-500 hover:underline"
               >
-                Edit Press Pass Details →
+                Edit Press Pass & Photo →
               </button>
               <button
                 type="button"
@@ -1129,7 +1223,7 @@ export const FieldPressMaster: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-zinc-800 font-mono text-xs flex justify-between items-center text-zinc-500">
-              <span>FP Workstation v2.4.0</span>
+              <span>FP_ Workstation v2.4.2</span>
               <button
                 onClick={() => setShowSettingsDrawer(false)}
                 className="px-4 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition"
