@@ -1409,13 +1409,13 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* 1. AI Photojournalism Visual Generator */}
-              <div className={`p-4 rounded-xl border space-y-3 ${subCardThemeClass}`}>
+              <div className={`p-4 rounded-xl border space-y-3 border-zinc-800 bg-zinc-950/60`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-mono text-xs font-bold text-amber-500">
                     <Sparkles className="h-4 w-4" />
                     <span>AI Photojournalism Visual Generator</span>
                   </div>
-                  <span className={`text-[10px] font-mono ${subTextThemeClass}`}>
+                  <span className={`text-[10px] font-mono text-zinc-500`}>
                     Documentary Engine • Generates directly to Tray
                   </span>
                 </div>
@@ -1495,7 +1495,7 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* 2. Visual Evidence & Media Tray */}
-              <div className={`p-4 rounded-xl border space-y-3 ${subCardThemeClass}`}>
+              <div className={`p-4 rounded-xl border space-y-3 border-zinc-800 bg-zinc-950/60`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2 font-mono text-xs font-bold text-amber-500">
                     <ImageIcon className="h-4 w-4" />
@@ -1681,7 +1681,7 @@ export const FieldPressMaster: React.FC = () => {
                     <div className="flex justify-center text-zinc-400">
                       <ImageIcon className="h-8 w-8 opacity-60" />
                     </div>
-                    <p className={`text-xs font-mono font-medium ${subTextThemeClass}`}>
+                    <p className={`text-xs font-mono font-medium text-zinc-500`}>
                       No media in evidence tray yet
                     </p>
                     <p className="text-[11px] text-zinc-400">
