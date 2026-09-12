@@ -243,7 +243,7 @@ export const FieldPressMaster: React.FC = () => {
       const base64 = event.target?.result as string;
       if (base64) {
         setEditPassForm((prev) => ({ ...prev, avatarUrl: base64 }));
-        setSavedSuccessToast("Photo attached to Pressie. Click 'Issue & Save Pressie' to commit.");
+        setSavedSuccessToast("Photo attached to Pressie. Click 'Save Press Pass Credentials' to commit.");
         setTimeout(() => setSavedSuccessToast(""), 3000);
       }
     };
@@ -1043,7 +1043,7 @@ export const FieldPressMaster: React.FC = () => {
                   className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5"
                 >
                   <Save className="h-4 w-4" />
-                  <span>Issue & Save Pressie</span>
+                  <span>Save Press Pass Credentials</span>
                 </button>
               </div>
             </form>
@@ -1706,7 +1706,7 @@ export const FieldPressMaster: React.FC = () => {
                   className="px-4 py-2 rounded border border-zinc-700 bg-zinc-800 text-amber-400 hover:bg-zinc-700 transition flex items-center gap-1.5"
                 >
                   <FolderLock className="h-4 w-4" />
-                  <span>Stage to Press Roll</span>
+                  <span>Stage Pressie to Press Roll</span>
                 </button>
 
                 <div className="flex gap-2">
@@ -1723,7 +1723,7 @@ export const FieldPressMaster: React.FC = () => {
                     className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5"
                   >
                     <Send className="h-4 w-4" />
-                    <span>Publish to Live Feed</span>
+                    <span>Publish Pressie to Live Feed</span>
                   </button>
                 </div>
               </div>
