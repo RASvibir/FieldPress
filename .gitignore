@@ -69,3 +69,5 @@ artifacts/fieldpress/**
 # FieldPress Worker local development secrets and Wrangler state
 workers/fieldpress-api/.dev.vars
 workers/fieldpress-api/.wrangler/
+artifacts/
+pnpm-workspace.yaml

@@ -1,65 +1,43 @@
-# FieldPress
+# FieldPress 📰
 
-Offline-aware field reporting and audio production for independent journalists. The product is a **responsive web app** at **https://fieldpress.studio**, with an optional Tauri desktop companion. Expo and React Native are not part of this stack.
+> Autonomous Field Bureau, Dispatches, and Telemetry Platform for Independent Correspondents.
 
-## How to open it
+---
 
-- Production: **https://fieldpress.studio**
-- Local: `pnpm start` then http://localhost:3000
+## 🛠️ Modal Endpoint Separation & Pressie Builder Architecture
 
-| What | Where |
-| --- | --- |
-| Newsroom | http://localhost:3000 |
-| API health | http://localhost:3000/api/healthz |
+### 1. Correct Endpoint Wiring: "Create Pressie" vs. "Press Pass"
+- **The Issue**: In previous revisions, the "Create Pressie" navigation button opened the **Press Pass Credential Editor** (the ID card badge preview labeled *"Create & Issue Your Pressie"* with button *"Issue & Save Pressie"*). This caused crossed endpoints because a "Pressie" is a dispatch / news item, not the reporter ID badge.
+- **The Resolution**:
+  - **Create Pressie** (`openCreatePressie()`): Opens the **Pressie Builder** (`New Field Dispatch or Press Roll`).
+  - **Press Pass** (`openPressPassEditor()`): Exclusively opened by clicking the **PRESS PASS: [callsign]** badge button in the top-right utility bar or via Settings Profile. Labeled accurately as **"Press Pass Credential & ID Studio"** with button **"Save Press Pass Credentials"**.
 
-Create an account at `/login`, then add notes and produce drafts. Reset a password with the email link or the optional **desk word** set at signup. On a phone, use the browser (or install the PWA). Do not use Expo Go.
+### 2. The Enhanced Pressie Builder (Dispatch Composer)
+Built directly on the foundation of the clean dispatch modal with three key studio features:
+1. **Image Generation Prompt Box**:
+   - Visual framing brief input box (`"Visual framing brief (e.g. Substation telemetry array along rural rail lines)..."`).
+   - "Gen Visual" action button with camera icon and live rendering spinner.
+   - 1-click "Prompt from Title" shortcut to auto-generate briefs from the headline.
+   - Quick thematic preset tags (Rail Corridor, Power Grid, Dark Fiber, River Basin).
+2. **Hybrid Generated Image Preview**:
+   - Live preview of the active cover image with source attribution tag (`AI Gen` vs `Field Upload`).
+   - "Active Cover" check badge and "Detach Cover" button.
+   - Active Cover Verification Caption input.
+3. **Add Local / Capture Image Tray**:
+   - Native device upload / camera capture button (`<input type="file" accept="image/*" capture="environment" />`).
+   - Image URL linking input.
+   - Multi-image evidence tray with side-by-side thumbnail previews, 1-click cover selection, high-res download, and removal.
+4. **Core Dispatch Controls**:
+   - Headline and Beat Location with 1-tap regional corridor quick-snapping (Danville, Lafayette, Covington, Catlin, Champaign-Urbana).
+   - Category selector (Field Dispatch, Breaking Wire, Infrastructure, Civic Wire, Transit, Telecom, Editorial).
+   - Story copy narrative textarea with live character and word counters.
+   - "Stage to Press Roll" (saves draft to queue) and "Publish to Live Feed" (publishes live to Wire).
 
-## First-time setup
+---
 
-Needs Node 24+ and pnpm.
-
-```bash
-corepack enable
-pnpm install
-cp .env.example .env
-docker compose up -d
-pnpm db:push
-pnpm dev
-```
-
-Postgres can be Docker (`heliumdb` on localhost:5432) or Neon (`DATABASE_URL` in `.env`).
-
-## Quality gates
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm audit:secrets
-```
-
-## Ship
-
-**Web + API (Vercel):** project already builds `@workspace/fieldpress-desktop` and `@workspace/api-server`. Point the production domain **fieldpress.studio** at that deployment (Cloudflare DNS → Vercel). Preview URLs remain on Vercel until you cut over.
-
-**Docker:**
+## 🚀 Running FieldPress
 
 ```bash
-docker build -t fieldpress .
-docker run --rm -p 3000:3000 --env-file .env fieldpress
+cd ~/FieldPress
+npm run dev
 ```
-
-Long FFmpeg / transcription jobs stay out of serverless request handlers; run them in workers when that pipeline lands.
-
-## Layout (current → target)
-
-| Role | Today | Target |
-| --- | --- | --- |
-| Web client | `artifacts/fieldpress-desktop` | `apps/web` |
-| API | `artifacts/api-server` | `apps/api` |
-| Tauri | `src-tauri` | `apps/desktop/src-tauri` |
-| Domain types | `packages/domain` | same |
-| Database | `lib/db` | `packages/database` |
-
-Shared packages already live under `packages/`. The Expo tree in `artifacts/fieldpress` is **retired** and is not a workspace package.
