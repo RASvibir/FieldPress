@@ -1,0 +1,20 @@
+import React from "react";
+
+export const PressieMark: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+  <svg
+    viewBox="0 0 32 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={`inline-block flex-shrink-0 ${className}`}
+  >
+    <rect width="32" height="32" rx="7" fill="#09090b" />
+    <rect x="10" y="5" width="12" height="3.5" rx="1.5" stroke="#22c55e" strokeWidth="1.5" />
+    <line x1="16" y1="8.5" x2="16" y2="12" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="16" cy="10.5" r="1" fill="#22c55e" />
+    <rect x="11" y="12" width="10" height="2.5" rx="0.5" stroke="#22c55e" strokeWidth="1.5" />
+    <rect x="7.5" y="14.5" width="17" height="4" rx="1.5" stroke="#22c55e" strokeWidth="1.5" />
+    <circle cx="16" cy="22" r="4" stroke="#22c55e" strokeWidth="1.5" />
+    <circle cx="16" cy="22" r="1.5" stroke="#22c55e" strokeWidth="1.2" strokeDasharray="1 1" />
+    <line x1="6" y1="27.5" x2="26" y2="27.5" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
