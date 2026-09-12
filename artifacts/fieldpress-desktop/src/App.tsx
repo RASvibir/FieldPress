@@ -219,6 +219,110 @@ export const FieldPressMaster: React.FC = () => {
 
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("Field Dispatch");
+
+  // Visual Generator & Media Tray states
+  
+  // File input ref and media tray handlers
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [formValidationError, setFormValidationError] = useState<string | null>(null);
+  const [newCoordinates, setNewCoordinates] = useState<string>("-87.6298, 40.1245");
+
+  const handleUploadImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        const item = {
+          id: "upload-" + Date.now(),
+          url: dataUrl,
+          source: "upload" as const,
+          caption: file.name.replace(/\.[^/.]+$/, ""),
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        };
+        setEvidenceGallery((prev: any[]) => [item, ...prev.slice(0, 8)]);
+        if (typeof setNewImageUrl === "function") setNewImageUrl(dataUrl);
+        if (typeof setNewImageCaption === "function") setNewImageCaption(item.caption);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddImageUrl = () => {
+    if (!manualImageUrl.trim()) return;
+    const item = {
+      id: "url-" + Date.now(),
+      url: manualImageUrl.trim(),
+      source: "upload" as const,
+      caption: "Field media link",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    };
+    setEvidenceGallery((prev: any[]) => [item, ...prev.slice(0, 8)]);
+    if (typeof setNewImageUrl === "function") setNewImageUrl(manualImageUrl.trim());
+    if (typeof setNewImageCaption === "function") setNewImageCaption("Field media link");
+    setManualImageUrl("");
+    setShowUrlInput(false);
+  };
+
+  const handleRemoveGalleryImage = (idToRemove: string) => {
+    setEvidenceGallery((prev: any[]) => {
+      const next = prev.filter((it: any) => it.id !== idToRemove);
+      if (next.length > 0) {
+        if (typeof setNewImageUrl === "function") setNewImageUrl(next[0].url);
+        if (typeof setNewImageCaption === "function") setNewImageCaption(next[0].caption || "");
+      } else {
+        if (typeof setNewImageUrl === "function") setNewImageUrl("");
+        if (typeof setNewImageCaption === "function") setNewImageCaption("");
+      }
+      return next;
+    });
+  };
+
+  const handleDownloadImage = (url: string, namePrefix = "fieldpress-evidence") => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${namePrefix}-${Date.now()}.jpg`;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const [visualPrompt, setVisualPrompt] = useState<string>("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
+  const [evidenceGallery, setEvidenceGallery] = useState<any[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
+  const [manualImageUrl, setManualImageUrl] = useState<string>("");
+  const [newImageUrl, setNewImageUrl] = useState<string>("");
+  const [newImageCaption, setNewImageCaption] = useState<string>("");
+  const inputThemeClass = "bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500";
+  const subCardThemeClass = "border-zinc-800 bg-zinc-950/60";
+  const subTextThemeClass = "text-zinc-500";
+
+  const generateVisual = async (customPrompt?: string) => {
+    const promptText = customPrompt || visualPrompt || "Field documentary photojournalism";
+    setIsGeneratingImage(true);
+    try {
+      const seed = Math.floor(Math.random() * 1000000);
+      const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+        promptText + ", authentic documentary photojournalism, 35mm film grain, editorial lighting, Reuters Pulitzer style"
+      )}?width=1200&height=675&nologo=true&seed=${seed}`;
+      setNewImageUrl(aiUrl);
+      setEvidenceGallery((prev: any[]) => [{ id: "ai-" + Date.now(), url: aiUrl, source: "ai", caption: promptText, timestamp: "Just now" }, ...prev]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const autoDraftVisualBrief = () => {
+    const brief = "Documentary photojournalism field capture";
+    setVisualPrompt(brief);
+    generateVisual(brief);
+  };
+
   const [newLocation, setNewLocation] = useState("Midwest Corridor");
   const [newContent, setNewContent] = useState("");
 
@@ -528,22 +632,15 @@ export const FieldPressMaster: React.FC = () => {
             </button>
 
             {/* DEDICATED HEADER TAB: CREATE PRESSIE */}
-            <button onClick={() => { setShowPublishModal(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold shadow-xs hover:border-emerald-400 cursor-pointer" title="Create Pressie: Story & Dispatch Composer">
+            <button onClick={() => { setShowPublishModal(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold shadow-xs hover:border-emerald-400 cursor-pointer" title="Dispatch Pressie: Story & Field Composer">
               <PressieMark className="h-4 w-4" />
-              <span>Create Pressie</span>
+              <span>Dispatch Pressie</span>
             </button>
           </nav>
 
           {/* Action Tools */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowPublishModal(true)}
-              className="flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:bg-amber-400 shadow-sm transition"
-              title="Compose Dispatch or Press Roll"
-            >
-              <Send className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Dispatch</span>
-            </button>
+            
 
             {/* Header Badge */}
             <button
