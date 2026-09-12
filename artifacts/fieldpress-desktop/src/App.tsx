@@ -528,14 +528,7 @@ export const FieldPressMaster: React.FC = () => {
             </button>
 
             {/* DEDICATED HEADER TAB: CREATE PRESSIE */}
-            <button
-              onClick={() => {
-                setEditPassForm(pressPass);
-                setShowCreatePressieModal(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold shadow-xs hover:border-emerald-400"
-              title="Create or Customize your Press Pass (Pressie)"
-            >
+            <button onClick={() => { setShowPublishModal(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold shadow-xs hover:border-emerald-400 cursor-pointer" title="Create Pressie: Story & Dispatch Composer">
               <PressieMark className="h-4 w-4" />
               <span>Create Pressie</span>
             </button>
@@ -836,7 +829,7 @@ export const FieldPressMaster: React.FC = () => {
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-2 font-mono">
                 <PressieMark className="h-5 w-5" />
-                <h3 className="font-bold text-base">Create & Issue Your Pressie</h3>
+                <h3 className="font-bold text-base">Press Pass Credential & ID Studio</h3>
               </div>
               <button 
                 onClick={() => setShowCreatePressieModal(false)}
@@ -1353,7 +1346,7 @@ export const FieldPressMaster: React.FC = () => {
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-2 font-mono">
                 <Send className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-base">New Field Dispatch or Press Roll</h3>
+                <h3 className="font-bold text-base">Pressie Builder • New Field Dispatch</h3>
               </div>
               <button 
                 onClick={() => setShowPublishModal(false)}
