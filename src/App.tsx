@@ -430,53 +430,166 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
+  const style = disp.editionStyle || "newspaper";
+
+  type EditionTheme = {
+    bg: string;
+    border: string;
+    innerBorder: string;
+    accentBar: string;
+    headerTitle: string;
+    headerColor: string;
+    badgeText: string;
+    badgeColor: string;
+    titleColor: string;
+    bodyColor: string;
+    fontTitle: string;
+    fontBody: string;
+    fontHeader: string;
+    frameWidth: number;
+    scanlines: boolean;
+  };
+
+  const themes: Record<"newspaper" | "comic" | "arcade" | "tactical" | "magazine", EditionTheme> = {
+    newspaper: {
+      bg: "#faf5eb",
+      border: "#5c3e21",
+      innerBorder: "rgba(92, 62, 33, 0.35)",
+      accentBar: "#5c3e21",
+      headerTitle: "THE DAILY BROADSHEET • FIELDPRESS REGIONAL WIRE",
+      headerColor: "#5c3e21",
+      badgeText: "VERIFIED BROADSHEET DISPATCH",
+      badgeColor: "#5c3e21",
+      titleColor: "#1c130b",
+      bodyColor: "#2c2014",
+      fontTitle: "bold 34px Georgia, 'Times New Roman', serif",
+      fontBody: "19px Georgia, 'Times New Roman', serif",
+      fontHeader: "bold 14px Georgia, 'Times New Roman', serif",
+      frameWidth: 2,
+      scanlines: false
+    },
+    comic: {
+      bg: "#fffdf0",
+      border: "#000000",
+      innerBorder: "rgba(250, 204, 21, 0.8)",
+      accentBar: "#ef4444",
+      headerTitle: "FIELDPRESS COMIC STRIP DISPATCH WIRE",
+      headerColor: "#ef4444",
+      badgeText: "ACTION DISPATCH",
+      badgeColor: "#000000",
+      titleColor: "#000000",
+      bodyColor: "#18181b",
+      fontTitle: "bold 36px Impact, 'Arial Black', sans-serif",
+      fontBody: "bold 18px 'Trebuchet MS', sans-serif",
+      fontHeader: "bold 15px 'Trebuchet MS', sans-serif",
+      frameWidth: 6,
+      scanlines: false
+    },
+    arcade: {
+      bg: "#000000",
+      border: "#00ff66",
+      innerBorder: "rgba(0, 255, 102, 0.3)",
+      accentBar: "#00ff66",
+      headerTitle: "*** 8-BIT TELEMETRY WIRE // ARCADE EDITION ***",
+      headerColor: "#00ff66",
+      badgeText: "[ 1P VERIFIED ]",
+      badgeColor: "#00ff66",
+      titleColor: "#55ff99",
+      bodyColor: "#00ff66",
+      fontTitle: "bold 30px 'Courier New', monospace",
+      fontBody: "18px 'Courier New', monospace",
+      fontHeader: "bold 14px 'Courier New', monospace",
+      frameWidth: 2,
+      scanlines: true
+    },
+    tactical: {
+      bg: "#030a12",
+      border: "#06b6d4",
+      innerBorder: "rgba(6, 182, 212, 0.3)",
+      accentBar: "#06b6d4",
+      headerTitle: "// TACTICAL RECONNAISSANCE DISPATCH // CORRIDOR PUBLIC //",
+      headerColor: "#22d3ee",
+      badgeText: "ENCRYPTED SENSOR FEED",
+      badgeColor: "#10b981",
+      titleColor: "#e0f2fe",
+      bodyColor: "#bae6fd",
+      fontTitle: "bold 30px ui-monospace, 'Courier New', monospace",
+      fontBody: "18px ui-monospace, 'Courier New', monospace",
+      fontHeader: "bold 13px ui-monospace, 'Courier New', monospace",
+      frameWidth: 2,
+      scanlines: false
+    },
+    magazine: {
+      bg: "#09090b",
+      border: "#a855f7",
+      innerBorder: "rgba(168, 85, 247, 0.25)",
+      accentBar: "#a855f7",
+      headerTitle: "FIELDPRESS JOURNAL • SPECIAL PHOTO EDITORIAL",
+      headerColor: "#c084fc",
+      badgeText: "VERIFIED PHOTO EDITORIAL",
+      badgeColor: "#a855f7",
+      titleColor: "#fafafa",
+      bodyColor: "#e4e4e7",
+      fontTitle: "bold 34px system-ui, sans-serif",
+      fontBody: "19px Georgia, serif",
+      fontHeader: "bold 14px system-ui, sans-serif",
+      frameWidth: 2,
+      scanlines: false
+    }
+  };
+
+  const theme = themes[style] || themes.newspaper;
+
   const renderCard = (withImage: HTMLImageElement | null) => {
-    // Backdrop
-    ctx.fillStyle = "#09090b";
+    ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, 1200, 675);
 
-    // Amber accent header bar
-    ctx.fillStyle = "#f59e0b";
+    if (theme.scanlines) {
+      ctx.fillStyle = "rgba(0, 255, 102, 0.04)";
+      for (let y = 0; y < 675; y += 4) {
+        ctx.fillRect(0, y, 1200, 2);
+      }
+    }
+
+    ctx.fillStyle = theme.accentBar;
     ctx.fillRect(0, 0, 1200, 8);
 
-    // Frame borders
-    ctx.strokeStyle = "#27272a";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = theme.border;
+    ctx.lineWidth = theme.frameWidth;
     ctx.strokeRect(24, 24, 1152, 627);
 
-    ctx.strokeStyle = "rgba(245, 158, 11, 0.25)";
+    ctx.strokeStyle = theme.innerBorder;
     ctx.lineWidth = 1;
-    ctx.strokeRect(28, 28, 1144, 619);
+    ctx.strokeRect(28 + (theme.frameWidth - 2), 28 + (theme.frameWidth - 2), 1144 - (theme.frameWidth - 2) * 2, 619 - (theme.frameWidth - 2) * 2);
 
-    // Brand wire header
-    ctx.fillStyle = "#f59e0b";
-    ctx.font = "bold 15px monospace";
-    ctx.fillText("FP_ FIELDPRESS SYNDICATED DISPATCH WIRE", 55, 68);
+    ctx.fillStyle = theme.headerColor;
+    ctx.font = theme.fontHeader;
+    ctx.fillText(theme.headerTitle, 55, 68);
 
-    ctx.fillStyle = "#10b981";
-    ctx.font = "bold 13px monospace";
-    ctx.fillText("✓ VERIFIED FIELD DISPATCH", 490, 68);
+    ctx.fillStyle = theme.badgeColor;
+    ctx.font = "bold 12px monospace";
+    ctx.fillText(theme.badgeText, 55, 86);
 
-    ctx.fillStyle = "#71717a";
-    ctx.font = "13px monospace";
-    ctx.fillText(`[${disp.location}] • ${disp.timestamp}`, 820, 68);
+    ctx.fillStyle = theme.headerColor;
+    ctx.font = "12px monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(`[${disp.location}] • ${disp.timestamp}`, 1145, 68);
+    ctx.textAlign = "left";
 
-    // Separator
-    ctx.fillStyle = "#27272a";
-    ctx.fillRect(55, 88, 1090, 1);
+    ctx.fillStyle = theme.border;
+    ctx.fillRect(55, 100, 1090, 1);
 
-    // Category pill
-    ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
     const catText = (disp.category || "FIELD DISPATCH").toUpperCase();
     ctx.font = "bold 13px monospace";
-    const catWidth = ctx.measureText(catText).width + 20;
-    ctx.fillRect(55, 108, catWidth, 26);
-    ctx.fillStyle = "#f59e0b";
-    ctx.fillText(catText, 65, 126);
+    const catWidth = ctx.measureText(catText).width + 22;
+    ctx.fillStyle = theme.innerBorder;
+    ctx.fillRect(55, 116, catWidth, 26);
+    ctx.fillStyle = theme.accentBar;
+    ctx.fillText(catText, 66, 134);
 
-    ctx.fillStyle = "#a1a1aa";
-    ctx.font = "14px monospace";
-    ctx.fillText(`BEAT: ${disp.location}`, 55 + catWidth + 18, 126);
+    ctx.fillStyle = theme.headerColor;
+    ctx.font = "13px monospace";
+    ctx.fillText(`EDITION: ${style.toUpperCase()} • BEAT: ${disp.location}`, 55 + catWidth + 18, 134);
 
     let textWidth = 1090;
     if (withImage && withImage.naturalWidth > 0) {
@@ -484,48 +597,47 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
       try {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(680, 155, 465, 340);
+        ctx.rect(680, 160, 465, 340);
         ctx.clip();
-        ctx.drawImage(withImage, 680, 155, 465, 340);
+        ctx.drawImage(withImage, 680, 160, 465, 340);
         ctx.restore();
 
-        ctx.strokeStyle = "#3f3f46";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(680, 155, 465, 340);
+        ctx.strokeStyle = theme.border;
+        ctx.lineWidth = theme.frameWidth > 2 ? 4 : 2;
+        ctx.strokeRect(680, 160, 465, 340);
 
         if (disp.imageCaption) {
           ctx.fillStyle = "rgba(9, 9, 11, 0.85)";
-          ctx.fillRect(680, 465, 465, 30);
-          ctx.fillStyle = "#d4d4d8";
+          ctx.fillRect(680, 470, 465, 30);
+          ctx.fillStyle = "#e4e4e7";
           ctx.font = "italic 12px sans-serif";
-          ctx.fillText(`Evidence: ${disp.imageCaption.slice(0, 52)}`, 690, 485);
+          ctx.fillText(`Evidence: ${disp.imageCaption.slice(0, 52)}`, 690, 490);
         }
       } catch {}
     }
 
-    // Headline
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 34px sans-serif";
-    let curY = 190;
-    curY = wrapCanvasText(ctx, disp.title, 55, curY, textWidth, 44, 3);
+    ctx.fillStyle = theme.titleColor;
+    ctx.font = theme.fontTitle;
+    let curY = 195;
+    curY = wrapCanvasText(ctx, disp.title, 55, curY, textWidth, 42, 3);
 
-    // Lead excerpt
-    ctx.fillStyle = "#d4d4d8";
-    ctx.font = "19px Georgia, serif";
-    curY += 14;
-    wrapCanvasText(ctx, disp.content, 55, curY, textWidth, 30, 4);
+    ctx.fillStyle = theme.bodyColor;
+    ctx.font = theme.fontBody;
+    curY += 12;
+    wrapCanvasText(ctx, disp.content, 55, curY, textWidth, 28, 4);
 
-    // Bottom byline bar
-    ctx.fillStyle = "#27272a";
-    ctx.fillRect(55, 570, 1090, 1);
+    ctx.fillStyle = theme.border;
+    ctx.fillRect(55, 572, 1090, 1);
 
-    ctx.fillStyle = "#f59e0b";
-    ctx.font = "bold 15px monospace";
-    ctx.fillText(`BYLINE: ${disp.author} (@${disp.callsign})`, 55, 608);
+    ctx.fillStyle = theme.headerColor;
+    ctx.font = "bold 14px monospace";
+    ctx.fillText(`BYLINE: ${disp.author} (@${disp.callsign})`, 55, 600);
 
-    ctx.fillStyle = "#71717a";
-    ctx.font = "13px monospace";
-    ctx.fillText("fieldpress.studio • Autonomous Field Newsroom", 740, 608);
+    ctx.fillStyle = theme.headerColor;
+    ctx.font = "12px monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(`fieldpress.studio • ${style.toUpperCase()} EDITION`, 1145, 600);
+    ctx.textAlign = "left";
   };
 
   if (disp.imageUrl) {
@@ -549,15 +661,10 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
   return new Promise((resolve) => {
     try {
       canvas.toBlob((b) => {
-        if (b) resolve(b);
-        else {
-          renderCard(null);
-          canvas.toBlob(resolve, "image/png");
-        }
+        resolve(b);
       }, "image/png");
     } catch {
-      renderCard(null);
-      canvas.toBlob(resolve, "image/png");
+      resolve(null);
     }
   });
 }
