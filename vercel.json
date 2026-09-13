@@ -1,47 +1,7 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @workspace/fieldpress-desktop run build && pnpm --filter @workspace/api-server run build",
-  "outputDirectory": "artifacts/fieldpress-desktop/dist/public",
-  "headers": [
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
-      ]
-    },
-    {
-      "source": "/manifest.webmanifest",
-      "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" }
-      ]
-    },
-    {
-      "source": "/admin-manual.html",
-      "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
-      ]
-    },
-    {
-      "source": "/admin-manual.md",
-      "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Content-Type", "value": "text/markdown; charset=utf-8" }
-      ]
-    }
-  ],
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/og/pressies/:id.png", "destination": "/api/og/pressies/:id.png" },
-    { "source": "/s/:id", "destination": "/api/share/:id" },
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/|s/|sw\\.js|manifest\\.webmanifest|icon-.*\\.png|apple-touch-icon\\.png|admin-manual\\.html|admin-manual\\.md|user-manual\\.html|robots\\.txt|favicon\\.svg).*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/index.mjs": {
-      "maxDuration": 60,
-      "includeFiles": "{artifacts/api-server/dist/**,artifacts/fieldpress-desktop/dist/public/**}"
-    }
-  }
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
