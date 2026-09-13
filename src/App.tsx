@@ -928,7 +928,7 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
-  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "linked" | "requests" | "directory">("cohorts");
+  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "directory">("cohorts");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
   const [cohortReqName, setCohortReqName] = useState("");
   const [cohortReqCallsign, setCohortReqCallsign] = useState("");
@@ -1110,11 +1110,29 @@ export const FieldPressMaster: React.FC = () => {
       requestedAt: "Just now"
     };
 
-    const nextRequests = [newReq, ...cohortRequests];
-    setCohortRequests(nextRequests);
+    // Directly establish the real cohort desk
+    const newCohort: CohortItem = {
+      id: `cohort-${cleanCallsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      name: cohortReqName.trim(),
+      callsign: cleanCallsign,
+      bureau: cohortReqBureau.trim(),
+      region: cohortReqRegion.trim() || "Midwest Corridor (IL / IN)",
+      description: cohortReqJustification.trim() || "Editorial cohort & dispatch desk.",
+      leadName: pressPass.name || "Victor Birkle",
+      leadCallsign: pressPass.callsign || "ViBiR",
+      membersCount: 1,
+      status: "active",
+      isJoined: true
+    };
+
+    const nextCohorts = [newCohort, ...cohorts];
+    setCohorts(nextCohorts);
     try {
-      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(nextRequests));
+      localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
     } catch {}
+
+    // Switch straight to the newly created channel
+    setActiveChatId(newCohort.id);
 
     setCohortReqName("");
     setCohortReqCallsign("");
@@ -1122,8 +1140,8 @@ export const FieldPressMaster: React.FC = () => {
     setCohortReqRegion("IL / IN Corridor");
     setCohortReqJustification("");
     setShowCohortRequestModal(false);
-    setSavedSuccessToast(`Charter request submitted for ${newReq.cohortName}.`);
-    setTimeout(() => setSavedSuccessToast(""), 3000);
+    setSavedSuccessToast(`Cohort desk established: ${newCohort.name}`);
+    setTimeout(() => setSavedSuccessToast(""), 2500);
   };
   const [messengerInput, setMessengerInput] = useState("");
   const [messengerImageUrl, setMessengerImageUrl] = useState("");
@@ -1133,7 +1151,10 @@ export const FieldPressMaster: React.FC = () => {
   const [messengerMessages, setMessengerMessages] = useState<FieldMessage[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_messenger_messages");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: FieldMessage[] = JSON.parse(saved);
+        return parsed.filter((m) => m.callsign !== "wire.sec" && m.sender !== "Field Comms Wire Security");
+      }
     } catch {}
     return [
       {
@@ -4454,7 +4475,7 @@ ${shareUrl}`;
             <div className="flex items-center justify-between border-b pb-3 border-zinc-700">
               <div className="flex items-center gap-2">
                 <Radio className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-sm">Propose New Field Cohort Wire</h3>
+                <h3 className="font-bold text-sm">Establish New Cohort Desk</h3>
               </div>
               <button
                 type="button"
@@ -4552,7 +4573,7 @@ ${shareUrl}`;
                   type="submit"
                   className="px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition cursor-pointer shadow-xs"
                 >
-                  Submit Charter Request
+                  Establish Cohort Desk
                 </button>
               </div>
             </form>
@@ -4570,21 +4591,16 @@ ${shareUrl}`;
               isDark ? "bg-zinc-950/70 border-zinc-800" : "bg-zinc-50 border-zinc-200"
             }`}>
               {/* Directory Header */}
-              <div className={`p-4 border-b flex items-center justify-between ${borderThemeClass}`}>
+              <div className={`p-3.5 border-b flex items-center justify-between ${borderThemeClass}`}>
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-mono text-sm font-black tracking-tight text-amber-500">
-                    FIELD DIRECTORY
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-mono text-xs font-black tracking-tight text-amber-500 uppercase">
+                    Field Comms Directory
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRegisterModal(true)}
-                  className="text-[10px] font-mono px-2.5 py-1 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition cursor-pointer shadow-xs"
-                  title="Register a genuine new correspondent account"
-                >
-                  + Register
-                </button>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  LIVE WIRE
+                </span>
               </div>
 
               {/* Directory Tabs: Linked Users vs Complete Directory Index */}
@@ -4714,7 +4730,7 @@ ${shareUrl}`;
                       className="w-full py-2.5 px-3 rounded-xl border border-dashed border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
                     >
                       <PlusCircle className="h-3.5 w-3.5" />
-                      <span>+ Propose / Request New Cohort</span>
+                      <span>+ Establish New Cohort Desk</span>
                     </button>
                   </div>
                 )}
