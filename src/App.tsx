@@ -928,7 +928,7 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
-  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "directory">("cohorts");
+  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "directory" | "linked" | "requests">("cohorts");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
   const [cohortReqName, setCohortReqName] = useState("");
   const [cohortReqCallsign, setCohortReqCallsign] = useState("");
@@ -4604,63 +4604,34 @@ ${shareUrl}`;
               </div>
 
               {/* Directory Tabs: Linked Users vs Complete Directory Index */}
-              <div className={`grid grid-cols-4 p-1.5 m-3 rounded-lg border text-xs font-mono ${
+              <div className={`grid grid-cols-2 p-1.5 m-3 rounded-lg border text-xs font-mono ${
                 isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-200 border-zinc-300"
               }`}>
                 <button
                   type="button"
                   onClick={() => setMessengerDirectoryTab("cohorts")}
-                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
+                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     messengerDirectoryTab === "cohorts"
                       ? "bg-amber-500 text-zinc-950 shadow-xs"
                       : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                   }`}
-                  title="Active Cohort Working Groups"
+                  title="Working Groups & Cohort Desks"
                 >
-                  <Radio className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Cohorts ({cohorts.filter((c) => c.isJoined).length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessengerDirectoryTab("linked")}
-                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
-                    messengerDirectoryTab === "linked"
-                      ? "bg-amber-500 text-zinc-950 shadow-xs"
-                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Linked Peer Correspondents"
-                >
-                  <Users className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Peers ({registeredUsers.filter((c) => c.isLinked).length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessengerDirectoryTab("requests")}
-                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer relative truncate ${
-                    messengerDirectoryTab === "requests"
-                      ? "bg-amber-500 text-zinc-950 shadow-xs"
-                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Cohort Wire Request Queue"
-                >
-                  <Clock className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Reqs ({cohortRequests.filter((r) => r.status === "pending").length})</span>
-                  {cohortRequests.filter((r) => r.status === "pending").length > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping absolute top-1 right-1" />
-                  )}
+                  <Radio className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>Desks & Cohorts</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setMessengerDirectoryTab("directory")}
-                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
-                    messengerDirectoryTab === "directory"
+                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    messengerDirectoryTab !== "cohorts"
                       ? "bg-amber-500 text-zinc-950 shadow-xs"
                       : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                   }`}
-                  title="Complete Correspondent Index"
+                  title="Newsroom Correspondents"
                 >
-                  <ShieldCheck className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">All ({registeredUsers.length})</span>
+                  <Users className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>Correspondents</span>
                 </button>
               </div>
 
@@ -4736,7 +4707,7 @@ ${shareUrl}`;
                 )}
 
                 {/* 2. REQUESTS TAB (COHORT REQUEST SYSTEM) */}
-                {messengerDirectoryTab === "requests" && (
+                {false && messengerDirectoryTab === "requests" && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
                       <span>Wire Request Ledger</span>
