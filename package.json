@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.8.0",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^0.344.0",
     "maplibre-gl": "^4.0.0",
