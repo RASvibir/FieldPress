@@ -1463,7 +1463,7 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Settings Sub-tab
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system">("profile");
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system">("quicklinks");
 
   // Press Pass State
   const [pressPass, setPressPass] = useState<PressPassData>(() => {
@@ -2593,41 +2593,42 @@ export const FieldPressMaster: React.FC = () => {
               }`}
             >
               Discover
-              {suggestedCorrespondents.length > 0 && (
+              {suggestedCohorts.length > 0 && (
                 <span className="min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-zinc-950 text-[9px] font-bold flex items-center justify-center">
-                  {suggestedCorrespondents.length}
+                  {suggestedCohorts.length}
                 </span>
               )}
             </button>
             </div>
 
-            {/* Pressy'o Newsroom Copilot Button with Official Crest */}
+            {/* Pressy'o Newsroom Copilot — icon only */}
             <button
               type="button"
               onClick={() => setShowPressyoModal(true)}
-              className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-400 text-amber-300 transition font-bold shadow-xs flex-shrink-0 cursor-pointer ml-1 text-xs font-mono group"
-              title="Open Pressy'O Autonomous Newsroom Copilot"
+              className="w-8 h-8 flex-shrink-0 rounded-full overflow-hidden border border-amber-500/50 hover:border-amber-400 transition cursor-pointer ml-1 bg-white"
+              title="Pressy'O — Newsroom Copilot"
             >
               <img
                 src="/pressyo-icon.jpg"
                 alt="Pressy'O"
-                className="w-5 h-5 rounded-full object-cover border border-amber-400/80 group-hover:scale-110 transition shadow-2xs bg-white"
+                className="w-full h-full object-cover"
                 onError={(e) => {
                   (e.currentTarget as HTMLElement).style.display = 'none';
                 }}
               />
-              <span className="tracking-tight font-black">Pressy'O</span>
             </button>
 
-            {/* Field Comms Instant Messaging Trigger */}
+            {/* Messages — icon only */}
             <button
               onClick={() => setShowMessengerModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 transition font-bold shadow-xs hover:border-cyan-400 flex-shrink-0 cursor-pointer ml-1 text-xs font-mono relative"
-              title="Open Messages"
+              className={`relative w-8 h-8 flex-shrink-0 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                isDark
+                  ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
+              }`}
+              title="Messages"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span>Messages</span>
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              <MessageCircle className="h-4 w-4" />
             </button>
           </nav>
 
@@ -6270,7 +6271,7 @@ ${shareUrl}`;
 
             {/* Drawer Tabs */}
             <div className="flex border-b border-zinc-800 font-mono text-xs overflow-x-auto">
-              {(["profile", "drafts", "bookmarks", "archives", "appearance", "system"] as const).map((tab) => (
+              {(["quicklinks", "profile", "drafts", "bookmarks", "archives", "appearance", "system"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSettingsActiveTab(tab)}
@@ -6280,7 +6281,7 @@ ${shareUrl}`;
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  {tab}
+                  {tab === "quicklinks" ? "Quick Links" : tab}
                 </button>
               ))}
             </div>
@@ -6288,6 +6289,105 @@ ${shareUrl}`;
             {/* Drawer Body */}
             <div className="flex-1 p-5 overflow-y-auto space-y-4 font-mono text-xs">
               
+              {/* TAB: QUICK LINKS — one-click access to everything */}
+              {settingsActiveTab === "quicklinks" && (
+                <div className="space-y-4">
+                  <div>
+                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Sections</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: "Daily Edition", icon: Newspaper, action: () => setActiveTab("edition") },
+                        { label: "Live Wire", icon: Radio, action: () => setActiveTab("wire") },
+                        { label: "Map Radar", icon: MapPin, action: () => setActiveTab("map") },
+                        { label: "Classifieds", icon: Tag, action: () => setActiveTab("classifieds") },
+                        { label: "Discover", icon: Users, action: () => setActiveTab("discover") }
+                      ].map(({ label, icon: Icon, action }) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => { setShowSettingsDrawer(false); action(); }}
+                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                        >
+                          <Icon className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                          <span className="font-bold">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Tools</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowSettingsDrawer(false); setShowPressyoModal(true); }}
+                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                      >
+                        <img src="/pressyo-icon.jpg" alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                        <span className="font-bold">Pressy'O</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowSettingsDrawer(false); setShowMessengerModal(true); }}
+                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                      >
+                        <MessageCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <span className="font-bold">Messages</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowSettingsDrawer(false); openCreatePressie(); }}
+                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                      >
+                        <Send className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <span className="font-bold">New Dispatch</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowSettingsDrawer(false); openPressPassEditor(); }}
+                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                      >
+                        <ShieldCheck className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <span className="font-bold">Press Pass</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Account</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {authAccount ? (
+                        <button
+                          type="button"
+                          onClick={() => { setShowSettingsDrawer(false); logOutAccount(); }}
+                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                        >
+                          <LogOut className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                          <span className="font-bold">Sign Out</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setShowSettingsDrawer(false); setAuthModalMode("signin"); setAuthError(""); }}
+                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                        >
+                          <LogIn className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                          <span className="font-bold">Sign In</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setTheme(isDark ? "light" : "dark")}
+                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
+                      >
+                        {isDark ? <Sun className="h-4 w-4 text-amber-500 flex-shrink-0" /> : <Moon className="h-4 w-4 text-amber-500 flex-shrink-0" />}
+                        <span className="font-bold">{isDark ? "Light Mode" : "Dark Mode"}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* TAB A: PROFILE */}
               {settingsActiveTab === "profile" && (
                 <div className="space-y-4">
