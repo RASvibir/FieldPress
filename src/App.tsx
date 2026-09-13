@@ -1522,6 +1522,23 @@ export const FieldPressMaster: React.FC = () => {
     } catch {}
   };
 
+  // --- Global search: searches all dispatches regardless of active tab ---
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const globalSearchResults = globalSearchQuery.trim()
+    ? dispatches
+        .filter((d) => {
+          const q = globalSearchQuery.toLowerCase();
+          return (
+            d.title.toLowerCase().includes(q) ||
+            d.content.toLowerCase().includes(q) ||
+            d.location.toLowerCase().includes(q) ||
+            d.author.toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 8)
+    : [];
+
   const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressroll");
@@ -2349,6 +2366,89 @@ export const FieldPressMaster: React.FC = () => {
 
           {/* Action Tools: Header Press Pass Trigger, Settings, Theme */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Global Search: searches all dispatches regardless of active tab */}
+            <div className="relative">
+              {showGlobalSearch ? (
+                <div className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
+                  isDark ? "border-zinc-800 bg-zinc-900" : "border-zinc-300 bg-white"
+                }`}>
+                  <Search className={`h-3.5 w-3.5 flex-shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`} />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={globalSearchQuery}
+                    onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setShowGlobalSearch(false);
+                        setGlobalSearchQuery("");
+                      }
+                    }}
+                    placeholder="Search all dispatches..."
+                    className={`w-36 sm:w-48 bg-transparent outline-none font-mono text-xs ${isDark ? "text-zinc-200 placeholder:text-zinc-600" : "text-zinc-900 placeholder:text-zinc-400"}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGlobalSearch(false);
+                      setGlobalSearchQuery("");
+                    }}
+                    className={`flex-shrink-0 ${isDark ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-400 hover:text-zinc-700"}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowGlobalSearch(true)}
+                  className={`p-1.5 rounded border transition cursor-pointer ${
+                    isDark
+                      ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
+                  }`}
+                  title="Search all dispatches"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              )}
+
+              {showGlobalSearch && globalSearchQuery.trim() && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowGlobalSearch(false)} />
+                  <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto rounded-lg border shadow-xl z-50 ${
+                    isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                  }`}>
+                    {globalSearchResults.length === 0 ? (
+                      <div className={`px-3 py-6 text-center font-mono text-xs ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+                        No dispatches match "{globalSearchQuery}".
+                      </div>
+                    ) : (
+                      globalSearchResults.map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStory(d);
+                            setShowGlobalSearch(false);
+                            setGlobalSearchQuery("");
+                          }}
+                          className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
+                            isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
+                          }`}
+                        >
+                          <p className="font-mono text-xs font-bold truncate">{d.title}</p>
+                          <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
+                            {d.location} • {d.author}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Notifications Bell: comments on the user's own dispatches */}
             <div className="relative">
               <button
