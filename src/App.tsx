@@ -886,6 +886,32 @@ export const FieldPressMaster: React.FC = () => {
     return INITIAL_DISPATCHES;
   });
 
+  // Deep-link routing: shared URLs point to `#dispatch-<id>`. Open the
+  // matching dispatch on load and whenever the hash changes (e.g. the
+  // person navigates back/forward, or opens a second share link in the
+  // same tab). Falls back to a toast if the dispatch can't be found
+  // (e.g. it was a demo dispatch that never persisted for this visitor).
+  useEffect(() => {
+    const openFromHash = () => {
+      const hash = window.location.hash;
+      const match = hash.match(/^#dispatch-(.+)$/);
+      if (!match) return;
+      const targetId = decodeURIComponent(match[1]);
+      const found = dispatches.find((d) => d.id === targetId) || pressRoll.find((d) => d.id === targetId);
+      if (found) {
+        setActiveTab("edition");
+        setSelectedStory(found);
+      } else {
+        setSavedSuccessToast("That dispatch link couldn't be found — it may have expired.");
+        setTimeout(() => setSavedSuccessToast(""), 3000);
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatches]);
+
   const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressroll");
