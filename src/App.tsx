@@ -4324,7 +4324,7 @@ export const FieldPressMaster: React.FC = () => {
                     </button>
                     {editPassForm.provenanceEnabled && (
                       <span className="text-[10px] text-emerald-400 font-mono">
-                        Ping: {editPassForm.coordinates ? `${editPassForm.coordinates[0]}, ${editPassForm.coordinates[1]}` : "Active"}
+                        ✓ Vicinity Lock Active
                       </span>
                     )}
                   </div>
@@ -4596,7 +4596,7 @@ export const FieldPressMaster: React.FC = () => {
               {selectedStory.coordinates && (
                 <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${subCardThemeClass}`}>
                   <MapPin className="h-4 w-4 text-amber-500" />
-                  <span>Telemetry Anchor: <strong>{selectedStory.coordinates[0]}, {selectedStory.coordinates[1]}</strong> ({selectedStory.location})</span>
+                  <span>Vicinity: <strong>{selectedStory.location || "Regional dispatch area"}</strong></span>
                 </div>
               )}
 
