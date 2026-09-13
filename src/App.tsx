@@ -916,33 +916,58 @@ export const FieldPressMaster: React.FC = () => {
     }
     let isMounted = true;
     setIsGeneratingCard(true);
-    generatePressieCardBlob(shareModalStory).then((blob) => {
+
+    const syncShareMeta = (imageUrl: string | undefined) => {
+      // Sync minimal metadata server-side so link-based shares (Facebook, X,
+      // Bluesky, Reddit, etc.) can show accurate Open Graph previews instead
+      // of nothing. Best-effort: failures here shouldn't block sharing.
+      fetch("/api/sync-dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: shareModalStory.id,
+          title: shareModalStory.title,
+          content: shareModalStory.content,
+          location: shareModalStory.location,
+          category: shareModalStory.category,
+          author: shareModalStory.author,
+          callsign: shareModalStory.callsign,
+          editionStyle: shareModalStory.editionStyle,
+          imageUrl
+        })
+      }).catch(() => {});
+    };
+
+    generatePressieCardBlob(shareModalStory).then(async (blob) => {
       if (!isMounted) return;
       if (blob) {
         setPressieCardBlob(blob);
         const url = URL.createObjectURL(blob);
         setPressieCardUrl(url);
+
+        // Upload the actual rendered edition card so social crawlers see the
+        // real styled graphic instead of the raw source photo. Falls back to
+        // the source image if the upload fails for any reason.
+        try {
+          const uploadRes = await fetch(`/api/upload-share-card?id=${encodeURIComponent(shareModalStory.id)}`, {
+            method: "POST",
+            headers: { "Content-Type": "image/png" },
+            body: blob
+          });
+          if (uploadRes.ok) {
+            const { url: hostedUrl } = await uploadRes.json();
+            syncShareMeta(hostedUrl);
+          } else {
+            syncShareMeta(shareModalStory.imageUrl);
+          }
+        } catch {
+          syncShareMeta(shareModalStory.imageUrl);
+        }
+      } else {
+        syncShareMeta(shareModalStory.imageUrl);
       }
       setIsGeneratingCard(false);
     });
-    // Sync minimal metadata server-side so link-based shares (Facebook, X,
-    // Bluesky, Reddit, etc.) can show accurate Open Graph previews instead
-    // of nothing. Best-effort: failures here shouldn't block sharing.
-    fetch("/api/sync-dispatch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: shareModalStory.id,
-        title: shareModalStory.title,
-        content: shareModalStory.content,
-        location: shareModalStory.location,
-        category: shareModalStory.category,
-        author: shareModalStory.author,
-        callsign: shareModalStory.callsign,
-        editionStyle: shareModalStory.editionStyle,
-        imageUrl: shareModalStory.imageUrl
-      })
-    }).catch(() => {});
     return () => {
       isMounted = false;
     };

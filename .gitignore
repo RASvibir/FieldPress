@@ -71,3 +71,4 @@ workers/fieldpress-api/.dev.vars
 workers/fieldpress-api/.wrangler/
 artifacts/
 pnpm-workspace.yaml
+.env*
