@@ -45,6 +45,9 @@ function renderPage({ title, description, image, spaUrl, canonicalUrl }) {
   <meta property="og:title" content="${t}" />
   <meta property="og:description" content="${d}" />
   <meta property="og:image" content="${img}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="675" />
+  <meta property="og:image:alt" content="${t}" />
   <meta property="og:url" content="${url}" />
   <meta property="og:site_name" content="FieldPress" />
 
