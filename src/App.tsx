@@ -5422,9 +5422,11 @@ ${shareUrl}`;
 
               {isPressyoLoading && (
                 <div className="flex gap-3 items-start">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-xs border border-black">
-                    🤖
-                  </div>
+                  <img
+                    src="/pressyo-icon.jpg"
+                    alt="Pressy'O drafting"
+                    className="w-8 h-8 rounded-xl object-cover border border-amber-500/80 shadow-md bg-white animate-pulse flex-shrink-0"
+                  />
                   <div className={`rounded-2xl p-3.5 text-xs sm:text-sm border shadow-xs rounded-tl-xs ${
                     isDark ? "bg-zinc-800/90 border-zinc-700 text-zinc-400" : "bg-zinc-100 border-zinc-300 text-zinc-500"
                   }`}>
