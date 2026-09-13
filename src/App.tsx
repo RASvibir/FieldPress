@@ -72,6 +72,7 @@ export interface StoryReactions {
 import React, { useState, useEffect, useRef } from "react";
 import {
   Inbox,
+  Newspaper,
   Menu,
   X,
   Settings,
@@ -2226,6 +2227,8 @@ export const FieldPressMaster: React.FC = () => {
 
           {/* Navigation Tabs */}
           <nav className="flex items-center gap-1 sm:gap-2 font-mono text-xs overflow-x-auto py-1">
+            {/* Primary content tabs move to the bottom rail on small screens */}
+            <div className="hidden sm:flex items-center gap-1 sm:gap-2">
             <button
               onClick={() => setActiveTab("edition")}
               className={`px-2.5 sm:px-3 py-1.5 rounded transition cursor-pointer ${
@@ -2274,6 +2277,7 @@ export const FieldPressMaster: React.FC = () => {
             >
               Classifieds
             </button>
+            </div>
 
             {/* Pressy'o Newsroom Copilot Button with Official Crest */}
             <button
@@ -2356,7 +2360,7 @@ export const FieldPressMaster: React.FC = () => {
       </header>
 
       {/* 4. MAIN CONTENT AREA */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 relative z-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-24 sm:pb-8 relative z-10">
         
         {/* Active View Header Bar */}
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b ${borderThemeClass}`}>
@@ -5906,6 +5910,42 @@ ${shareUrl}`;
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Navigation Rail — thumb-zone tab bar for small screens.
+          Mirrors the four primary content tabs hidden from the top nav above. */}
+      <nav
+        className={`sm:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-md ${
+          isDark ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"
+        }`}
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="grid grid-cols-4">
+          {([
+            { tab: "edition" as const, label: "Edition", Icon: Newspaper },
+            { tab: "wire" as const, label: "Wire", Icon: Radio },
+            { tab: "map" as const, label: "Map", Icon: MapPin },
+            { tab: "classifieds" as const, label: "Classifieds", Icon: Tag }
+          ]).map(({ tab, label, Icon }) => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`flex flex-col items-center justify-center gap-0.5 py-2.5 font-mono text-[10px] transition cursor-pointer ${
+                  isActive
+                    ? isDark ? "text-amber-400" : "text-amber-700"
+                    : isDark ? "text-zinc-500" : "text-zinc-500"
+                }`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon className={`h-5 w-5 ${isActive ? "stroke-[2.5]" : ""}`} />
+                <span className={isActive ? "font-bold" : ""}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
     </div>
   );
