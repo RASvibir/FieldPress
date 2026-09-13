@@ -4136,7 +4136,7 @@ export const FieldPressMaster: React.FC = () => {
                       </div>
                     )}
                     <span className="absolute bottom-2 right-2 text-[10px] font-mono px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-500/30">
-                      HD Pressie Clipping
+                      {shareModalStory.editionStyle ? `${shareModalStory.editionStyle.toUpperCase()} EDITION` : 'HD PRESSIE CLIPPING'}
                     </span>
                   </div>
 
@@ -4295,6 +4295,16 @@ ${shareUrl}`;
                   >
                     <span>🦋</span>
                     <span>Bluesky</span>
+                  </a>
+
+<a
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2.5 rounded-lg border border-blue-600/40 bg-[#1877F2]/15 text-[#1877F2] hover:bg-[#1877F2]/25 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
+                  >
+                    <span className="font-serif font-black text-sm">f</span>
+                    <span>Facebook</span>
                   </a>
 
                   <a
