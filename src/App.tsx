@@ -73,6 +73,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Inbox,
   Newspaper,
+  Bell,
   Menu,
   X,
   Settings,
@@ -1481,6 +1482,46 @@ export const FieldPressMaster: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatches]);
 
+  // --- Notifications: comments on the current user's own dispatches ---
+  // Comment timestamps are free-text ("Just now"), not real dates, so we
+  // can't detect "new since last visit" by time. Instead we track which
+  // comment IDs have already been seen (IDs are unique & creation-ordered
+  // via `cm-${Date.now()}`), which is robust regardless of timestamp text.
+  const [seenCommentIds, setSeenCommentIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("fieldpress_notif_seen_ids");
+      if (saved) return new Set(JSON.parse(saved));
+    } catch {}
+    return new Set();
+  });
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  const myDispatchIds = new Set(
+    dispatches
+      .filter((d) => d.author === pressPass.name || d.callsign === pressPass.callsign)
+      .map((d) => d.id)
+  );
+
+  const notificationItems = Object.entries(allComments)
+    .filter(([dispId]) => myDispatchIds.has(dispId))
+    .flatMap(([dispId, comments]) =>
+      comments
+        .filter((c) => c.callsign !== pressPass.callsign)
+        .map((c) => ({ ...c, dispatchId: dispId }))
+    )
+    .reverse(); // most recent first (comments are appended in order)
+
+  const unseenNotifications = notificationItems.filter((n) => !seenCommentIds.has(n.id));
+
+  const markNotificationsSeen = () => {
+    const allIds = new Set(seenCommentIds);
+    notificationItems.forEach((n) => allIds.add(n.id));
+    setSeenCommentIds(allIds);
+    try {
+      localStorage.setItem("fieldpress_notif_seen_ids", JSON.stringify(Array.from(allIds)));
+    } catch {}
+  };
+
   const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressroll");
@@ -2311,6 +2352,75 @@ export const FieldPressMaster: React.FC = () => {
 
           {/* Action Tools: Header Press Pass Trigger, Settings, Theme */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Notifications Bell: comments on the user's own dispatches */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  const opening = !showNotifPanel;
+                  setShowNotifPanel(opening);
+                  if (opening) markNotificationsSeen();
+                }}
+                className={`relative p-1.5 rounded border transition cursor-pointer ${
+                  isDark
+                    ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                    : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
+                }`}
+                title="Notifications"
+              >
+                <Bell className="h-4 w-4" />
+                {unseenNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold font-mono">
+                    {unseenNotifications.length > 9 ? "9+" : unseenNotifications.length}
+                  </span>
+                )}
+              </button>
+
+              {showNotifPanel && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)} />
+                  <div className={`absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border shadow-xl z-50 ${
+                    isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                  }`}>
+                    <div className={`px-3 py-2 border-b font-mono text-xs font-bold ${isDark ? "border-zinc-800 text-zinc-300" : "border-zinc-200 text-zinc-700"}`}>
+                      Notifications
+                    </div>
+                    {notificationItems.length === 0 ? (
+                      <div className={`px-3 py-6 text-center font-mono text-xs ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+                        No activity yet on your dispatches.
+                      </div>
+                    ) : (
+                      notificationItems.slice(0, 30).map((n) => {
+                        const disp = dispatches.find((d) => d.id === n.dispatchId);
+                        return (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => {
+                              setShowNotifPanel(false);
+                              if (disp) setSelectedStory(disp);
+                            }}
+                            className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
+                              isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
+                            }`}
+                          >
+                            <p className="font-mono text-xs">
+                              <span className="font-bold">@{n.callsign}</span>
+                              <span className={isDark ? "text-zinc-400" : "text-zinc-500"}> commented on </span>
+                              <span className="font-bold">{disp ? disp.title : "your dispatch"}</span>
+                            </p>
+                            <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
+                              {n.text}
+                            </p>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Header Press Pass Badge Trigger (DEDICATED TO REPORTER CREDENTIAL/ID EDITOR - IMAGE 1) */}
             <button
               onClick={openPressPassEditor}
