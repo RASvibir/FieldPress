@@ -690,6 +690,7 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
+  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"linked" | "directory">("linked");
   const [messengerInput, setMessengerInput] = useState("");
   const [messengerImageUrl, setMessengerImageUrl] = useState("");
   const [messengerLinkUrl, setMessengerLinkUrl] = useState("");
@@ -3772,7 +3773,7 @@ export const FieldPressMaster: React.FC = () => {
                   className="px-3 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  <span>{typeof navigator !== "undefined" && navigator.share ? "System Share Sheet" : "Copy Broadcast Wire"}</span>
+                  <span>{typeof navigator !== "undefined" && !!navigator.share ? "System Share Sheet" : "Copy Broadcast Wire"}</span>
                 </button>
               </div>
             </div>
