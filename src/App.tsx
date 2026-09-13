@@ -93,6 +93,7 @@ import {
   Upload,
   Archive,
   Download,
+  Copy,
   Eye,
   PlusCircle,
   Clock,
@@ -385,6 +386,181 @@ export const getEditionClasses = (style?: string, isDark: boolean = true) => {
   }
 };
 
+// ============================================================================
+// HELPER: Dynamic Social Pressie Graphic Generator (1200x675 HD 16:9)
+// ============================================================================
+function wrapCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number = 4
+): number {
+  const words = text.split(" ");
+  let line = "";
+  let lineCount = 0;
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + " ";
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      line = words[n] + " ";
+      y += lineHeight;
+      lineCount++;
+      if (lineCount >= maxLines - 1 && n < words.length - 1) {
+        line = line.trim() + "...";
+        break;
+      }
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+  return y + lineHeight;
+}
+
+export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | null> {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 675;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const renderCard = (withImage: HTMLImageElement | null) => {
+    // Backdrop
+    ctx.fillStyle = "#09090b";
+    ctx.fillRect(0, 0, 1200, 675);
+
+    // Amber accent header bar
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillRect(0, 0, 1200, 8);
+
+    // Frame borders
+    ctx.strokeStyle = "#27272a";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(24, 24, 1152, 627);
+
+    ctx.strokeStyle = "rgba(245, 158, 11, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(28, 28, 1144, 619);
+
+    // Brand wire header
+    ctx.fillStyle = "#f59e0b";
+    ctx.font = "bold 15px monospace";
+    ctx.fillText("FP_ FIELDPRESS SYNDICATED DISPATCH WIRE", 55, 68);
+
+    ctx.fillStyle = "#10b981";
+    ctx.font = "bold 13px monospace";
+    ctx.fillText("✓ VERIFIED FIELD DISPATCH", 490, 68);
+
+    ctx.fillStyle = "#71717a";
+    ctx.font = "13px monospace";
+    ctx.fillText(`[${disp.location}] • ${disp.timestamp}`, 820, 68);
+
+    // Separator
+    ctx.fillStyle = "#27272a";
+    ctx.fillRect(55, 88, 1090, 1);
+
+    // Category pill
+    ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
+    const catText = (disp.category || "FIELD DISPATCH").toUpperCase();
+    ctx.font = "bold 13px monospace";
+    const catWidth = ctx.measureText(catText).width + 20;
+    ctx.fillRect(55, 108, catWidth, 26);
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillText(catText, 65, 126);
+
+    ctx.fillStyle = "#a1a1aa";
+    ctx.font = "14px monospace";
+    ctx.fillText(`BEAT: ${disp.location}`, 55 + catWidth + 18, 126);
+
+    let textWidth = 1090;
+    if (withImage && withImage.naturalWidth > 0) {
+      textWidth = 590;
+      try {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(680, 155, 465, 340);
+        ctx.clip();
+        ctx.drawImage(withImage, 680, 155, 465, 340);
+        ctx.restore();
+
+        ctx.strokeStyle = "#3f3f46";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(680, 155, 465, 340);
+
+        if (disp.imageCaption) {
+          ctx.fillStyle = "rgba(9, 9, 11, 0.85)";
+          ctx.fillRect(680, 465, 465, 30);
+          ctx.fillStyle = "#d4d4d8";
+          ctx.font = "italic 12px sans-serif";
+          ctx.fillText(`Evidence: ${disp.imageCaption.slice(0, 52)}`, 690, 485);
+        }
+      } catch {}
+    }
+
+    // Headline
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 34px sans-serif";
+    let curY = 190;
+    curY = wrapCanvasText(ctx, disp.title, 55, curY, textWidth, 44, 3);
+
+    // Lead excerpt
+    ctx.fillStyle = "#d4d4d8";
+    ctx.font = "19px Georgia, serif";
+    curY += 14;
+    wrapCanvasText(ctx, disp.content, 55, curY, textWidth, 30, 4);
+
+    // Bottom byline bar
+    ctx.fillStyle = "#27272a";
+    ctx.fillRect(55, 570, 1090, 1);
+
+    ctx.fillStyle = "#f59e0b";
+    ctx.font = "bold 15px monospace";
+    ctx.fillText(`BYLINE: ${disp.author} (@${disp.callsign})`, 55, 608);
+
+    ctx.fillStyle = "#71717a";
+    ctx.font = "13px monospace";
+    ctx.fillText("fieldpress.studio • Autonomous Field Newsroom", 740, 608);
+  };
+
+  if (disp.imageUrl) {
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = disp.imageUrl;
+      await new Promise((res) => {
+        img.onload = res;
+        img.onerror = res;
+        setTimeout(res, 1800);
+      });
+      renderCard(img.complete && img.naturalWidth > 0 ? img : null);
+    } catch {
+      renderCard(null);
+    }
+  } else {
+    renderCard(null);
+  }
+
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob((b) => {
+        if (b) resolve(b);
+        else {
+          renderCard(null);
+          canvas.toBlob(resolve, "image/png");
+        }
+      }, "image/png");
+    } catch {
+      renderCard(null);
+      canvas.toBlob(resolve, "image/png");
+    }
+  });
+}
+
 export const FieldPressMaster: React.FC = () => {
   // Pressy'o AI Newsroom Copilot State
   const [showPressyoModal, setShowPressyoModal] = useState(false);
@@ -612,6 +788,33 @@ export const FieldPressMaster: React.FC = () => {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [selectedStory, setSelectedStory] = useState<Dispatch | null>(null);
   const [shareModalStory, setShareModalStory] = useState<Dispatch | null>(null);
+  const [pressieCardBlob, setPressieCardBlob] = useState<Blob | null>(null);
+  const [pressieCardUrl, setPressieCardUrl] = useState<string | null>(null);
+  const [isGeneratingCard, setIsGeneratingCard] = useState<boolean>(false);
+  const [shareViewMode, setShareViewMode] = useState<"card" | "broadsheet">("card");
+
+  useEffect(() => {
+    if (!shareModalStory) {
+      if (pressieCardUrl) URL.revokeObjectURL(pressieCardUrl);
+      setPressieCardUrl(null);
+      setPressieCardBlob(null);
+      return;
+    }
+    let isMounted = true;
+    setIsGeneratingCard(true);
+    generatePressieCardBlob(shareModalStory).then((blob) => {
+      if (!isMounted) return;
+      if (blob) {
+        setPressieCardBlob(blob);
+        const url = URL.createObjectURL(blob);
+        setPressieCardUrl(url);
+      }
+      setIsGeneratingCard(false);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [shareModalStory]);
   const [showPostNoticeModal, setShowPostNoticeModal] = useState(false);
   const [newEditionStyle, setNewEditionStyle] = useState<"tactical" | "newspaper" | "comic" | "arcade" | "magazine">("tactical");
   const [newSharingOption, setNewSharingOption] = useState<"fork" | "colab" | "none">("fork");
@@ -3839,13 +4042,14 @@ export const FieldPressMaster: React.FC = () => {
       {/* ========================================================================= */}
       {shareModalStory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto font-mono">
-          <div className={`w-full max-w-lg rounded-xl border-2 shadow-2xl overflow-hidden transition ${
+          <div className={`w-full max-w-xl rounded-xl border-2 shadow-2xl overflow-hidden transition ${
             isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
+            {/* Header */}
             <div className={`flex-shrink-0 p-4 border-b flex items-center justify-between text-xs ${borderThemeClass}`}>
               <div className="flex items-center gap-2">
                 <Share2 className="h-4 w-4 text-amber-500" />
-                <span className="font-bold uppercase tracking-wider">Share Pressie to Social Media</span>
+                <span className="font-bold uppercase tracking-wider">Share Pressie & Export Visual Card</span>
               </div>
               <button
                 onClick={() => setShareModalStory(null)}
@@ -3855,63 +4059,197 @@ export const FieldPressMaster: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 space-y-4">
-              <div className={`p-4 rounded-lg border ${
-                isDark ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-              } shadow-sm space-y-3`}>
-                <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 text-[10px] text-zinc-400">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <span className="text-amber-500 font-black">FP_</span>
-                    <span>FIELDPRESS SYNDICATED WIRE</span>
-                  </div>
-                  <span>{shareModalStory.timestamp}</span>
-                </div>
-
-                {shareModalStory.imageUrl && (
-                  <div className="rounded-md overflow-hidden border border-zinc-800 relative aspect-video bg-black shadow-sm">
-                    <img
-                      src={shareModalStory.imageUrl}
-                      alt={shareModalStory.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {shareModalStory.imageCaption && (
-                      <div className="absolute bottom-0 inset-x-0 bg-black/80 p-1.5 text-[10px] text-zinc-300">
-                        {shareModalStory.imageCaption}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-[10px]">
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold uppercase">
-                      {shareModalStory.category}
-                    </span>
-                    <span className="text-zinc-400 font-bold">[{shareModalStory.location}]</span>
-                  </div>
-                  <h3 className="text-base font-bold leading-snug">
-                    {shareModalStory.title}
-                  </h3>
-                  <p className={`text-xs font-serif leading-relaxed line-clamp-2 ${
-                    isDark ? "text-zinc-300" : "text-zinc-700"
-                  }`}>
-                    {shareModalStory.content}
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-400">
-                  <span>Byline: {shareModalStory.author} (@{shareModalStory.callsign})</span>
-                  <span className="text-emerald-500 font-bold">VERIFIED DISPATCH</span>
-                </div>
+            <div className="p-4 sm:p-5 space-y-4">
+              {/* Mode Toggle: Visual Social Graphic vs Broadsheet */}
+              <div className={`grid grid-cols-2 p-1 rounded-lg border text-xs font-mono ${
+                isDark ? "bg-zinc-950 border-zinc-800" : "bg-zinc-200 border-zinc-300"
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => setShareViewMode("card")}
+                  className={`py-1.5 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    shareViewMode === "card"
+                      ? "bg-amber-500 text-zinc-950 shadow-xs"
+                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span>Social Graphic (1200×675)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShareViewMode("broadsheet")}
+                  className={`py-1.5 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    shareViewMode === "broadsheet"
+                      ? "bg-amber-500 text-zinc-950 shadow-xs"
+                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Broadsheet Text Clipping</span>
+                </button>
               </div>
 
+              {/* View 1: High-Res Social Graphic Card */}
+              {shareViewMode === "card" && (
+                <div className="space-y-2">
+                  <div className="rounded-xl overflow-hidden border border-zinc-700 bg-black relative aspect-video flex items-center justify-center shadow-lg">
+                    {pressieCardUrl ? (
+                      <img
+                        src={pressieCardUrl}
+                        alt="Rendered Social Pressie Card"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-xs font-mono text-zinc-400 gap-2 p-6">
+                        <RefreshCw className="h-5 w-5 text-amber-500 animate-spin" />
+                        <span>Rendering 1200×675 Pressie Graphic...</span>
+                      </div>
+                    )}
+                    <span className="absolute bottom-2 right-2 text-[10px] font-mono px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-500/30">
+                      HD Pressie Clipping
+                    </span>
+                  </div>
+
+                  {/* Primary Media Actions */}
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <button
+                      type="button"
+                      disabled={!pressieCardBlob}
+                      onClick={async () => {
+                        if (!pressieCardBlob) return;
+                        const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
+                        const shareText = `📰 FIELDPRESS DISPATCH: "${shareModalStory.title}" [${shareModalStory.location}] by ${shareModalStory.author} (@${shareModalStory.callsign})
+
+${shareUrl}`;
+                        try {
+                          const file = new File([pressieCardBlob], `fieldpress-${shareModalStory.id}.png`, { type: "image/png" });
+                          if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+                            await navigator.share({
+                              title: `FieldPress: ${shareModalStory.title}`,
+                              text: shareText,
+                              files: [file]
+                            });
+                            return;
+                          }
+                        } catch {}
+                        if (typeof navigator !== "undefined" && navigator.share) {
+                          navigator.share({ title: `FieldPress: ${shareModalStory.title}`, text: shareText, url: shareUrl }).catch(() => {});
+                        }
+                      }}
+                      className="p-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                      title="Attach image to Twitter, iMessage, WhatsApp, Slack"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      <span>Share Image</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!pressieCardBlob}
+                      onClick={async () => {
+                        if (!pressieCardBlob) return;
+                        try {
+                          if (typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write) {
+                            await navigator.clipboard.write([
+                              new ClipboardItem({ "image/png": pressieCardBlob })
+                            ]);
+                            setSavedSuccessToast("Pressie image copied to clipboard! Paste directly into X, Reddit, or Discord.");
+                            setTimeout(() => setSavedSuccessToast(""), 3000);
+                          }
+                        } catch {
+                          setSavedSuccessToast("Could not copy image directly; use Download PNG.");
+                          setTimeout(() => setSavedSuccessToast(""), 2500);
+                        }
+                      }}
+                      className="p-2 rounded border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      title="Copy PNG image to clipboard to paste into tweets, discord, reddit"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Copy Image</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!pressieCardUrl}
+                      onClick={() => {
+                        if (!pressieCardUrl) return;
+                        const a = document.createElement("a");
+                        a.href = pressieCardUrl;
+                        a.download = `fieldpress-${shareModalStory.id}.png`;
+                        a.click();
+                        setSavedSuccessToast("Pressie PNG graphic downloaded.");
+                        setTimeout(() => setSavedSuccessToast(""), 2500);
+                      }}
+                      className="p-2 rounded border border-zinc-700 hover:bg-zinc-800 text-zinc-200 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Download className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>Download PNG</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* View 2: Broadsheet Clipping */}
+              {shareViewMode === "broadsheet" && (
+                <div className={`p-4 rounded-lg border ${
+                  isDark ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+                } shadow-sm space-y-3`}>
+                  <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 text-[10px] text-zinc-400">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <span className="text-amber-500 font-black">FP_</span>
+                      <span>FIELDPRESS SYNDICATED WIRE</span>
+                    </div>
+                    <span>{shareModalStory.timestamp}</span>
+                  </div>
+
+                  {shareModalStory.imageUrl && (
+                    <div className="rounded-md overflow-hidden border border-zinc-800 relative aspect-video bg-black shadow-sm">
+                      <img
+                        src={shareModalStory.imageUrl}
+                        alt={shareModalStory.title}
+                        className="w-full h-full object-cover"
+                      />
+                      {shareModalStory.imageCaption && (
+                        <div className="absolute bottom-0 inset-x-0 bg-black/80 p-1.5 text-[10px] text-zinc-300">
+                          {shareModalStory.imageCaption}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold uppercase">
+                        {shareModalStory.category}
+                      </span>
+                      <span className="text-zinc-400 font-bold">[{shareModalStory.location}]</span>
+                    </div>
+                    <h3 className="text-base font-bold leading-snug">
+                      {shareModalStory.title}
+                    </h3>
+                    <p className={`text-xs font-serif leading-relaxed line-clamp-3 ${
+                      isDark ? "text-zinc-300" : "text-zinc-700"
+                    }`}>
+                      {shareModalStory.content}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-400">
+                    <span>Byline: {shareModalStory.author} (@{shareModalStory.callsign})</span>
+                    <span className="text-emerald-500 font-bold">VERIFIED DISPATCH</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Direct Social Channels with Rich Story Prefill */}
               <div>
                 <label className="block text-xs font-bold mb-2 text-zinc-400">
-                  Direct Share to Social Media:
+                  Broadcast Direct to Social Networks:
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}&url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]\n\n"${shareModalStory.content.slice(0, 110)}..."\n\nBy @${shareModalStory.callsign}`)}&url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-zinc-700 bg-black text-white hover:bg-zinc-800 transition flex items-center justify-center gap-2 font-bold cursor-pointer"
@@ -3921,12 +4259,40 @@ export const FieldPressMaster: React.FC = () => {
                   </a>
 
                   <a
-                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&title=${encodeURIComponent(`FieldPress: ${shareModalStory.title}`)}`}
+                    href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`📰 FieldPress: "${shareModalStory.title}" [${shareModalStory.location}]\nBy @${shareModalStory.callsign}\n\n${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2.5 rounded-lg border border-sky-500/40 bg-sky-600/10 text-sky-400 hover:bg-sky-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
+                  >
+                    <span>🦋</span>
+                    <span>Bluesky</span>
+                  </a>
+
+                  <a
+                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&title=${encodeURIComponent(`[FieldPress] ${shareModalStory.title} (${shareModalStory.location})`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-orange-500/40 bg-orange-600/10 text-orange-500 hover:bg-orange-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
                   >
                     <span>Reddit</span>
+                  </a>
+
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📰 *FieldPress Dispatch*: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content.slice(0, 140)}..."\n\n${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2.5 rounded-lg border border-emerald-500/40 bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
+                  >
+                    <span>WhatsApp</span>
+                  </a>
+
+                  <a
+                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2.5 rounded-lg border border-cyan-500/40 bg-cyan-600/10 text-cyan-400 hover:bg-cyan-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
+                  >
+                    <span>Telegram</span>
                   </a>
 
                   <a
@@ -3937,45 +4303,19 @@ export const FieldPressMaster: React.FC = () => {
                   >
                     <span>LinkedIn</span>
                   </a>
-
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2.5 rounded-lg border border-blue-600/40 bg-blue-700/10 text-blue-500 hover:bg-blue-700/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
-                  >
-                    <span>Facebook</span>
-                  </a>
-
-                  <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`FieldPress Dispatch: "${shareModalStory.title}" ${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2.5 rounded-lg border border-emerald-500/40 bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
-                  >
-                    <span>WhatsApp</span>
-                  </a>
-
-                  <a
-                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&text=${encodeURIComponent(`FieldPress Dispatch: "${shareModalStory.title}"`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2.5 rounded-lg border border-cyan-500/40 bg-cyan-600/10 text-cyan-400 hover:bg-cyan-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
-                  >
-                    <span>Telegram</span>
-                  </a>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80 text-xs">
+              {/* Auxiliary Copy Actions */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80 text-xs">
                 <button
                   type="button"
                   onClick={() => {
                     const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                    if (navigator.clipboard) {
                       navigator.clipboard.writeText(shareUrl);
                     }
-                    setSavedSuccessToast("Direct share URL copied to clipboard.");
+                    setSavedSuccessToast("Deep link copied to clipboard.");
                     setTimeout(() => setSavedSuccessToast(""), 2500);
                   }}
                   className="px-3 py-2 rounded border border-zinc-700 hover:bg-zinc-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-bold text-zinc-200"
@@ -3988,23 +4328,17 @@ export const FieldPressMaster: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
-                    const text = `📰 FIELDPRESS DISPATCH: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n${shareModalStory.imageUrl ? `📷 Still: ${shareModalStory.imageUrl}\n` : ""}${shareUrl}`;
-                    if (navigator.share) {
-                      navigator.share({
-                        title: `FieldPress: ${shareModalStory.title}`,
-                        text: text,
-                        url: shareUrl
-                      }).catch(() => {});
-                    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                    const text = `📰 FIELDPRESS WIRE DISPATCH: "${shareModalStory.title}"\n📍 Location: [${shareModalStory.location}] | Category: [${shareModalStory.category}]\n✍️ Byline: ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content}"\n\n🔗 Verified Dispatch Link: ${shareUrl}`;
+                    if (navigator.clipboard) {
                       navigator.clipboard.writeText(text);
-                      setSavedSuccessToast("Broadcast text copied to clipboard.");
+                      setSavedSuccessToast("Full pressie text & citation copied.");
                       setTimeout(() => setSavedSuccessToast(""), 2500);
                     }
                   }}
-                  className="px-3 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                  className="px-3 py-2 rounded border border-zinc-700 hover:bg-zinc-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-bold text-zinc-200"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  <span>{typeof navigator !== "undefined" && !!navigator.share ? "System Share Sheet" : "Copy Broadcast Wire"}</span>
+                  <FileText className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Copy Full Text</span>
                 </button>
               </div>
             </div>
