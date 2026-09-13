@@ -2163,14 +2163,22 @@ export const FieldPressMaster: React.FC = () => {
               Classifieds
             </button>
 
-            {/* Pressy'o Newsroom Copilot Button */}
+            {/* Pressy'o Newsroom Copilot Button with Official Crest */}
             <button
+              type="button"
               onClick={() => setShowPressyoModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition font-bold shadow-xs hover:border-amber-400 flex-shrink-0 cursor-pointer ml-1 text-xs font-mono"
-              title="Open Pressy'o Autonomous Newsroom Copilot"
+              className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 hover:border-amber-400 text-amber-300 transition font-bold shadow-xs flex-shrink-0 cursor-pointer ml-1 text-xs font-mono group"
+              title="Open Pressy'O Autonomous Newsroom Copilot"
             >
-              <Bot className="h-3.5 w-3.5" />
-              <span>Pressy'o</span>
+              <img
+                src="/pressyo-icon.jpg"
+                alt="Pressy'O"
+                className="w-5 h-5 rounded-full object-cover border border-amber-400/80 group-hover:scale-110 transition shadow-2xs bg-white"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span className="tracking-tight font-black">Pressy'O</span>
             </button>
 
             {/* Field Comms Instant Messaging Trigger */}
@@ -5308,9 +5316,7 @@ ${shareUrl}`;
               isDark ? "bg-zinc-950/80" : "bg-amber-50/60"
             }`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-xl shadow-md border-2 border-black">
-                  🤖
-                </div>
+                <img src="/pressyo-icon.jpg" alt="Pressy'O Crest" className="w-10 h-10 rounded-xl object-cover border-2 border-amber-500 shadow-md bg-white flex-shrink-0" />
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="font-mono text-sm font-bold text-amber-500">
@@ -5366,9 +5372,7 @@ ${shareUrl}`;
                   className={`flex gap-3 ${msg.sender === "user" ? "flex-row-reverse" : "flex-row"} items-start`}
                 >
                   {msg.sender === "pressyo" ? (
-                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-xs border border-black">
-                      🤖
-                    </div>
+                    <img src="/pressyo-icon.jpg" alt="Pressy'O" className="w-8 h-8 rounded-xl object-cover border border-amber-500/50 shadow-xs flex-shrink-0 bg-white" />
                   ) : (
                     <div className="w-8 h-8 rounded-xl bg-zinc-800 text-zinc-200 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-zinc-700">
                       You
@@ -5461,16 +5465,7 @@ ${shareUrl}`;
         </div>
       )}
 
-      {/* Floating Action Button: Ask Pressy'o */}
-      <button
-        type="button"
-        onClick={() => setShowPressyoModal(true)}
-        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-500 text-zinc-950 font-mono font-bold text-xs shadow-2xl hover:bg-amber-400 hover:scale-105 transition cursor-pointer border-2 border-black"
-        title="Open Pressy'o Autonomous Newsroom Assistant"
-      >
-        <span className="text-base leading-none">🤖</span>
-        <span>Ask Pressy'o</span>
-      </button>
+      
 
       {/* ========================================================================= */}
       {showSettingsDrawer && (
