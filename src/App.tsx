@@ -2838,6 +2838,21 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
+  // =========================================================================
+  // COLAB REQUEST (sharingOption === "colab" → DM the author instead of forking)
+  // =========================================================================
+  const handleRequestCollab = (dispatch: Dispatch) => {
+    if (dispatch.author === pressPass.name || dispatch.callsign === pressPass.callsign) {
+      setSavedSuccessToast("This is already your dispatch.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+      return;
+    }
+    messageCorrespondent(dispatch.author, dispatch.callsign);
+    setMessengerInput(
+      `Hey @${dispatch.callsign} — I'd like to collaborate on "${dispatch.title}". Open to teaming up on this one?`
+    );
+  };
+
   const handleSyncFeeds = () => {
     setIsSyncing(true);
     setTimeout(() => {
@@ -3753,6 +3768,20 @@ export const FieldPressMaster: React.FC = () => {
                         </button>
                       )}
 
+                      {d.sharingOption === "colab" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRequestCollab(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Request to collaborate with the author via Field Comms"
+                        >
+                          <span>🤝 Request to Collaborate</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -3994,6 +4023,19 @@ export const FieldPressMaster: React.FC = () => {
                               title="Fork pressie by Pressy'o"
                             >
                               <span className="text-xs">🔀</span>
+                            </button>
+                          )}
+                          {disp.sharingOption === "colab" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRequestCollab(disp);
+                              }}
+                              className="hover:text-purple-400 p-1 rounded transition cursor-pointer"
+                              title="Request to collaborate with the author via Field Comms"
+                            >
+                              <span className="text-xs">🤝</span>
                             </button>
                           )}
                           <button
@@ -4259,6 +4301,19 @@ export const FieldPressMaster: React.FC = () => {
                             title="Fork pressie"
                           >
                             <span className="text-xs">🔀</span>
+                          </button>
+                        )}
+                        {d.sharingOption === "colab" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequestCollab(d);
+                            }}
+                            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-purple-400 transition"
+                            title="Request to collaborate with the author via Field Comms"
+                          >
+                            <span className="text-xs">🤝</span>
                           </button>
                         )}
                         <button
