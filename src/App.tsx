@@ -212,6 +212,9 @@ export interface Dispatch {
   editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine";
   sharingOption?: "fork" | "colab" | "none";
   parentDispatchId?: string;
+  repostOf?: string;
+  repostedByName?: string;
+  repostedByCallsign?: string;
 }
 
 export const INITIAL_DISPATCHES: Dispatch[] = [
@@ -2273,6 +2276,44 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
+  // =========================================================================
+  // REPOST TO WIRE (FACEBOOK-STYLE SHARE-WITHOUT-FORKING, BYLINE PRESERVED)
+  // =========================================================================
+  const handleRepostToWire = (original: Dispatch) => {
+    if (original.author === pressPass.name || original.callsign === pressPass.callsign) {
+      setSavedSuccessToast("This is already your dispatch.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+      return;
+    }
+    const alreadyReposted = dispatches.some(
+      (d) => d.repostOf === original.id && d.repostedByCallsign === pressPass.callsign
+    );
+    if (alreadyReposted) {
+      setSavedSuccessToast("You've already shared this dispatch to your Wire.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+      return;
+    }
+    const sourceId = original.repostOf || original.id;
+    const repostItem: Dispatch = {
+      ...original,
+      id: `repost-${Date.now()}`,
+      repostOf: sourceId,
+      repostedByName: pressPass.name,
+      repostedByCallsign: pressPass.callsign,
+      timestamp: "Just now",
+      isPressRoll: false
+    };
+    const updatedDispatches = [repostItem, ...dispatches];
+    setDispatches(updatedDispatches);
+    try {
+      localStorage.setItem("fieldpress_dispatches", JSON.stringify(updatedDispatches));
+    } catch {}
+    setShareModalStory(null);
+    setSavedSuccessToast(`Shared to your Wire — @${original.callsign}'s byline preserved.`);
+    setActiveTab("edition");
+    setTimeout(() => setSavedSuccessToast(""), 3000);
+  };
+
   const handleSyncFeeds = () => {
     setIsSyncing(true);
     setTimeout(() => {
@@ -3054,6 +3095,12 @@ export const FieldPressMaster: React.FC = () => {
                         </p>
                       )}
 
+                      {d.repostedByCallsign && (
+                        <div className="pt-2 text-[11px] font-mono text-indigo-300 flex items-center gap-1">
+                          <span>🔁</span>
+                          <span>Shared by @{d.repostedByCallsign}</span>
+                        </div>
+                      )}
                       <div className="pt-2 flex items-center justify-between text-xs font-mono text-zinc-400">
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-zinc-300">Byline:</span>
@@ -3264,6 +3311,12 @@ export const FieldPressMaster: React.FC = () => {
                         </div>
                       )}
 
+                      {disp.repostedByCallsign && (
+                        <div className="text-[10px] text-indigo-400 mb-1.5 flex items-center gap-1">
+                          <span>🔁</span>
+                          <span>Shared by @{disp.repostedByCallsign}</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-[11px] font-mono mb-2">
                         <span className="font-bold text-amber-500 uppercase">{disp.category}</span>
                         <span className="text-[10px] uppercase opacity-75 px-1.5 py-0.5 rounded border border-zinc-700/50">
@@ -3511,6 +3564,9 @@ export const FieldPressMaster: React.FC = () => {
                     </div>
                     <div className="sm:text-right font-mono text-xs flex-shrink-0 flex sm:flex-col justify-between items-end gap-2">
                       <div>
+                        {d.repostedByCallsign && (
+                          <div className="text-[10px] text-indigo-400 mb-0.5">🔁 Shared by @{d.repostedByCallsign}</div>
+                        )}
                         <div className="font-bold">{d.author}</div>
                         <div className="text-amber-500 font-semibold">@{d.callsign}</div>
                         <div className={`text-[10px] ${subTextThemeClass}`}>{d.bureau}</div>
@@ -4941,6 +4997,21 @@ ${shareUrl}`;
                     <span>Byline: {shareModalStory.author} (@{shareModalStory.callsign})</span>
                     <span className="text-emerald-500 font-bold">VERIFIED DISPATCH</span>
                   </div>
+                </div>
+              )}
+
+              {/* Share to Wire: Facebook-style repost with attribution preserved */}
+              {shareModalStory.author !== pressPass.name && shareModalStory.callsign !== pressPass.callsign && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleRepostToWire(shareModalStory)}
+                    className="w-full p-2.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition flex items-center justify-center gap-2 font-bold cursor-pointer"
+                    title="Repost to your Wire feed with original byline preserved"
+                  >
+                    <span>🔁</span>
+                    <span>Share to Wire (keeps @{shareModalStory.callsign}'s byline)</span>
+                  </button>
                 </div>
               )}
 
