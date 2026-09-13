@@ -1,3 +1,34 @@
+
+export interface CohortItem {
+  id: string;
+  name: string;
+  callsign: string;
+  bureau: string;
+  region: string;
+  description: string;
+  leadName: string;
+  leadCallsign: string;
+  membersCount: number;
+  avatarUrl?: string;
+  status: "active" | "pending";
+  isJoined: boolean;
+}
+
+export interface CohortRequest {
+  id: string;
+  cohortId?: string;
+  cohortName: string;
+  callsign: string;
+  bureau: string;
+  region: string;
+  requesterName: string;
+  requesterCallsign: string;
+  requesterAvatar?: string;
+  justification: string;
+  status: "pending" | "accepted" | "declined";
+  requestedAt: string;
+}
+
 export interface FieldMessage {
   id: string;
   chatId: string;
@@ -694,7 +725,203 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
-  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"linked" | "directory">("linked");
+  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "linked" | "requests" | "directory">("cohorts");
+  const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
+  const [cohortReqName, setCohortReqName] = useState("");
+  const [cohortReqCallsign, setCohortReqCallsign] = useState("");
+  const [cohortReqBureau, setCohortReqBureau] = useState("Midwest Corridor Wire");
+  const [cohortReqRegion, setCohortReqRegion] = useState("IL / IN Corridor");
+  const [cohortReqJustification, setCohortReqJustification] = useState("");
+
+  const [cohorts, setCohorts] = useState<CohortItem[]>(() => {
+    const defaultCohorts: CohortItem[] = [
+      {
+        id: "cohort-vermilion-grid",
+        name: "Vermilion Microgrid Resiliency Cohort",
+        callsign: "vermilion.grid",
+        bureau: "Midwest Corridor Dispatch",
+        region: "Danville, IL & Vermilion County",
+        description: "Autonomous substation monitoring, edge sensor packet logs, and public co-op power telemetry.",
+        leadName: "Victor Birkle",
+        leadCallsign: "ViBiR",
+        membersCount: 6,
+        status: "active",
+        isJoined: true
+      },
+      {
+        id: "cohort-wabash-transit",
+        name: "Wabash Freight & Transit Cohort",
+        callsign: "wabash.transit",
+        bureau: "Wabash Rail Logistics",
+        region: "Wabash Valley (IL / IN)",
+        description: "Battery-electric shuttle telemetry, Route 63 corridor logistics, and shared freight reporting.",
+        leadName: "Marcus Vance",
+        leadCallsign: "vance.lead",
+        membersCount: 5,
+        status: "active",
+        isJoined: true
+      },
+      {
+        id: "cohort-civic-hydrology",
+        name: "Civic Hydrology & Watershed Cohort",
+        callsign: "civic.hydro",
+        bureau: "Tippecanoe Desk",
+        region: "Wabash River Basin",
+        description: "Over 80 years of topographical maps, citizen weir monitoring, and river basin turbidity telemetry.",
+        leadName: "Elena Rostova",
+        leadCallsign: "elena.wire",
+        membersCount: 4,
+        status: "active",
+        isJoined: true
+      }
+    ];
+    try {
+      const saved = localStorage.getItem("fieldpress_cohorts");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return defaultCohorts;
+  });
+
+  const [cohortRequests, setCohortRequests] = useState<CohortRequest[]>(() => {
+    const defaultRequests: CohortRequest[] = [
+      {
+        id: "cr-101",
+        cohortName: "Central Illinois Autonomous Ag Cohort",
+        callsign: "ag.auto",
+        bureau: "Champaign Agronomy Wire",
+        region: "Champaign-Urbana & Central IL",
+        requesterName: "Dr. Aris Thorne",
+        requesterCallsign: "thorne.ag",
+        requesterAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+        justification: "Requesting encrypted field comms channel to cross-reference agricultural soil telemetry with municipal weather sensor packets.",
+        status: "pending",
+        requestedAt: "18m ago"
+      }
+    ];
+    try {
+      const saved = localStorage.getItem("fieldpress_cohort_requests");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return defaultRequests;
+  });
+
+  const handleAcceptCohortRequest = (reqId: string) => {
+    const req = cohortRequests.find((r) => r.id === reqId);
+    if (!req) return;
+
+    const updatedRequests = cohortRequests.map((r) =>
+      r.id === reqId ? { ...r, status: "accepted" as const } : r
+    );
+    setCohortRequests(updatedRequests);
+    try {
+      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(updatedRequests));
+    } catch {}
+
+    const existingCohort = cohorts.find((c) => c.callsign.toLowerCase() === req.callsign.toLowerCase());
+    let targetCohortId = existingCohort?.id;
+
+    if (!existingCohort) {
+      const newCohort: CohortItem = {
+        id: `cohort-${req.callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+        name: req.cohortName,
+        callsign: req.callsign,
+        bureau: req.bureau,
+        region: req.region,
+        description: req.justification,
+        leadName: req.requesterName,
+        leadCallsign: req.requesterCallsign,
+        membersCount: 2,
+        status: "active",
+        isJoined: true
+      };
+      targetCohortId = newCohort.id;
+      const nextCohorts = [newCohort, ...cohorts];
+      setCohorts(nextCohorts);
+      try {
+        localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
+      } catch {}
+    } else {
+      const nextCohorts = cohorts.map((c) => (c.id === existingCohort.id ? { ...c, isJoined: true } : c));
+      setCohorts(nextCohorts);
+      try {
+        localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
+      } catch {}
+    }
+
+    const handshakeMsg: FieldMessage = {
+      id: `msg-${Date.now()}`,
+      chatId: targetCohortId || "bureau-wire",
+      sender: "Field Comms Wire Security",
+      callsign: "wire.sec",
+      text: `🔒 Cryptographic wire handshake accepted by @${pressPass.callsign || "ViBiR"}. ${req.cohortName} cohort channel initialized. Encrypted peer communications enabled.`,
+      timestamp: "Just now"
+    };
+    const updatedMessages = [...messengerMessages, handshakeMsg];
+    setMessengerMessages(updatedMessages);
+    try {
+      localStorage.setItem("fieldpress_messenger_messages", JSON.stringify(updatedMessages));
+    } catch {}
+
+    if (targetCohortId) setActiveChatId(targetCohortId);
+    setSavedSuccessToast(`Cohort request accepted. Encrypted wire active for ${req.cohortName}.`);
+    setTimeout(() => setSavedSuccessToast(""), 3000);
+  };
+
+  const handleDeclineCohortRequest = (reqId: string) => {
+    const updated = cohortRequests.map((r) =>
+      r.id === reqId ? { ...r, status: "declined" as const } : r
+    );
+    setCohortRequests(updated);
+    try {
+      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(updated));
+    } catch {}
+    setSavedSuccessToast("Cohort wire request declined.");
+    setTimeout(() => setSavedSuccessToast(""), 2500);
+  };
+
+  const handleSubmitCohortRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cohortReqName.trim() || !cohortReqCallsign.trim() || !cohortReqBureau.trim()) {
+      setFormValidationError("Please provide cohort title, callsign, and bureau.");
+      return;
+    }
+
+    const cleanCallsign = cohortReqCallsign.trim().replace(/^@/, "");
+    const newReq: CohortRequest = {
+      id: `cr-${Date.now()}`,
+      cohortName: cohortReqName.trim(),
+      callsign: cleanCallsign,
+      bureau: cohortReqBureau.trim(),
+      region: cohortReqRegion.trim() || "Midwest Corridor (IL / IN)",
+      requesterName: pressPass.name || "Victor Birkle",
+      requesterCallsign: pressPass.callsign || "ViBiR",
+      requesterAvatar: pressPass.avatarUrl,
+      justification: cohortReqJustification.trim() || "Encrypted regional journalism & telemetry coordination wire.",
+      status: "pending",
+      requestedAt: "Just now"
+    };
+
+    const nextRequests = [newReq, ...cohortRequests];
+    setCohortRequests(nextRequests);
+    try {
+      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(nextRequests));
+    } catch {}
+
+    setCohortReqName("");
+    setCohortReqCallsign("");
+    setCohortReqBureau("Midwest Corridor Wire");
+    setCohortReqRegion("IL / IN Corridor");
+    setCohortReqJustification("");
+    setShowCohortRequestModal(false);
+    setSavedSuccessToast(`Charter request submitted for ${newReq.cohortName}.`);
+    setTimeout(() => setSavedSuccessToast(""), 3000);
+  };
   const [messengerInput, setMessengerInput] = useState("");
   const [messengerImageUrl, setMessengerImageUrl] = useState("");
   const [messengerLinkUrl, setMessengerLinkUrl] = useState("");
@@ -3884,6 +4111,121 @@ export const FieldPressMaster: React.FC = () => {
       {/* ========================================================================= */}
       {/* 8B. INSTANT MESSAGING DRAWER / MODAL (FIELD COMMS WIRE: DMs & GROUPS)     */}
       {/* ========================================================================= */}
+            {/* 8D. COHORT REQUEST & PROPOSAL MODAL */}
+      {showCohortRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
+          <div className={`w-full max-w-lg rounded-2xl border shadow-2xl p-6 space-y-4 ${
+            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="flex items-center justify-between border-b pb-3 border-zinc-700">
+              <div className="flex items-center gap-2">
+                <Radio className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-sm">Propose New Field Cohort Wire</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCohortRequestModal(false)}
+                className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className={`text-[11px] leading-relaxed ${subTextThemeClass}`}>
+              Submit a charter request to establish a dedicated encrypted cohort frequency for specialized regional investigative journalism, shared sensor telemetry, and cross-bureau coordination.
+            </p>
+
+            <form onSubmit={handleSubmitCohortRequest} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
+                  Cohort Name / Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cohortReqName}
+                  onChange={(e) => setCohortReqName(e.target.value)}
+                  placeholder="e.g. Wabash Valley Energy & Transit Cohort"
+                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold mb-1 text-zinc-300">
+                    Cohort Callsign *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cohortReqCallsign}
+                    onChange={(e) => setCohortReqCallsign(e.target.value)}
+                    placeholder="e.g. wv.energy"
+                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold mb-1 text-zinc-300">
+                    Bureau Affiliation *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cohortReqBureau}
+                    onChange={(e) => setCohortReqBureau(e.target.value)}
+                    placeholder="e.g. Wabash Valley Desk"
+                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
+                  Regional Operational Corridor
+                </label>
+                <input
+                  type="text"
+                  value={cohortReqRegion}
+                  onChange={(e) => setCohortReqRegion(e.target.value)}
+                  placeholder="e.g. Danville, IL - Lafayette, IN - Terre Haute"
+                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
+                  Wire Charter & Telemetry Justification *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={cohortReqJustification}
+                  onChange={(e) => setCohortReqJustification(e.target.value)}
+                  placeholder="Detail the collaborative reporting mission, telemetry datasets, or sensor tracking this cohort will manage..."
+                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCohortRequestModal(false)}
+                  className="px-3 py-2 rounded border border-zinc-700 hover:bg-zinc-800 text-zinc-300 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition cursor-pointer shadow-xs"
+                >
+                  Submit Charter Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showMessengerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md font-sans">
           <div className={`w-full max-w-5xl h-[85vh] max-h-[720px] rounded-2xl border shadow-2xl flex flex-col md:flex-row overflow-hidden transition ${
@@ -3912,32 +4254,63 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* Directory Tabs: Linked Users vs Complete Directory Index */}
-              <div className={`grid grid-cols-2 p-1.5 m-3 rounded-lg border text-xs font-mono ${
+              <div className={`grid grid-cols-4 p-1.5 m-3 rounded-lg border text-xs font-mono ${
                 isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-200 border-zinc-300"
               }`}>
                 <button
                   type="button"
+                  onClick={() => setMessengerDirectoryTab("cohorts")}
+                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
+                    messengerDirectoryTab === "cohorts"
+                      ? "bg-amber-500 text-zinc-950 shadow-xs"
+                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                  title="Active Cohort Working Groups"
+                >
+                  <Radio className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">Cohorts ({cohorts.filter((c) => c.isJoined).length})</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setMessengerDirectoryTab("linked")}
-                  className={`py-1.5 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
                     messengerDirectoryTab === "linked"
                       ? "bg-amber-500 text-zinc-950 shadow-xs"
                       : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                   }`}
+                  title="Linked Peer Correspondents"
                 >
-                  <Users className="h-3.5 w-3.5" />
-                  <span>Linked ({registeredUsers.filter((c) => c.isLinked).length})</span>
+                  <Users className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">Peers ({registeredUsers.filter((c) => c.isLinked).length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessengerDirectoryTab("requests")}
+                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer relative truncate ${
+                    messengerDirectoryTab === "requests"
+                      ? "bg-amber-500 text-zinc-950 shadow-xs"
+                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                  title="Cohort Wire Request Queue"
+                >
+                  <Clock className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">Reqs ({cohortRequests.filter((r) => r.status === "pending").length})</span>
+                  {cohortRequests.filter((r) => r.status === "pending").length > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping absolute top-1 right-1" />
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMessengerDirectoryTab("directory")}
-                  className={`py-1.5 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                  className={`py-1.5 px-1 rounded-md font-bold transition flex items-center justify-center gap-1 cursor-pointer truncate ${
                     messengerDirectoryTab === "directory"
                       ? "bg-amber-500 text-zinc-950 shadow-xs"
                       : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                   }`}
+                  title="Complete Correspondent Index"
                 >
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>Index ({registeredUsers.length})</span>
+                  <ShieldCheck className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">All ({registeredUsers.length})</span>
                 </button>
               </div>
 
@@ -3959,7 +4332,168 @@ export const FieldPressMaster: React.FC = () => {
 
               {/* Real Registered Users List */}
               <div className="flex-1 overflow-y-auto px-3 space-y-1.5 pb-2">
-                {(messengerDirectoryTab === "linked"
+                {/* 1. COHORTS TAB */}
+                {messengerDirectoryTab === "cohorts" && (
+                  <div className="space-y-1.5">
+                    {cohorts.map((c) => {
+                      const isSelected = activeChatId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setActiveChatId(c.id)}
+                          className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 ${
+                            isSelected
+                              ? isDark
+                                ? "bg-amber-500/15 border-amber-500 text-amber-200 shadow-xs"
+                                : "bg-amber-50 border-amber-400 text-amber-950 shadow-xs"
+                              : isDark
+                                ? "border-zinc-800/80 hover:bg-zinc-800/60 text-zinc-300"
+                                : "border-zinc-200 hover:bg-zinc-100 text-zinc-800"
+                          }`}
+                        >
+                          <div className="min-w-0 flex items-start gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
+                              👥
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-xs font-bold truncate">{c.name}</span>
+                              </div>
+                              <p className="text-[11px] text-amber-500 font-mono truncate">
+                                @{c.callsign} • {c.membersCount} peers
+                              </p>
+                              <p className={`text-[10px] truncate ${subTextThemeClass}`}>
+                                {c.bureau}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex-shrink-0">
+                            Active
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCohortRequestModal(true)}
+                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      <span>+ Propose / Request New Cohort</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. REQUESTS TAB (COHORT REQUEST SYSTEM) */}
+                {messengerDirectoryTab === "requests" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
+                      <span>Wire Request Ledger</span>
+                      <span className="text-amber-400 font-bold">{cohortRequests.length} Total</span>
+                    </div>
+
+                    {cohortRequests.length === 0 ? (
+                      <div className="p-6 text-center text-xs font-mono text-zinc-500 border border-zinc-800 rounded-xl">
+                        No active cohort requests on wire.
+                      </div>
+                    ) : (
+                      cohortRequests.map((req) => {
+                        const isPending = req.status === "pending";
+                        const isAccepted = req.status === "accepted";
+
+                        return (
+                          <div
+                            key={req.id}
+                            className={`p-3 rounded-xl border space-y-2 transition ${
+                              isPending
+                                ? "bg-amber-500/10 border-amber-500/40 text-zinc-200"
+                                : isAccepted
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-zinc-300"
+                                : "bg-zinc-900/60 border-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h4 className="font-mono text-xs font-bold text-amber-400 truncate">
+                                  {req.cohortName}
+                                </h4>
+                                <p className="text-[10px] font-mono text-zinc-400 truncate">
+                                  @{req.callsign} • {req.bureau}
+                                </p>
+                              </div>
+                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase flex-shrink-0 ${
+                                isPending
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse"
+                                  : isAccepted
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
+                                  : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                              }`}>
+                                {req.status}
+                              </span>
+                            </div>
+
+                            <div className="p-2 rounded bg-black/40 text-[11px] font-sans leading-relaxed text-zinc-300 border border-white/5">
+                              "{req.justification}"
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-0.5">
+                              <span>From @{req.requesterCallsign} ({req.requesterName})</span>
+                              <span>{req.requestedAt}</span>
+                            </div>
+
+                            {/* Actions for Pending Requests */}
+                            {isPending && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcceptCohortRequest(req.id)}
+                                  className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                                >
+                                  <Check className="h-3 w-3" />
+                                  <span>Accept & Open Wire</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeclineCohortRequest(req.id)}
+                                  className="py-1.5 px-2.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 font-mono text-xs transition cursor-pointer"
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            )}
+
+                            {isAccepted && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetId = `cohort-${req.callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+                                  setActiveChatId(targetId);
+                                }}
+                                className="w-full py-1 px-2 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 font-mono text-[11px] font-bold text-center transition cursor-pointer"
+                              >
+                                → Switch to Active Channel
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCohortRequestModal(true)}
+                      className="w-full py-2 px-3 rounded-xl border border-dashed border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      <span>+ Submit New Cohort Request</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 3. PEERS & 4. DIRECTORY */}
+                {(messengerDirectoryTab === "linked" || messengerDirectoryTab === "directory") && (
+                (messengerDirectoryTab === "linked"
                   ? registeredUsers.filter((u) => u.isLinked)
                   : registeredUsers
                 ).map((u) => {
@@ -4031,7 +4565,7 @@ export const FieldPressMaster: React.FC = () => {
                       )}
                     </div>
                   );
-                })}
+                }))}
               </div>
 
               {/* Your Press Pass Identity Footer */}
