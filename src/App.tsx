@@ -115,7 +115,11 @@ import {
   Link2,
   Smile,
   Paperclip,
-  Bot
+  Bot,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Lock
 } from "lucide-react";
 import * as maplibregl from "maplibre-gl";
 
@@ -1449,6 +1453,86 @@ export const FieldPressMaster: React.FC = () => {
   const [editPassForm, setEditPassForm] = useState<PressPassData>(pressPass);
   const [savedSuccessToast, setSavedSuccessToast] = useState("");
 
+  // --- Real cross-device accounts (email + password) ---
+  const [authAccount, setAuthAccount] = useState<{
+    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string;
+  } | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authCallsign, setAuthCallsign] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
+    setPressPass((prev) => {
+      const next = { ...prev, name: account.name, callsign: account.callsign, bureau: account.bureau, avatarUrl: account.avatarUrl, email: account.email };
+      try {
+        localStorage.setItem("fieldpress_press_pass", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.account) {
+          setAuthAccount(data.account);
+          applyAccountToPressPass(data.account);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const submitAuthForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const isSignup = authModalMode === "signup";
+      const res = await fetch(isSignup ? "/api/auth/signup" : "/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isSignup
+            ? { email: authEmail, password: authPassword, callsign: authCallsign, name: authName, bureau: pressPass.bureau }
+            : { email: authEmail, password: authPassword }
+        )
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || "Something went wrong. Please try again.");
+        setAuthLoading(false);
+        return;
+      }
+      setAuthAccount(data.account);
+      applyAccountToPressPass(data.account);
+      setAuthModalMode(null);
+      setAuthEmail("");
+      setAuthPassword("");
+      setAuthCallsign("");
+      setAuthName("");
+      setSavedSuccessToast(isSignup ? "Account created. You're signed in on this device." : "Signed in.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setAuthError("Network error. Please try again.");
+    }
+    setAuthLoading(false);
+  };
+
+  const logOutAccount = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
+    setAuthAccount(null);
+    setSavedSuccessToast("Signed out.");
+    setTimeout(() => setSavedSuccessToast(""), 2500);
+  };
+
   // Live Dispatches & Press Roll (Staged Drafts)
   const [dispatches, setDispatches] = useState<Dispatch[]>(() => {
     try {
@@ -2592,6 +2676,35 @@ export const FieldPressMaster: React.FC = () => {
                 </>
               )}
             </div>
+
+            {/* Account: Sign In trigger (signed out) or account badge + sign out (signed in) */}
+            {authAccount ? (
+              <button
+                onClick={logOutAccount}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono transition cursor-pointer ${
+                  isDark
+                    ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                    : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
+                }`}
+                title="Sign out"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Sign out</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => { setAuthModalMode("signin"); setAuthError(""); }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono transition cursor-pointer ${
+                  isDark
+                    ? "border-cyan-500/40 hover:bg-cyan-500/10 text-cyan-400"
+                    : "border-cyan-600/30 hover:bg-cyan-50 text-cyan-700"
+                }`}
+                title="Sign in to sync your account across devices"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                <span>Sign in</span>
+              </button>
+            )}
 
             {/* Header Press Pass Badge Trigger (DEDICATED TO REPORTER CREDENTIAL/ID EDITOR - IMAGE 1) */}
             <button
@@ -4252,6 +4365,132 @@ export const FieldPressMaster: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* 6b. ACCOUNT SIGN IN / SIGN UP MODAL                                        */}
+      {/*     Cross-device account access. Separate from the local Press Pass ID.   */}
+      {/* ========================================================================= */}
+      {authModalMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className={`w-full max-w-sm rounded-xl border shadow-2xl overflow-hidden transition ${
+            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono">
+                {authModalMode === "signup" ? (
+                  <UserPlus className="h-5 w-5 text-cyan-500" />
+                ) : (
+                  <Lock className="h-5 w-5 text-cyan-500" />
+                )}
+                <h3 className="font-bold text-base">
+                  {authModalMode === "signup" ? "Create Account" : "Sign In"}
+                </h3>
+              </div>
+              <button
+                onClick={() => { setAuthModalMode(null); setAuthError(""); }}
+                className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={submitAuthForm} className="p-5 sm:p-6 space-y-4 font-mono text-xs">
+              <p className={`text-[11px] leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                {authModalMode === "signup"
+                  ? "Sign up to sync your Press Pass and dispatches across devices."
+                  : "Sign in to access your account on this device."}
+              </p>
+
+              {authModalMode === "signup" && (
+                <>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Name</label>
+                    <input
+                      type="text"
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      required
+                      className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                      placeholder="Jane Reporter"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Callsign</label>
+                    <input
+                      type="text"
+                      value={authCallsign}
+                      onChange={(e) => setAuthCallsign(e.target.value)}
+                      required
+                      pattern="[A-Za-z0-9._]{3,32}"
+                      title="3-32 characters: letters, numbers, dots, underscores"
+                      className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                      placeholder="jreporter"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-1">
+                <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Email</label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  required
+                  className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Password</label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              {authError && (
+                <div className="flex items-start gap-1.5 text-rose-500 text-[11px]">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{authError}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full px-4 py-2.5 rounded bg-cyan-500 text-zinc-950 font-bold hover:bg-cyan-400 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {authModalMode === "signup" ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                <span>{authLoading ? "Please wait..." : authModalMode === "signup" ? "Create account" : "Sign in"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalMode(authModalMode === "signup" ? "signin" : "signup");
+                  setAuthError("");
+                }}
+                className={`w-full text-center text-[11px] underline underline-offset-2 cursor-pointer ${
+                  isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                {authModalMode === "signup"
+                  ? "Already have an account? Sign in"
+                  : "Need an account? Sign up"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 7. IMMERSIVE FULL-PAGE PRESSIE READER WITH REACTS & COMMENTS              */}
       {/* ========================================================================= */}
