@@ -1262,6 +1262,8 @@ export const FieldPressMaster: React.FC = () => {
   const [messengerLinkUrl, setMessengerLinkUrl] = useState("");
   const [showAttachImage, setShowAttachImage] = useState(false);
   const [showAttachLink, setShowAttachLink] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [messengerMessages, setMessengerMessages] = useState<FieldMessage[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_messenger_messages");
@@ -1520,6 +1522,76 @@ export const FieldPressMaster: React.FC = () => {
     try {
       localStorage.setItem("fieldpress_notif_seen_ids", JSON.stringify(Array.from(allIds)));
     } catch {}
+  };
+
+  // --- Suggested Correspondents: people who've actually engaged with your
+  // dispatches (commented) but aren't linked yet — a real "meet people"
+  // signal drawn from existing interaction data, not a synthetic feed.
+  const suggestedCorrespondents = (() => {
+    const seen = new Set<string>();
+    const suggestions: { name: string; callsign: string }[] = [];
+    for (const [dispId, comments] of Object.entries(allComments)) {
+      if (!dispatches.some((d) => d.id === dispId && (d.author === pressPass.name || d.callsign === pressPass.callsign))) continue;
+      for (const c of comments) {
+        if (c.callsign === pressPass.callsign) continue;
+        if (seen.has(c.callsign)) continue;
+        const existing = registeredUsers.find((u) => u.callsign.toLowerCase() === c.callsign.toLowerCase());
+        if (existing?.isLinked) continue;
+        seen.add(c.callsign);
+        suggestions.push({ name: c.author, callsign: c.callsign });
+      }
+    }
+    return suggestions.slice(0, 6);
+  })();
+
+  // --- Correspondent card: click any commenter's identity to view/link them ---
+  const [correspondentPopover, setCorrespondentPopover] = useState<{ name: string; callsign: string } | null>(null);
+
+  const openCorrespondentFromComment = (name: string, callsign: string) => {
+    if (callsign === pressPass.callsign) return; // don't offer to link yourself
+    setCorrespondentPopover({ name, callsign });
+  };
+
+  const resolveCorrespondent = (callsign: string): CorrespondentUser | null =>
+    registeredUsers.find((u) => u.callsign.toLowerCase() === callsign.toLowerCase()) || null;
+
+  const linkCorrespondent = (name: string, callsign: string) => {
+    const existing = resolveCorrespondent(callsign);
+    let updated: CorrespondentUser[];
+    if (existing) {
+      updated = registeredUsers.map((u) => (u.id === existing.id ? { ...u, isLinked: true } : u));
+    } else {
+      const newUser: CorrespondentUser = {
+        id: `usr-${callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+        name,
+        callsign,
+        email: "",
+        role: "Field Correspondent",
+        bureau: "Midwest Corridor Wire",
+        location: "",
+        pressPassAvatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(callsign)}`,
+        isLinked: true,
+        isAdmin: false
+      };
+      updated = [...registeredUsers, newUser];
+    }
+    setRegisteredUsers(updated);
+    try {
+      localStorage.setItem("fieldpress_registered_users", JSON.stringify(updated));
+    } catch {}
+    setSavedSuccessToast(`@${callsign} linked as a correspondent.`);
+    setTimeout(() => setSavedSuccessToast(""), 2500);
+  };
+
+  const messageCorrespondent = (name: string, callsign: string) => {
+    let user = resolveCorrespondent(callsign);
+    if (!user) {
+      linkCorrespondent(name, callsign);
+      user = { id: `usr-${callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}` } as CorrespondentUser;
+    }
+    setActiveChatId(user.id);
+    setCorrespondentPopover(null);
+    setShowMessengerModal(true);
   };
 
   // --- Global search: searches all dispatches regardless of active tab ---
@@ -2921,7 +2993,10 @@ export const FieldPressMaster: React.FC = () => {
                         {getCommentsForDispatch(d.id).map((c) => (
                           <div key={c.id} className={`p-2.5 rounded-lg border space-y-1 ${subCardThemeClass}`}>
                             <div className="flex items-center justify-between text-[11px]">
-                              <div className="flex items-center gap-1.5">
+                              <div
+                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition"
+                                onClick={() => openCorrespondentFromComment(c.author, c.callsign)}
+                              >
                                 <span className="font-bold text-zinc-200">{c.author}</span>
                                 <span className="text-amber-500 font-semibold">@{c.callsign}</span>
                               </div>
@@ -3150,7 +3225,12 @@ export const FieldPressMaster: React.FC = () => {
                             {getCommentsForDispatch(disp.id).map((c) => (
                               <div key={c.id} className={`p-2 rounded border text-[11px] ${subCardThemeClass}`}>
                                 <div className="flex items-center justify-between text-[10px] mb-0.5">
-                                  <span className="font-bold text-zinc-300">@{c.callsign}</span>
+                                  <span
+                                    className="font-bold text-zinc-300 cursor-pointer hover:text-amber-400 transition"
+                                    onClick={() => openCorrespondentFromComment(c.author, c.callsign)}
+                                  >
+                                    @{c.callsign}
+                                  </span>
                                   <span className={subTextThemeClass}>{c.timestamp}</span>
                                 </div>
                                 <p className={isDark ? "text-zinc-300" : "text-zinc-700"}>{c.text}</p>
@@ -4372,7 +4452,10 @@ export const FieldPressMaster: React.FC = () => {
                     getCommentsForDispatch(selectedStory.id).map((c) => (
                       <div key={c.id} className={`p-3.5 rounded-lg border space-y-1.5 ${subCardThemeClass}`}>
                         <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
+                          <div
+                            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
+                            onClick={() => openCorrespondentFromComment(c.author, c.callsign)}
+                          >
                             <span className="font-bold text-zinc-200">{c.author}</span>
                             <span className="text-amber-500 font-semibold text-[11px]">@{c.callsign}</span>
                           </div>
@@ -5176,7 +5259,40 @@ ${shareUrl}`;
 
                 {/* DIRECTORY */}
                 {messengerDirectoryTab === "directory" && (
-                registeredUsers.map((u) => {
+                <>
+                {suggestedCorrespondents.length > 0 && (
+                  <div className="mb-2.5">
+                    <p className={`font-mono text-[10px] font-bold uppercase mb-1.5 px-0.5 ${subTextThemeClass}`}>
+                      Suggested — people engaging with your dispatches
+                    </p>
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {suggestedCorrespondents.map((s) => (
+                        <div
+                          key={s.callsign}
+                          className={`flex-shrink-0 w-24 p-2 rounded-lg border text-center ${
+                            isDark ? "border-zinc-800 bg-zinc-900/60" : "border-zinc-200 bg-white"
+                          }`}
+                        >
+                          <img
+                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(s.callsign)}`}
+                            alt={s.name}
+                            className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 mx-auto mb-1"
+                          />
+                          <p className="font-mono text-[10px] font-bold truncate">{s.name}</p>
+                          <p className="font-mono text-[9px] text-amber-500 truncate mb-1">@{s.callsign}</p>
+                          <button
+                            type="button"
+                            onClick={() => linkCorrespondent(s.name, s.callsign)}
+                            className="w-full text-[9px] font-mono font-bold py-1 rounded bg-amber-500 text-zinc-950 hover:bg-amber-400 transition cursor-pointer"
+                          >
+                            + Link
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {registeredUsers.map((u) => {
                   const isSelected = activeChatId === u.id;
                   const isUserAdminAccount = u.isAdmin || u.email === "vibir@fieldpress.studio" || u.callsign.toLowerCase() === "vibir";
 
@@ -5245,7 +5361,9 @@ ${shareUrl}`;
                       )}
                     </div>
                   );
-                }))}
+                })}
+                </>
+                )}
               </div>
 
               {/* Your Press Pass Identity Footer */}
@@ -5454,74 +5572,122 @@ ${shareUrl}`;
                   </div>
                 )}
 
-                {/* Quick Emoji Bar & Tool Controls */}
-                <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] text-zinc-400 font-mono mr-1">Emoji:</span>
-                    {["📰", "⚡", "🔍", "💬", "🤝", "🔥", "🔻", "📡", "👍", "❤️"].map((em) => (
-                      <button
-                        key={em}
-                        type="button"
-                        onClick={() => setMessengerInput((prev) => prev + " " + em)}
-                        className="px-1.5 py-0.5 rounded bg-zinc-800/60 hover:bg-zinc-700 text-xs border border-zinc-700/40 select-none cursor-pointer"
-                      >
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2">
+                {/* Messenger-style composer row: attach, emoji, input, send */}
+                <form onSubmit={handleSendMessengerMessage} className="flex items-center gap-1.5">
+                  {/* Attach menu (Photo / Link), consolidated behind one "+" */}
+                  <div className="relative flex-shrink-0">
                     <button
                       type="button"
                       onClick={() => {
-                        setShowAttachImage(!showAttachImage);
-                        setShowAttachLink(false);
+                        setShowAttachMenu(!showAttachMenu);
+                        setShowEmojiPicker(false);
                       }}
-                      className={`px-2 py-1 rounded text-xs font-mono flex items-center gap-1 border transition cursor-pointer ${
-                        showAttachImage || messengerImageUrl
+                      className={`w-8 h-8 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                        showAttachImage || showAttachLink || messengerImageUrl || messengerLinkUrl
                           ? "bg-amber-500/20 border-amber-500 text-amber-400"
-                          : "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400"
+                          : isDark
+                            ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400"
+                            : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
                       }`}
-                      title="Attach Image"
+                      title="Attach"
                     >
-                      <ImageIcon className="h-3.5 w-3.5" />
-                      <span>Image</span>
+                      <PlusCircle className="h-4 w-4" />
                     </button>
+                    {showAttachMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowAttachMenu(false)} />
+                        <div className={`absolute bottom-10 left-0 w-40 rounded-xl border shadow-xl z-50 overflow-hidden ${
+                          isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                        }`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachImage(!showAttachImage);
+                              setShowAttachLink(false);
+                              setShowAttachMenu(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono transition cursor-pointer ${
+                              isDark ? "hover:bg-zinc-800 text-zinc-200" : "hover:bg-zinc-100 text-zinc-800"
+                            }`}
+                          >
+                            <ImageIcon className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Photo</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachLink(!showAttachLink);
+                              setShowAttachImage(false);
+                              setShowAttachMenu(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono border-t transition cursor-pointer ${
+                              isDark ? "hover:bg-zinc-800 text-zinc-200 border-zinc-800" : "hover:bg-zinc-100 text-zinc-800 border-zinc-100"
+                            }`}
+                          >
+                            <Link2 className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Link</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Emoji picker */}
+                  <div className="relative flex-shrink-0">
                     <button
                       type="button"
                       onClick={() => {
-                        setShowAttachLink(!showAttachLink);
-                        setShowAttachImage(false);
+                        setShowEmojiPicker(!showEmojiPicker);
+                        setShowAttachMenu(false);
                       }}
-                      className={`px-2 py-1 rounded text-xs font-mono flex items-center gap-1 border transition cursor-pointer ${
-                        showAttachLink || messengerLinkUrl
-                          ? "bg-cyan-500/20 border-cyan-500 text-cyan-400"
-                          : "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400"
+                      className={`w-8 h-8 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                        showEmojiPicker
+                          ? "bg-amber-500/20 border-amber-500 text-amber-400"
+                          : isDark
+                            ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400"
+                            : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
                       }`}
-                      title="Attach Link"
+                      title="Emoji"
                     >
-                      <Link2 className="h-3.5 w-3.5" />
-                      <span>Link</span>
+                      <Smile className="h-4 w-4" />
                     </button>
+                    {showEmojiPicker && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowEmojiPicker(false)} />
+                        <div className={`absolute bottom-10 left-0 p-2 rounded-xl border shadow-xl z-50 grid grid-cols-5 gap-0.5 ${
+                          isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                        }`}>
+                          {["📰", "⚡", "🔍", "💬", "🤝", "🔥", "🔻", "📡", "👍", "❤️"].map((em) => (
+                            <button
+                              key={em}
+                              type="button"
+                              onClick={() => setMessengerInput((prev) => prev + " " + em)}
+                              className={`w-8 h-8 rounded-lg text-base transition cursor-pointer ${
+                                isDark ? "hover:bg-zinc-800" : "hover:bg-zinc-100"
+                              }`}
+                            >
+                              {em}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
 
-                {/* Input Field & Send Button */}
-                <form onSubmit={handleSendMessengerMessage} className="flex gap-2">
                   <input
                     type="text"
                     value={messengerInput}
                     onChange={(e) => setMessengerInput(e.target.value)}
-                    placeholder={`Transmit message as @${pressPass.callsign || "ViBiR"}...`}
-                    className={`flex-1 rounded-xl px-3.5 py-2 text-xs sm:text-sm focus:outline-none transition ${inputThemeClass}`}
+                    placeholder="Message..."
+                    className={`flex-1 rounded-full px-4 py-2 text-xs sm:text-sm focus:outline-none transition ${inputThemeClass}`}
                   />
                   <button
                     type="submit"
                     disabled={!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()}
-                    className="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold text-xs sm:text-sm hover:bg-amber-400 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                    className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-500 text-zinc-950 hover:bg-amber-400 transition flex items-center justify-center cursor-pointer disabled:opacity-40 shadow-xs"
+                    title="Send"
                   >
-                    <Send className="h-3.5 w-3.5" />
-                    <span>Transmit</span>
+                    <Send className="h-4 w-4" />
                   </button>
                 </form>
               </div>
@@ -5529,6 +5695,70 @@ ${shareUrl}`;
           </div>
         </div>
       )}
+
+      {/* Correspondent Card: opens when a commenter's identity is clicked anywhere in the app */}
+      {correspondentPopover && (() => {
+        const cs = correspondentPopover.callsign;
+        const existing = resolveCorrespondent(cs);
+        const isLinked = existing?.isLinked ?? false;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setCorrespondentPopover(null)}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-xs rounded-2xl border shadow-2xl p-5 space-y-4 ${
+                isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={existing?.pressPassAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cs)}`}
+                  alt={correspondentPopover.name}
+                  className="w-12 h-12 rounded-xl object-cover border border-amber-500/50 flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold truncate">{correspondentPopover.name}</p>
+                  <p className="font-mono text-xs text-amber-500 truncate">@{cs}</p>
+                  {existing?.bureau && (
+                    <p className={`font-mono text-[11px] truncate ${subTextThemeClass}`}>{existing.bureau}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => linkCorrespondent(correspondentPopover.name, cs)}
+                  disabled={isLinked}
+                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-60 ${
+                    isLinked
+                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                      : "bg-amber-500 text-zinc-950 hover:bg-amber-400"
+                  }`}
+                >
+                  {isLinked ? <Check className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
+                  <span>{isLinked ? "Linked" : "+ Link"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => messageCorrespondent(correspondentPopover.name, cs)}
+                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                    isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-200" : "border-zinc-300 hover:bg-zinc-100 text-zinc-800"
+                  }`}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Message</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCorrespondentPopover(null)}
+                className={`w-full text-center font-mono text-[11px] ${subTextThemeClass}`}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* 8C. GENUINE CORRESPONDENT REGISTRATION MODAL                              */}
