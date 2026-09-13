@@ -3359,14 +3359,15 @@ export const FieldPressMaster: React.FC = () => {
       {/* ========================================================================= */}
       {/* 7. IMMERSIVE FULL-PAGE PRESSIE READER WITH REACTS & COMMENTS              */}
       {/* ========================================================================= */}
-      {selectedStory && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-md overflow-y-auto font-mono">
-          <div className={`w-full max-w-4xl mx-auto my-4 sm:my-8 rounded-2xl border shadow-2xl overflow-hidden transition ${
-            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
-          }`}>
+      {selectedStory && (() => {
+        const readerEditionStyle = selectedStory.editionStyle || "tactical";
+        const readerEc = getEditionClasses(readerEditionStyle, isDark);
+        return (
+        <div className={`fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-md overflow-y-auto ${readerEditionStyle === "newspaper" ? "font-serif" : readerEditionStyle === "arcade" ? "font-['VT323']" : readerEditionStyle === "comic" || readerEditionStyle === "magazine" ? "font-sans" : "font-mono"}`}>
+          <div className={`w-full max-w-4xl mx-auto my-4 sm:my-8 rounded-2xl border shadow-2xl overflow-hidden transition ${readerEc.card}`}>
             {/* Sticky Header Navigation */}
-            <div className={`sticky top-0 z-20 px-6 py-4 border-b flex items-center justify-between backdrop-blur-md ${
-              isDark ? "bg-zinc-900/95 border-zinc-800" : "bg-white/95 border-zinc-200"
+            <div className={`sticky top-0 z-20 px-6 py-4 border-b flex items-center justify-between backdrop-blur-md ${readerEc.accentBorder} ${
+              isDark ? "bg-zinc-900/95" : "bg-white/95"
             }`}>
               <div className="flex items-center gap-3">
                 <button
@@ -3375,8 +3376,11 @@ export const FieldPressMaster: React.FC = () => {
                 >
                   ← Back to Feed
                 </button>
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[11px] font-bold uppercase">
+                <span className={readerEc.badge}>
                   {selectedStory.category}
+                </span>
+                <span className={readerEc.subtleBadge + " px-2 py-0.5 text-[10px] font-bold"}>
+                  {readerEc.tag}
                 </span>
                 <span className="text-zinc-400 text-xs">[{selectedStory.location}]</span>
               </div>
@@ -3413,10 +3417,10 @@ export const FieldPressMaster: React.FC = () => {
 
               {/* Headline & Metadata */}
               <div className="space-y-3">
-                <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+                <h1 className={readerEc.headline}>
                   {selectedStory.title}
                 </h1>
-                <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${borderThemeClass} ${subTextThemeClass}`}>
+                <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${readerEc.accentBorder} ${subTextThemeClass}`}>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-zinc-200">Byline:</span>
                     <span>{selectedStory.author} (@{selectedStory.callsign})</span>
@@ -3428,7 +3432,7 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* Main Body Narrative */}
-              <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
+              <div className={`${readerEc.body} whitespace-pre-wrap py-2 text-base sm:text-lg`}>
                 {selectedStory.content}
               </div>
 
@@ -3574,7 +3578,7 @@ export const FieldPressMaster: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      ); })()}
 
       {/* ========================================================================= */}
       {/* 7B. FRONT-PAGE DISPATCH CLIPPING & SOCIAL MEDIA DIRECT SHARE HUB          */}
