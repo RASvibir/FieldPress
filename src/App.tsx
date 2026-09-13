@@ -852,7 +852,7 @@ export const FieldPressMaster: React.FC = () => {
   const [watermarkVisible, setWatermarkVisible] = useState(true);
 
   // Main Navigation Tabs: "edition" | "wire" | "map" | "classifieds"
-  const [activeTab, setActiveTab] = useState<"edition" | "wire" | "map" | "classifieds">("edition");
+  const [activeTab, setActiveTab] = useState<"edition" | "wire" | "map" | "classifieds" | "discover">("edition");
 
   // =========================================================================
   // STRICTLY SEPARATED MODAL ENDPOINTS:
@@ -1653,6 +1653,70 @@ export const FieldPressMaster: React.FC = () => {
       }
     }
     return suggestions.slice(0, 6);
+  })();
+
+  // --- Suggested Cohorts: people to meet, ranked by real activity overlap
+  // (comments on shared dispatches) plus shared beat/category interest.
+  // Never surfaces anyone's precise location — only their general bureau,
+  // and only if they've opted their provenance ping on.
+  const suggestedCohorts = (() => {
+    // My categories: what I've posted about + what I've commented on
+    const myCategories = new Set<string>();
+    dispatches
+      .filter((d) => d.author === pressPass.name || d.callsign === pressPass.callsign)
+      .forEach((d) => myCategories.add(d.category));
+    Object.entries(allComments).forEach(([dispId, comments]) => {
+      if (comments.some((c) => c.callsign === pressPass.callsign)) {
+        const d = dispatches.find((x) => x.id === dispId);
+        if (d) myCategories.add(d.category);
+      }
+    });
+
+    // My commenters + people whose dispatches I've commented on = activity overlap
+    const activityOverlap = new Map<string, number>();
+    Object.entries(allComments).forEach(([dispId, comments]) => {
+      const dispatch = dispatches.find((d) => d.id === dispId);
+      const iCommentedHere = comments.some((c) => c.callsign === pressPass.callsign);
+      const isMyDispatch = dispatch && (dispatch.author === pressPass.name || dispatch.callsign === pressPass.callsign);
+      comments.forEach((c) => {
+        if (c.callsign === pressPass.callsign) return;
+        if (isMyDispatch || iCommentedHere) {
+          activityOverlap.set(c.callsign, (activityOverlap.get(c.callsign) || 0) + 1);
+        }
+      });
+    });
+
+    const candidates = registeredUsers.filter((u) => !u.isLinked && u.callsign !== pressPass.callsign);
+
+    const scored = candidates.map((u) => {
+      // Shared categories: what this person has posted or commented on
+      const theirCategories = new Set<string>();
+      dispatches
+        .filter((d) => d.author === u.name || d.callsign === u.callsign)
+        .forEach((d) => theirCategories.add(d.category));
+      Object.entries(allComments).forEach(([dispId, comments]) => {
+        if (comments.some((c) => c.callsign === u.callsign)) {
+          const d = dispatches.find((x) => x.id === dispId);
+          if (d) theirCategories.add(d.category);
+        }
+      });
+      const sharedCategories = [...myCategories].filter((c) => theirCategories.has(c));
+
+      const activityScore = activityOverlap.get(u.callsign) || 0;
+      const interestScore = sharedCategories.length;
+      const score = activityScore * 2 + interestScore;
+
+      const reasons: string[] = [];
+      if (activityScore > 0) reasons.push("Engaged with your dispatches");
+      if (sharedCategories.length > 0) reasons.push(`Covers ${sharedCategories.slice(0, 2).join(", ")}`);
+
+      return { user: u, score, reasons, sharedCategories };
+    });
+
+    return scored
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
   })();
 
   // --- Correspondent card: click any commenter's identity to view/link them ---
@@ -2517,6 +2581,23 @@ export const FieldPressMaster: React.FC = () => {
               }`}
             >
               Classifieds
+            </button>
+            <button
+              onClick={() => setActiveTab("discover")}
+              className={`px-2.5 sm:px-3 py-1.5 rounded transition cursor-pointer flex items-center gap-1 ${
+                activeTab === "discover"
+                  ? isDark
+                    ? "bg-zinc-800 text-amber-400 font-bold"
+                    : "bg-zinc-200 text-amber-700 font-bold"
+                  : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Discover
+              {suggestedCorrespondents.length > 0 && (
+                <span className="min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-zinc-950 text-[9px] font-bold flex items-center justify-center">
+                  {suggestedCorrespondents.length}
+                </span>
+              )}
             </button>
             </div>
 
@@ -3644,6 +3725,82 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "discover" && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className={`p-6 rounded-lg border ${cardThemeClass}`}>
+              <div className="mb-4">
+                <h2 className="font-mono text-lg font-bold">Discover</h2>
+                <p className={`text-xs font-mono mt-0.5 ${subTextThemeClass}`}>
+                  People to connect with, based on shared coverage areas and activity on your dispatches. Locations are only shown if someone has chosen to share them.
+                </p>
+              </div>
+
+              {suggestedCohorts.length === 0 ? (
+                <div className={`p-8 rounded-lg border text-center text-xs font-mono ${subCardThemeClass} ${subTextThemeClass}`}>
+                  <Users className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                  <p className="font-bold text-sm mb-1">No suggestions yet</p>
+                  <p>Post a dispatch or leave a comment — we'll surface people covering similar ground.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {suggestedCohorts.map(({ user: u, reasons }) => (
+                    <div key={u.id} className={`p-4 rounded-xl border ${subCardThemeClass}`}>
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={u.pressPassAvatar}
+                          alt={u.name}
+                          className="w-11 h-11 rounded-full object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate">{u.name}</p>
+                          <p className="text-xs text-amber-500 font-mono truncate">@{u.callsign}</p>
+                          {u.bureau ? (
+                            <p className={`text-[11px] mt-0.5 truncate ${subTextThemeClass}`}>{u.bureau}</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {reasons.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {reasons.map((r) => (
+                            <span
+                              key={r}
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                                isDark ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"
+                              }`}
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => linkCorrespondent(u.name, u.callsign)}
+                          className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition cursor-pointer"
+                        >
+                          Connect
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => messageCorrespondent(u.name, u.callsign)}
+                          className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition cursor-pointer ${
+                            isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-300" : "border-zinc-300 hover:bg-zinc-100 text-zinc-700"
+                          }`}
+                        >
+                          Message
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -5286,16 +5443,36 @@ ${shareUrl}`;
               {/* Directory Header */}
               <div className={`p-3.5 border-b flex items-center justify-between ${borderThemeClass}`}>
                 <span className="font-bold text-sm">Messages</span>
-                <button
-                  type="button"
-                  onClick={() => setShowCohortRequestModal(true)}
-                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
-                    isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
-                  }`}
-                  title="Start new conversation"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMessengerModal(false);
+                      setActiveTab("discover");
+                    }}
+                    className={`p-1.5 rounded-lg border transition cursor-pointer relative ${
+                      isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
+                    }`}
+                    title="Discover people to connect with"
+                  >
+                    <Users className="h-4 w-4" />
+                    {suggestedCohorts.length > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-amber-500 text-zinc-950 text-[8px] font-bold flex items-center justify-center">
+                        {suggestedCohorts.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCohortRequestModal(true)}
+                    className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                      isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
+                    }`}
+                    title="Start new conversation"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Simple search */}
