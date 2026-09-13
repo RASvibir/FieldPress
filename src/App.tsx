@@ -71,6 +71,7 @@ export interface StoryReactions {
 }
 import React, { useState, useEffect, useRef } from "react";
 import {
+  Inbox,
   Menu,
   X,
   Settings,
@@ -928,7 +929,7 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
-  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "directory" | "linked" | "requests">("cohorts");
+  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "requests" | "directory">("cohorts");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
   const [cohortReqName, setCohortReqName] = useState("");
   const [cohortReqCallsign, setCohortReqCallsign] = useState("");
@@ -1056,20 +1057,6 @@ export const FieldPressMaster: React.FC = () => {
         localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
       } catch {}
     }
-
-    const handshakeMsg: FieldMessage = {
-      id: `msg-${Date.now()}`,
-      chatId: targetCohortId || "bureau-wire",
-      sender: "Field Comms Wire Security",
-      callsign: "wire.sec",
-      text: `🔒 Cryptographic wire handshake accepted by @${pressPass.callsign || "ViBiR"}. ${req.cohortName} cohort channel initialized. Encrypted peer communications enabled.`,
-      timestamp: "Just now"
-    };
-    const updatedMessages = [...messengerMessages, handshakeMsg];
-    setMessengerMessages(updatedMessages);
-    try {
-      localStorage.setItem("fieldpress_messenger_messages", JSON.stringify(updatedMessages));
-    } catch {}
 
     if (targetCohortId) setActiveChatId(targetCohortId);
     setSavedSuccessToast(`Cohort request accepted. Encrypted wire active for ${req.cohortName}.`);
@@ -4622,7 +4609,7 @@ ${shareUrl}`;
               </div>
 
               {/* Directory Tabs: Linked Users vs Complete Directory Index */}
-              <div className={`grid grid-cols-2 p-1.5 m-3 rounded-lg border text-xs font-mono ${
+              <div className={`grid grid-cols-3 p-1.5 m-3 rounded-lg border text-xs font-mono ${
                 isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-200 border-zinc-300"
               }`}>
                 <button
@@ -4636,13 +4623,32 @@ ${shareUrl}`;
                   title="Working Groups & Cohort Desks"
                 >
                   <Radio className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>Desks & Cohorts</span>
+                  <span className="hidden sm:inline">Desks & Cohorts</span>
+                  <span className="sm:hidden">Desks</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessengerDirectoryTab("requests")}
+                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
+                    messengerDirectoryTab === "requests"
+                      ? "bg-amber-500 text-zinc-950 shadow-xs"
+                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                  title="Pending Cohort Requests"
+                >
+                  <Inbox className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>Requests</span>
+                  {cohortRequests.filter((r) => r.status === "pending").length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border border-black/20">
+                      {cohortRequests.filter((r) => r.status === "pending").length}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMessengerDirectoryTab("directory")}
                   className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    messengerDirectoryTab !== "cohorts"
+                    messengerDirectoryTab === "directory"
                       ? "bg-amber-500 text-zinc-950 shadow-xs"
                       : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                   }`}
@@ -4724,8 +4730,8 @@ ${shareUrl}`;
                   </div>
                 )}
 
-                {/* 2. REQUESTS TAB (COHORT REQUEST SYSTEM) */}
-                {false && messengerDirectoryTab === "requests" && (
+                {/* REQUESTS TAB */}
+                {messengerDirectoryTab === "requests" && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
                       <span>Wire Request Ledger</span>
@@ -4781,7 +4787,6 @@ ${shareUrl}`;
                               <span>{req.requestedAt}</span>
                             </div>
 
-                            {/* Actions for Pending Requests */}
                             {isPending && (
                               <div className="flex items-center gap-2 pt-1">
                                 <button
@@ -4830,12 +4835,9 @@ ${shareUrl}`;
                   </div>
                 )}
 
-                {/* 3. PEERS & 4. DIRECTORY */}
-                {(messengerDirectoryTab === "linked" || messengerDirectoryTab === "directory") && (
-                (messengerDirectoryTab === "linked"
-                  ? registeredUsers.filter((u) => u.isLinked)
-                  : registeredUsers
-                ).map((u) => {
+                {/* DIRECTORY */}
+                {messengerDirectoryTab === "directory" && (
+                registeredUsers.map((u) => {
                   const isSelected = activeChatId === u.id;
                   const isUserAdminAccount = u.isAdmin || u.email === "vibir@fieldpress.studio" || u.callsign.toLowerCase() === "vibir";
 
