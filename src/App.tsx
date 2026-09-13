@@ -5349,9 +5349,9 @@ ${shareUrl}`;
               <div className="px-3 pb-2">
                 <button
                   type="button"
-                  onClick={() => setActiveChatId("bureau-wire")}
+                  onClick={() => setActiveChatId("midwest-bureau")}
                   className={`w-full p-2 rounded-lg border text-left transition flex items-center gap-2 cursor-pointer font-mono text-xs ${
-                    activeChatId === "bureau-wire"
+                    activeChatId === "midwest-bureau"
                       ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-xs font-bold"
                       : "border-zinc-800 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-200"
                   }`}
@@ -5644,7 +5644,7 @@ ${shareUrl}`;
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* Active Conversation Header */}
               {(() => {
-                const isGroup = activeChatId === "bureau-wire";
+                const isGroup = activeChatId === "midwest-bureau";
                 const activeUser = registeredUsers.find((u) => u.id === activeChatId);
 
                 return (
@@ -5695,19 +5695,19 @@ ${shareUrl}`;
               })()}
 
               {/* Real Messages Stream (Zero Fake Simulated Dialogue!) */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messengerMessages.filter((m) => m.chatId === activeChatId).length === 0 ? (
-                  <div className={`p-8 rounded-xl border text-center font-mono text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-md mx-auto my-8 space-y-2`}>
-                    <Radio className="h-6 w-6 text-amber-500 mx-auto" />
-                    <p className="font-bold text-zinc-300">
-                      {activeChatId === "bureau-wire"
-                        ? "Midwest Bureau All-Hands Wire Open"
-                        : `Direct encrypted wire established with ${
+                  <div className={`p-8 rounded-lg border text-center font-mono text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
+                    <Radio className="h-8 w-8 text-amber-500 mx-auto" />
+                    <p className="font-bold text-zinc-200 text-sm">
+                      {activeChatId === "midwest-bureau"
+                        ? "Midwest Bureau Wire Open"
+                        : `Direct Wire with ${
                             registeredUsers.find((u) => u.id === activeChatId)?.name || "@callsign"
                           }`}
                     </p>
-                    <p className="text-[11px] leading-relaxed">
-                      No communications recorded. Transmit a live message, evidence still, or dispatch link below.
+                    <p className="text-[11px] leading-relaxed text-zinc-400">
+                      No messages yet. Send a message or share evidence below.
                     </p>
                   </div>
                 ) : (
@@ -5721,42 +5721,42 @@ ${shareUrl}`;
                       return (
                         <div
                           key={m.id}
-                          className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start group`}
+                          className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
                         >
                           {/* Press Pass Avatar next to message */}
                           {senderAvatar ? (
                             <img
                               src={senderAvatar}
                               alt={m.sender}
-                              className="w-7 h-7 rounded-full object-cover border border-amber-500/50 flex-shrink-0 mt-1"
+                              className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
                             />
                           ) : (
-                            <div className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-1">
+                            <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
                               {m.sender[0]}
                             </div>
                           )}
 
-                          <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[80%]`}>
-                            <div className="flex items-center gap-1.5 text-[10px] font-mono mb-1 text-zinc-400 px-1">
+                          <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
+                            <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
                               <span className="font-bold text-zinc-300">{m.sender}</span>
-                              <span className="text-amber-500">@{m.callsign}</span>
-                              <span>•</span>
-                              <span>{m.timestamp}</span>
+                              <span className="text-amber-600">@{m.callsign}</span>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-zinc-600">{m.timestamp}</span>
                             </div>
 
-                            <div className={`rounded-2xl p-3 text-xs sm:text-sm leading-relaxed border shadow-xs space-y-2 ${
+                            <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border space-y-2 ${
                               isMe
-                                ? "bg-amber-500/20 border-amber-500/40 text-zinc-100 rounded-tr-xs"
+                                ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
                                 : isDark
-                                  ? "bg-zinc-800/80 border-zinc-700/60 text-zinc-200 rounded-tl-xs"
-                                  : "bg-zinc-100 border-zinc-300 text-zinc-800 rounded-tl-xs"
+                                  ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
+                                  : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
                             }`}>
                               {/* Message Text with Respectful Sizing */}
                               {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
 
                               {/* Shared Image Attachment */}
                               {m.imageUrl && (
-                                <div className="rounded-lg overflow-hidden border border-zinc-700/80 aspect-video max-h-48 bg-black">
+                                <div className="rounded-lg overflow-hidden border border-zinc-700/50 aspect-video max-h-40 bg-black">
                                   <img src={m.imageUrl} alt="Shared still" className="w-full h-full object-cover" />
                                 </div>
                               )}
@@ -5767,7 +5767,13 @@ ${shareUrl}`;
                                   href={m.linkUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-zinc-950/60 border border-zinc-700/80 text-cyan-400 hover:text-cyan-300 text-xs font-mono transition"
+                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
+                                    isMe
+                                      ? "bg-amber-700/80 text-amber-100 hover:bg-amber-700"
+                                      : isDark
+                                        ? "bg-zinc-950/60 text-cyan-400 hover:text-cyan-300"
+                                        : "bg-zinc-200 text-blue-600 hover:text-blue-700"
+                                  }`}
                                 >
                                   <Link2 className="h-3 w-3 flex-shrink-0" />
                                   <span className="truncate">{m.linkUrl}</span>
