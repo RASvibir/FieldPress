@@ -106,6 +106,7 @@ import {
   Edit3,
   Sparkles,
   Search,
+  MessageCircle,
   Volume2,
   ExternalLink,
   Tag,
@@ -1287,6 +1288,7 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 2500);
   };
   const [messengerInput, setMessengerInput] = useState("");
+  const [messengerSearchQuery, setMessengerSearchQuery] = useState("");
   const [messengerImageUrl, setMessengerImageUrl] = useState("");
   const [messengerLinkUrl, setMessengerLinkUrl] = useState("");
   const [showAttachImage, setShowAttachImage] = useState(false);
@@ -2540,10 +2542,10 @@ export const FieldPressMaster: React.FC = () => {
             <button
               onClick={() => setShowMessengerModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30 transition font-bold shadow-xs hover:border-cyan-400 flex-shrink-0 cursor-pointer ml-1 text-xs font-mono relative"
-              title="Open Field Comms Messenger (Direct Messages & Group Wire)"
+              title="Open Messages"
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              <span>Field Comms</span>
+              <span>Messages</span>
               <span className="w-2 h-2 rounded-full bg-cyan-400" />
             </button>
           </nav>
@@ -5283,351 +5285,104 @@ ${shareUrl}`;
             }`}>
               {/* Directory Header */}
               <div className={`p-3.5 border-b flex items-center justify-between ${borderThemeClass}`}>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-mono text-xs font-black tracking-tight text-amber-500 uppercase">
-                    Field Comms Directory
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                  LIVE WIRE
-                </span>
+                <span className="font-bold text-sm">Messages</span>
+                <button
+                  type="button"
+                  onClick={() => setShowCohortRequestModal(true)}
+                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                    isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
+                  }`}
+                  title="Start new conversation"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* Directory Tabs: Linked Users vs Complete Directory Index */}
-              <div className={`grid grid-cols-3 p-1.5 m-3 rounded-lg border text-xs font-mono ${
-                isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-200 border-zinc-300"
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setMessengerDirectoryTab("cohorts")}
-                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    messengerDirectoryTab === "cohorts"
-                      ? "bg-amber-500 text-zinc-950 shadow-xs"
-                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Working Groups & Cohort Desks"
-                >
-                  <Radio className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="hidden sm:inline">Desks & Cohorts</span>
-                  <span className="sm:hidden">Desks</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessengerDirectoryTab("requests")}
-                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
-                    messengerDirectoryTab === "requests"
-                      ? "bg-amber-500 text-zinc-950 shadow-xs"
-                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Pending Cohort Requests"
-                >
-                  <Inbox className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>Requests</span>
-                  {cohortRequests.filter((r) => r.status === "pending").length > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border border-black/20">
-                      {cohortRequests.filter((r) => r.status === "pending").length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessengerDirectoryTab("directory")}
-                  className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    messengerDirectoryTab === "directory"
-                      ? "bg-amber-500 text-zinc-950 shadow-xs"
-                      : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Newsroom Correspondents"
-                >
-                  <Users className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>Correspondents</span>
-                </button>
+              {/* Simple search */}
+              <div className="px-3 pt-3 pb-2">
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${
+                  isDark ? "bg-zinc-900 border-zinc-800 text-zinc-400" : "bg-zinc-100 border-zinc-200 text-zinc-500"
+                }`}>
+                  <Search className="h-3.5 w-3.5 flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={messengerSearchQuery}
+                    onChange={(e) => setMessengerSearchQuery(e.target.value)}
+                    placeholder="Search"
+                    className="bg-transparent flex-1 outline-none placeholder:text-zinc-500 text-xs"
+                  />
+                </div>
               </div>
 
               {/* Group Channel Quick Link */}
-              <div className="px-3 pb-2">
-                <button
-                  type="button"
+              <div className="px-3 pb-1">
+                <div
                   onClick={() => setActiveChatId("midwest-bureau")}
-                  className={`w-full p-2 rounded-lg border text-left transition flex items-center gap-2 cursor-pointer font-mono text-xs ${
+                  className={`p-2.5 rounded-xl transition flex items-center gap-2.5 cursor-pointer ${
                     activeChatId === "midwest-bureau"
-                      ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-xs font-bold"
-                      : "border-zinc-800 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-200"
+                      ? isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-50 text-amber-950"
+                      : isDark ? "hover:bg-zinc-800/60 text-zinc-300" : "hover:bg-zinc-100 text-zinc-800"
                   }`}
                 >
-                  <Radio className="h-3.5 w-3.5 text-cyan-400 flex-shrink-0" />
-                  <span className="truncate"># Midwest Bureau Wire (All)</span>
-                </button>
+                  <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                    #
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">Everyone</p>
+                    <p className={`text-xs truncate ${subTextThemeClass}`}>Group chat</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Real Registered Users List */}
-              <div className="flex-1 overflow-y-auto px-3 space-y-1.5 pb-2">
-                {/* 1. COHORTS TAB */}
-                {messengerDirectoryTab === "cohorts" && (
-                  <div className="space-y-1.5">
-                    {cohorts.map((c) => {
-                      const isSelected = activeChatId === c.id;
-                      return (
-                        <div
-                          key={c.id}
-                          onClick={() => setActiveChatId(c.id)}
-                          className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 ${
-                            isSelected
-                              ? isDark
-                                ? "bg-amber-500/15 border-amber-500 text-amber-200 shadow-xs"
-                                : "bg-amber-50 border-amber-400 text-amber-950 shadow-xs"
-                              : isDark
-                                ? "border-zinc-800/80 hover:bg-zinc-800/60 text-zinc-300"
-                                : "border-zinc-200 hover:bg-zinc-100 text-zinc-800"
-                          }`}
-                        >
-                          <div className="min-w-0 flex items-start gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
-                              👥
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-xs font-bold truncate">{c.name}</span>
-                              </div>
-                              <p className="text-[11px] text-amber-500 font-mono truncate">
-                                @{c.callsign} • {c.membersCount} peers
-                              </p>
-                              <p className={`text-[10px] truncate ${subTextThemeClass}`}>
-                                {c.bureau}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex-shrink-0">
-                            Active
-                          </span>
-                        </div>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      onClick={() => setShowCohortRequestModal(true)}
-                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-                    >
-                      <PlusCircle className="h-3.5 w-3.5" />
-                      <span>+ Establish New Cohort Desk</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* REQUESTS TAB */}
-                {messengerDirectoryTab === "requests" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
-                      <span>Wire Request Ledger</span>
-                      <span className="text-amber-400 font-bold">{cohortRequests.length} Total</span>
-                    </div>
-
-                    {cohortRequests.length === 0 ? (
-                      <div className="p-6 text-center text-xs font-mono text-zinc-500 border border-zinc-800 rounded-xl">
-                        No active cohort requests on wire.
-                      </div>
-                    ) : (
-                      cohortRequests.map((req) => {
-                        const isPending = req.status === "pending";
-                        const isAccepted = req.status === "accepted";
-
-                        return (
-                          <div
-                            key={req.id}
-                            className={`p-3 rounded-xl border space-y-2 transition ${
-                              isPending
-                                ? "bg-amber-500/10 border-amber-500/40 text-zinc-200"
-                                : isAccepted
-                                ? "bg-emerald-500/10 border-emerald-500/30 text-zinc-300"
-                                : "bg-zinc-900/60 border-zinc-800 text-zinc-400"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h4 className="font-mono text-xs font-bold text-amber-400 truncate">
-                                  {req.cohortName}
-                                </h4>
-                                <p className="text-[10px] font-mono text-zinc-400 truncate">
-                                  @{req.callsign} • {req.bureau}
-                                </p>
-                              </div>
-                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase flex-shrink-0 ${
-                                isPending
-                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse"
-                                  : isAccepted
-                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
-                                  : "bg-zinc-800 text-zinc-400 border-zinc-700"
-                              }`}>
-                                {req.status}
-                              </span>
-                            </div>
-
-                            <div className="p-2 rounded bg-black/40 text-[11px] font-sans leading-relaxed text-zinc-300 border border-white/5">
-                              "{req.justification}"
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-0.5">
-                              <span>From @{req.requesterCallsign} ({req.requesterName})</span>
-                              <span>{req.requestedAt}</span>
-                            </div>
-
-                            {isPending && (
-                              <div className="flex items-center gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleAcceptCohortRequest(req.id)}
-                                  className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                                >
-                                  <Check className="h-3 w-3" />
-                                  <span>Accept & Open Wire</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeclineCohortRequest(req.id)}
-                                  className="py-1.5 px-2.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 font-mono text-xs transition cursor-pointer"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )}
-
-                            {isAccepted && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const targetId = `cohort-${req.callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-                                  setActiveChatId(targetId);
-                                }}
-                                className="w-full py-1 px-2 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 font-mono text-[11px] font-bold text-center transition cursor-pointer"
-                              >
-                                → Switch to Active Channel
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => setShowCohortRequestModal(true)}
-                      className="w-full py-2 px-3 rounded-xl border border-dashed border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-                    >
-                      <PlusCircle className="h-3.5 w-3.5" />
-                      <span>+ Submit New Cohort Request</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* DIRECTORY */}
-                {messengerDirectoryTab === "directory" && (
-                <>
-                {suggestedCorrespondents.length > 0 && (
-                  <div className="mb-2.5">
-                    <p className={`font-mono text-[10px] font-bold uppercase mb-1.5 px-0.5 ${subTextThemeClass}`}>
-                      Suggested — people engaging with your dispatches
-                    </p>
-                    <div className="flex gap-1.5 overflow-x-auto pb-1">
-                      {suggestedCorrespondents.map((s) => (
-                        <div
-                          key={s.callsign}
-                          className={`flex-shrink-0 w-24 p-2 rounded-lg border text-center ${
-                            isDark ? "border-zinc-800 bg-zinc-900/60" : "border-zinc-200 bg-white"
-                          }`}
-                        >
-                          <img
-                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(s.callsign)}`}
-                            alt={s.name}
-                            className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 mx-auto mb-1"
-                          />
-                          <p className="font-mono text-[10px] font-bold truncate">{s.name}</p>
-                          <p className="font-mono text-[9px] text-amber-500 truncate mb-1">@{s.callsign}</p>
-                          <button
-                            type="button"
-                            onClick={() => linkCorrespondent(s.name, s.callsign)}
-                            className="w-full text-[9px] font-mono font-bold py-1 rounded bg-amber-500 text-zinc-950 hover:bg-amber-400 transition cursor-pointer"
-                          >
-                            + Link
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {registeredUsers.map((u) => {
+              {/* Conversation list — people only, no jargon */}
+              <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-2">
+                {registeredUsers
+                  .filter((u) =>
+                    !messengerSearchQuery.trim() ||
+                    u.name.toLowerCase().includes(messengerSearchQuery.toLowerCase()) ||
+                    u.callsign.toLowerCase().includes(messengerSearchQuery.toLowerCase())
+                  )
+                  .map((u) => {
                   const isSelected = activeChatId === u.id;
                   const isUserAdminAccount = u.isAdmin || u.email === "vibir@fieldpress.studio" || u.callsign.toLowerCase() === "vibir";
+                  const lastMsg = [...messengerMessages].filter((m) => m.chatId === u.id).pop();
 
                   return (
                     <div
                       key={u.id}
                       onClick={() => setActiveChatId(u.id)}
-                      className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2.5 ${
+                      className={`p-2.5 rounded-xl transition cursor-pointer flex items-center gap-2.5 ${
                         isSelected
-                          ? isDark
-                            ? "bg-amber-500/15 border-amber-500 text-amber-200 shadow-xs"
-                            : "bg-amber-50 border-amber-400 text-amber-950 shadow-xs"
-                          : isDark
-                            ? "border-zinc-800/80 hover:bg-zinc-800/60 text-zinc-300"
-                            : "border-zinc-200 hover:bg-zinc-100 text-zinc-800"
+                          ? isDark ? "bg-amber-500/15 text-amber-200" : "bg-amber-50 text-amber-950"
+                          : isDark ? "hover:bg-zinc-800/60 text-zinc-300" : "hover:bg-zinc-100 text-zinc-800"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {/* Press Pass Avatar Badge */}
-                        <div className="relative flex-shrink-0">
-                          <img
-                            src={u.pressPassAvatar}
-                            alt={u.name}
-                            className="w-9 h-9 rounded-lg object-cover border border-amber-500/50 shadow-xs"
-                          />
-                          <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-zinc-950" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-bold truncate">{u.name}</span>
-                            {isUserAdminAccount && (
-                              <span className="text-[9px] font-mono px-1 rounded bg-amber-500 text-zinc-950 font-black">
-                                ADMIN
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-amber-500 font-mono truncate">
-                            @{u.callsign}
-                          </p>
-                          <p className={`text-[10px] truncate ${subTextThemeClass}`}>
-                            {u.bureau}
-                          </p>
-                        </div>
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={u.pressPassAvatar}
+                          alt={u.name}
+                          className="w-9 h-9 rounded-full object-cover"
+                        />
+                        {u.isLinked && (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-zinc-950" />
+                        )}
                       </div>
-
-                      {/* Link Status Toggle */}
-                      {u.id !== "usr-vibir" && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const updated = registeredUsers.map((x) => (x.id === u.id ? { ...x, isLinked: !x.isLinked } : x));
-                            setRegisteredUsers(updated);
-                            try {
-                              localStorage.setItem("fieldpress_registered_users", JSON.stringify(updated));
-                            } catch {}
-                          }}
-                          className={`text-[10px] font-mono px-2 py-1 rounded border transition cursor-pointer flex-shrink-0 ${
-                            u.isLinked
-                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-rose-500/20 hover:border-rose-500/40 hover:text-rose-300"
-                              : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-amber-500/20 hover:border-amber-500 hover:text-amber-300"
-                          }`}
-                        >
-                          {u.isLinked ? "Linked" : "+ Link"}
-                        </button>
-                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold truncate">{u.name}</span>
+                          {isUserAdminAccount && (
+                            <span className="text-[9px] px-1 rounded bg-amber-500 text-zinc-950 font-bold flex-shrink-0">
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs truncate ${subTextThemeClass}`}>
+                          {lastMsg ? lastMsg.text || "Sent an attachment" : `@${u.callsign}`}
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
-                </>
-                )}
               </div>
 
               {/* Your Press Pass Identity Footer */}
@@ -5664,19 +5419,14 @@ ${shareUrl}`;
                         />
                       ) : null}
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="font-mono text-sm font-bold">
-                            {isGroup ? "Midwest Bureau All-Hands Wire" : activeUser ? activeUser.name : "Field Messenger"}
-                          </h2>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                            🔒 Encrypted Wire
-                          </span>
-                        </div>
+                        <h2 className="text-sm font-semibold">
+                          {isGroup ? "Everyone" : activeUser ? activeUser.name : "Messages"}
+                        </h2>
                         <p className={`text-xs mt-0.5 ${subTextThemeClass}`}>
                           {isGroup
-                            ? "Public dispatch frequency for all linked correspondents"
+                            ? "Group chat"
                             : activeUser
-                              ? `@${activeUser.callsign} • ${activeUser.role} • ${activeUser.bureau} (${activeUser.location})`
+                              ? `@${activeUser.callsign}${activeUser.location ? " • " + activeUser.location : ""}`
                               : ""}
                         </p>
                       </div>
@@ -5686,7 +5436,7 @@ ${shareUrl}`;
                       type="button"
                       onClick={() => setShowMessengerModal(false)}
                       className="p-1.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
-                      title="Close Field Comms"
+                      title="Close messages"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -5697,17 +5447,17 @@ ${shareUrl}`;
               {/* Real Messages Stream (Zero Fake Simulated Dialogue!) */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messengerMessages.filter((m) => m.chatId === activeChatId).length === 0 ? (
-                  <div className={`p-8 rounded-lg border text-center font-mono text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
-                    <Radio className="h-8 w-8 text-amber-500 mx-auto" />
-                    <p className="font-bold text-zinc-200 text-sm">
+                  <div className={`p-8 rounded-lg border text-center text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
+                    <MessageCircle className="h-8 w-8 text-amber-500 mx-auto" />
+                    <p className="font-semibold text-sm">
                       {activeChatId === "midwest-bureau"
-                        ? "Midwest Bureau Wire Open"
-                        : `Direct Wire with ${
-                            registeredUsers.find((u) => u.id === activeChatId)?.name || "@callsign"
+                        ? "No messages yet"
+                        : `Start a conversation with ${
+                            registeredUsers.find((u) => u.id === activeChatId)?.name || "this person"
                           }`}
                     </p>
                     <p className="text-[11px] leading-relaxed text-zinc-400">
-                      No messages yet. Send a message or share evidence below.
+                      Send a message or share a photo below.
                     </p>
                   </div>
                 ) : (
