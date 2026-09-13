@@ -358,6 +358,7 @@ export const FieldPressMaster: React.FC = () => {
   // Pressy'o AI Newsroom Copilot State
   const [showPressyoModal, setShowPressyoModal] = useState(false);
   const [pressyoInput, setPressyoInput] = useState("");
+  const [isPressyoLoading, setIsPressyoLoading] = useState(false);
   const [pressyoChat, setPressyoChat] = useState<Array<{ sender: "user" | "pressyo"; text: string; actionData?: { title: string; content: string; style: "newspaper" | "comic" | "arcade" | "tactical" | "magazine"; prompt?: string } }>>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressyo_chat");
@@ -449,62 +450,65 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 2500);
   };
 
-  const handlePressyoSend = (customPrompt?: string) => {
+  const inferEditionStyle = (text: string): "newspaper" | "comic" | "arcade" | "tactical" | "magazine" => {
+    const lower = text.toLowerCase();
+    if (lower.includes("comic") || lower.includes("kapow") || lower.includes("hero")) return "comic";
+    if (lower.includes("broadsheet") || lower.includes("1920") || lower.includes("paper") || lower.includes("old")) return "newspaper";
+    if (lower.includes("arcade") || lower.includes("pixel") || lower.includes("8-bit")) return "arcade";
+    if (lower.includes("tactical") || lower.includes("intel") || lower.includes("recon")) return "tactical";
+    return "magazine";
+  };
+
+  const handlePressyoSend = async (customPrompt?: string) => {
     const userText = customPrompt || pressyoInput.trim();
-    if (!userText) return;
+    if (!userText || isPressyoLoading) return;
 
     const newChat = [...pressyoChat, { sender: "user" as const, text: userText }];
     setPressyoChat(newChat);
     setPressyoInput("");
+    setIsPressyoLoading(true);
 
-    // Autonomous Pressy'o Intelligence response
-    setTimeout(() => {
-      let botResponse = "";
-      let actionData: { title: string; content: string; style: "newspaper" | "comic" | "arcade" | "tactical" | "magazine"; prompt?: string } | undefined = undefined;
+    const editionStyle = inferEditionStyle(userText);
 
-      const lower = userText.toLowerCase();
-      if (lower.includes("comic") || lower.includes("kapow") || lower.includes("hero")) {
-        botResponse = "💥 BAM! Here is a high-octane Comic Strip dispatch ready for the wire:";
-        actionData = {
-          title: "!ZAP! The Signal Wire Strikes Back",
-          content: "SuperPressie scanned the frequencies as corporate scramblers attempted to jam the community microwave link. 'NOT ON MY WATCH!' cried the correspondent, rerouting 5.8 GHz packets through the water tower relay.",
-          style: "comic",
-          prompt: "Comic book pop art illustration: superhero journalist deflecting radar beams on a broadcast antenna tower, vibrant halftone dots, heavy inks"
-        };
-      } else if (lower.includes("broadsheet") || lower.includes("1920") || lower.includes("paper") || lower.includes("old")) {
-        botResponse = "📰 Splendid! Here is a vintage 1920s Broadsheet dispatch:";
-        actionData = {
-          title: "CORRIDOR TELEGRAPH HOOKS EXPAND ACROSS WABASH BASIN",
-          content: "In an extraordinary exhibition of civic coordination, regional cooperators yesterday joined telegraphic conduits along the rail right-of-way, securing unbroken freight communications for three counties.",
-          style: "newspaper",
-          prompt: "Vintage 1920s rotogravure newspaper photo: newsboy holding early telegraph paper, aged newsprint grain, sepia tones"
-        };
-      } else if (lower.includes("arcade") || lower.includes("pixel") || lower.includes("8-bit")) {
-        botResponse = "🕹️ LEVEL UP! 8-Bit Arcade Telemetry generated:";
-        actionData = {
-          title: "■ MISSION 04: OPTICAL RING DEPLOYED ■",
-          content: "PLAYER 1 ENTERED THE FIBER SHED. TELEMETRY PACKETS SYNCED AT 1000 MBPS. SUBSTATION NODES ONLINE. BOSS LEVEL THREAT: POWER SURGE NEUTRALIZED.",
-          style: "arcade",
-          prompt: "Pixel art green phosphor CRT screen: arcade telemetry monitor displaying retro digital rail map, 8-bit aesthetic"
-        };
-      } else if (lower.includes("tactical") || lower.includes("intel") || lower.includes("recon")) {
-        botResponse = "🛰️ ENCRYPTED INTEL: Tactical reconnaissance report compiled:";
-        actionData = {
-          title: "SURVEILLANCE REPORT // VERMILION EDGE ARRAY",
-          content: "Recon telemetry indicates all three modular distribution nodes are operating autonomously on edge batteries. Signal strength steady across 144.390 MHz backup carrier.",
-          style: "tactical",
-          prompt: "Satellite telemetry night vision photograph: thermal surveillance of power substation corridor, cyan crosshairs and coordinate HUD"
-        };
-      } else {
-        botResponse = "⚡ Field analysis complete. I can generate complete dispatches, visual prompts, or assist with your reporter press pass. Choose an edition style or ask me to draft a headline!";
+    try {
+      const resp = await fetch("/api/pressyo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userText, editionStyle })
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data?.error || `Request failed (${resp.status})`);
       }
 
-      const finalized = [...newChat, { sender: "pressyo" as const, text: botResponse, actionData }];
+      const finalized = [...newChat, {
+        sender: "pressyo" as const,
+        text: data.text,
+        actionData: {
+          title: `Pressy'o Dispatch (${editionStyle})`,
+          content: data.text,
+          style: editionStyle
+        }
+      }];
       setPressyoChat(finalized);
       try {
         localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
       } catch {}
-    }, 600);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Pressy'o is unreachable right now.";
+      const finalized = [...newChat, {
+        sender: "pressyo" as const,
+        text: `⚠️ Couldn't reach Pressy'o: ${errorMessage}. Try again in a moment.`
+      }];
+      setPressyoChat(finalized);
+      try {
+        localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
+      } catch {}
+    } finally {
+      setIsPressyoLoading(false);
+    }
   };
 
   // Theme & UI Preferences
@@ -4491,7 +4495,8 @@ export const FieldPressMaster: React.FC = () => {
                   key={chip.label}
                   type="button"
                   onClick={() => handlePressyoSend(chip.query)}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-semibold transition cursor-pointer shadow-2xs"
+                  disabled={isPressyoLoading}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-semibold transition cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {chip.label}
                 </button>
@@ -4555,6 +4560,19 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
                 </div>
               ))}
+
+              {isPressyoLoading && (
+                <div className="flex gap-3 items-start">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-xs border border-black">
+                    🤖
+                  </div>
+                  <div className={`rounded-2xl p-3.5 text-xs sm:text-sm border shadow-xs rounded-tl-xs ${
+                    isDark ? "bg-zinc-800/90 border-zinc-700 text-zinc-400" : "bg-zinc-100 border-zinc-300 text-zinc-500"
+                  }`}>
+                    Pressy'o is drafting...
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bottom Composer */}
@@ -4571,11 +4589,12 @@ export const FieldPressMaster: React.FC = () => {
                   value={pressyoInput}
                   onChange={(e) => setPressyoInput(e.target.value)}
                   placeholder="Ask Pressy'o to draft a story, refine prompts, or suggest headlines..."
-                  className={`flex-1 rounded-xl px-3.5 py-2 text-xs sm:text-sm focus:outline-none transition ${inputThemeClass}`}
+                  disabled={isPressyoLoading}
+                  className={`flex-1 rounded-xl px-3.5 py-2 text-xs sm:text-sm focus:outline-none transition disabled:opacity-50 ${inputThemeClass}`}
                 />
                 <button
                   type="submit"
-                  disabled={!pressyoInput.trim()}
+                  disabled={!pressyoInput.trim() || isPressyoLoading}
                   className="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold text-xs sm:text-sm hover:bg-amber-400 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
                 >
                   <Send className="h-3.5 w-3.5" />
