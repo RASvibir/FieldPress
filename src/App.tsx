@@ -812,6 +812,24 @@ export const FieldPressMaster: React.FC = () => {
       }
       setIsGeneratingCard(false);
     });
+    // Sync minimal metadata server-side so link-based shares (Facebook, X,
+    // Bluesky, Reddit, etc.) can show accurate Open Graph previews instead
+    // of nothing. Best-effort: failures here shouldn't block sharing.
+    fetch("/api/sync-dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: shareModalStory.id,
+        title: shareModalStory.title,
+        content: shareModalStory.content,
+        location: shareModalStory.location,
+        category: shareModalStory.category,
+        author: shareModalStory.author,
+        callsign: shareModalStory.callsign,
+        editionStyle: shareModalStory.editionStyle,
+        imageUrl: shareModalStory.imageUrl
+      })
+    }).catch(() => {});
     return () => {
       isMounted = false;
     };
@@ -1880,7 +1898,7 @@ export const FieldPressMaster: React.FC = () => {
 
   const handleShareStory = (disp: Dispatch) => {
     setShareModalStory(disp);
-    const shareUrl = `${window.location.origin}/#dispatch-${disp.id}`;
+    const shareUrl = `${window.location.origin}/api/dispatch/${disp.id}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(shareUrl).catch(() => {});
     }
@@ -4134,7 +4152,7 @@ export const FieldPressMaster: React.FC = () => {
                       disabled={!pressieCardBlob}
                       onClick={async () => {
                         if (!pressieCardBlob) return;
-                        const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
+                        const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
                         const shareText = `📰 FIELDPRESS DISPATCH: "${shareModalStory.title}" [${shareModalStory.location}] by ${shareModalStory.author} (@${shareModalStory.callsign})
 
 ${shareUrl}`;
@@ -4265,7 +4283,7 @@ ${shareUrl}`;
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]\n\n"${shareModalStory.content.slice(0, 110)}..."\n\nBy @${shareModalStory.callsign}`)}&url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]\n\n"${shareModalStory.content.slice(0, 110)}..."\n\nBy @${shareModalStory.callsign}`)}&url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-zinc-700 bg-black text-white hover:bg-zinc-800 transition flex items-center justify-center gap-2 font-bold cursor-pointer"
@@ -4275,7 +4293,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`📰 FieldPress: "${shareModalStory.title}" [${shareModalStory.location}]\nBy @${shareModalStory.callsign}\n\n${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`📰 FieldPress: "${shareModalStory.title}" [${shareModalStory.location}]\nBy @${shareModalStory.callsign}\n\n${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-sky-500/40 bg-sky-600/10 text-sky-400 hover:bg-sky-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4285,7 +4303,7 @@ ${shareUrl}`;
                   </a>
 
 <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-blue-600/40 bg-[#1877F2]/15 text-[#1877F2] hover:bg-[#1877F2]/25 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4295,7 +4313,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&title=${encodeURIComponent(`[FieldPress] ${shareModalStory.title} (${shareModalStory.location})`)}`}
+                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}&title=${encodeURIComponent(`[FieldPress] ${shareModalStory.title} (${shareModalStory.location})`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-orange-500/40 bg-orange-600/10 text-orange-500 hover:bg-orange-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4304,7 +4322,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📰 *FieldPress Dispatch*: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content.slice(0, 140)}..."\n\n${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📰 *FieldPress Dispatch*: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content.slice(0, 140)}..."\n\n${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-emerald-500/40 bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4313,7 +4331,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}&text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}`}
+                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}&text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-cyan-500/40 bg-cyan-600/10 text-cyan-400 hover:bg-cyan-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4322,7 +4340,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/#dispatch-${shareModalStory.id}`)}`}
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-blue-500/40 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -4337,7 +4355,7 @@ ${shareUrl}`;
                 <button
                   type="button"
                   onClick={() => {
-                    const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
+                    const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(shareUrl);
                     }
@@ -4353,7 +4371,7 @@ ${shareUrl}`;
                 <button
                   type="button"
                   onClick={() => {
-                    const shareUrl = `${window.location.origin}/#dispatch-${shareModalStory.id}`;
+                    const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
                     const text = `📰 FIELDPRESS WIRE DISPATCH: "${shareModalStory.title}"\n📍 Location: [${shareModalStory.location}] | Category: [${shareModalStory.category}]\n✍️ Byline: ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content}"\n\n🔗 Verified Dispatch Link: ${shareUrl}`;
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(text);
