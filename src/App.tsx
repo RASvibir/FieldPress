@@ -1769,6 +1769,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // Pressie Builder Form State
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editingDispatchId, setEditingDispatchId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("Field Dispatch");
   const [newLocation, setNewLocation] = useState("Midwest Corridor");
@@ -2083,6 +2084,7 @@ export const FieldPressMaster: React.FC = () => {
       }
     } else {
       setEditingDraftId(null);
+      setEditingDispatchId(null);
       setNewTitle("");
       setNewCategory("Field Dispatch");
       setNewLocation("Midwest Corridor");
@@ -2098,6 +2100,40 @@ export const FieldPressMaster: React.FC = () => {
     setFormValidationError(null);
     setShowPressPassModal(false); // ENSURE PRESS PASS IS NOT OPEN
     setShowPressieBuilderModal(true); // OPEN EXACT PRESSIE BUILDER
+  };
+
+  // =========================================================================
+  // EDIT PUBLISHED DISPATCH (OWNER-ONLY, RE-OPENS COMPOSER, SAVES IN PLACE)
+  // =========================================================================
+  const openEditPressie = (dispatch: Dispatch) => {
+    setEditingDispatchId(dispatch.id);
+    setEditingDraftId(null);
+    setNewTitle(dispatch.title);
+    setNewCategory(dispatch.category || "Field Dispatch");
+    setNewLocation(dispatch.location || "Midwest Corridor");
+    setNewContent(dispatch.content || "");
+    setNewImageUrl(dispatch.imageUrl || "");
+    setNewImageCaption(dispatch.imageCaption || "");
+    setVisualPrompt(dispatch.title || "");
+    setNewEditionStyle(dispatch.editionStyle || "tactical");
+    setNewSharingOption(dispatch.sharingOption || "fork");
+    if (dispatch.imageUrl) {
+      setEvidenceGallery([{
+        id: "edit-" + Date.now(),
+        url: dispatch.imageUrl,
+        source: "upload",
+        caption: dispatch.imageCaption || "",
+        timestamp: "Original"
+      }]);
+    } else {
+      setEvidenceGallery([]);
+    }
+    if (dispatch.coordinates) {
+      setNewCoordinates(`${dispatch.coordinates[0]}, ${dispatch.coordinates[1]}`);
+    }
+    setFormValidationError(null);
+    setShowPressPassModal(false);
+    setShowPressieBuilderModal(true);
   };
 
   // =========================================================================
@@ -2183,14 +2219,16 @@ export const FieldPressMaster: React.FC = () => {
     const chosenImage = newImageUrl || (evidenceGallery.length > 0 ? evidenceGallery[0].url : undefined);
     const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
 
+    const existing = editingDispatchId ? dispatches.find((d) => d.id === editingDispatchId) : undefined;
+
     const pressieItem: Dispatch = {
-      id: `disp-${Date.now()}`,
+      id: existing ? existing.id : `disp-${Date.now()}`,
       title: newTitle.trim(),
-      category: "Field Dispatch",
-      author: pressPass.name,
-      callsign: pressPass.callsign,
-      bureau: pressPass.bureau,
-      timestamp: "Just now",
+      category: existing ? existing.category : "Field Dispatch",
+      author: existing ? existing.author : pressPass.name,
+      callsign: existing ? existing.callsign : pressPass.callsign,
+      bureau: existing ? existing.bureau : pressPass.bureau,
+      timestamp: existing ? existing.timestamp : "Just now",
       location: pressPass.location || pressPass.bureau || "Midwest Corridor",
       coordinates: parsedCoords,
       content: fallbackContent,
@@ -2198,7 +2236,8 @@ export const FieldPressMaster: React.FC = () => {
       imageCaption: chosenCaption,
       isPressRoll: false,
       editionStyle: newEditionStyle,
-      sharingOption: newSharingOption
+      sharingOption: newSharingOption,
+      parentDispatchId: existing ? existing.parentDispatchId : undefined
     };
 
     if (editingDraftId) {
@@ -2209,7 +2248,9 @@ export const FieldPressMaster: React.FC = () => {
       } catch {}
     }
 
-    const updatedDispatches = [pressieItem, ...dispatches];
+    const updatedDispatches = existing
+      ? dispatches.map((d) => (d.id === existing.id ? pressieItem : d))
+      : [pressieItem, ...dispatches];
     setDispatches(updatedDispatches);
     try {
       localStorage.setItem("fieldpress_dispatches", JSON.stringify(updatedDispatches));
@@ -2217,7 +2258,8 @@ export const FieldPressMaster: React.FC = () => {
 
     setShowPressieBuilderModal(false);
     setFormValidationError(null);
-    setSavedSuccessToast("Dispatch published to Front-Page Feed!");
+    setEditingDispatchId(null);
+    setSavedSuccessToast(existing ? "Dispatch updated." : "Dispatch published to Front-Page Feed!");
     setActiveTab("edition"); // Immediately show at top of front-page edition!
     setTimeout(() => setSavedSuccessToast(""), 3500);
   };
@@ -3084,17 +3126,34 @@ export const FieldPressMaster: React.FC = () => {
                         <span>{bookmarks.includes(d.id) ? "Saved" : "Save"}</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleForkPressie(d);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
-                        title="Fork this pressie into composer with attribution"
-                      >
-                        <span>🔀 Fork Pressie</span>
-                      </button>
+                      {(d.author === pressPass.name || d.callsign === pressPass.callsign) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditPressie(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Edit your dispatch"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+
+                      {d.sharingOption === "fork" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleForkPressie(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Fork this pressie into composer with attribution"
+                        >
+                          <span>🔀 Fork Pressie</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={(e) => {
@@ -3298,17 +3357,32 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="pt-3 border-t border-zinc-700/40 flex items-center justify-between text-[11px] font-mono">
                         <span>{disp.location}</span>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleForkPressie(disp);
-                            }}
-                            className="hover:text-emerald-400 p-1 rounded transition cursor-pointer"
-                            title="Fork pressie by Pressy'o"
-                          >
-                            <span className="text-xs">🔀</span>
-                          </button>
+                          {(disp.author === pressPass.name || disp.callsign === pressPass.callsign) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditPressie(disp);
+                              }}
+                              className="hover:text-amber-400 p-1 rounded transition cursor-pointer"
+                              title="Edit your dispatch"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {disp.sharingOption === "fork" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleForkPressie(disp);
+                              }}
+                              className="hover:text-emerald-400 p-1 rounded transition cursor-pointer"
+                              title="Fork pressie by Pressy'o"
+                            >
+                              <span className="text-xs">🔀</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3527,7 +3601,20 @@ export const FieldPressMaster: React.FC = () => {
                         >
                           <Bookmark className={`h-3.5 w-3.5 ${bookmarks.includes(d.id) ? "fill-amber-500 text-amber-500" : ""}`} />
                         </button>
-{d.sharingOption === "fork" && (
+{(d.author === pressPass.name || d.callsign === pressPass.callsign) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditPressie(d);
+                            }}
+                            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition"
+                            title="Edit your dispatch"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {d.sharingOption === "fork" && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3663,11 +3750,11 @@ export const FieldPressMaster: React.FC = () => {
               <div className="flex items-center gap-2.5 font-mono">
                 <Send className="h-5 w-5 text-amber-500" />
                 <h3 className="font-bold text-base">
-                  {editingDraftId ? "New Field Dispatch or Press Roll • Editing Staged Draft" : "New Field Dispatch or Press Roll"}
+                  {editingDispatchId ? "Editing Published Dispatch" : editingDraftId ? "New Field Dispatch or Press Roll • Editing Staged Draft" : "New Field Dispatch or Press Roll"}
                 </h3>
               </div>
               <button 
-                onClick={() => setShowPressieBuilderModal(false)}
+                onClick={() => { setShowPressieBuilderModal(false); setEditingDispatchId(null); setEditingDraftId(null); }}
                 className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
               >
                 <X className="h-5 w-5" />
@@ -4038,7 +4125,7 @@ export const FieldPressMaster: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowPressieBuilderModal(false)}
+                  onClick={() => { setShowPressieBuilderModal(false); setEditingDispatchId(null); setEditingDraftId(null); }}
                   className={`px-4 py-2 rounded border transition cursor-pointer ${
                     isDark ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800" : "border-zinc-300 text-zinc-700 hover:bg-zinc-200"
                   }`}
