@@ -1477,7 +1477,7 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Settings Sub-tab
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system">("quicklinks");
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system" | "admin">("quicklinks");
 
   // Press Pass State
   const [pressPass, setPressPass] = useState<PressPassData>(() => {
@@ -1507,6 +1507,57 @@ export const FieldPressMaster: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [authAvatarFile, setAuthAvatarFile] = useState<File | null>(null);
   const authAvatarInputRef = useRef<HTMLInputElement | null>(null);
+
+  // --- Admin: role management panel (super_admin only) ---
+  const [adminUsers, setAdminUsers] = useState<Array<{
+    id: string; email: string; callsign: string; name: string; bureau: string;
+    avatar_url: string | null; role: string; created_at: string;
+  }>>([]);
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+  const [adminUsersError, setAdminUsersError] = useState("");
+  const [adminRoleUpdatingId, setAdminRoleUpdatingId] = useState<string | null>(null);
+
+  const loadAdminUsers = async () => {
+    setAdminUsersLoading(true);
+    setAdminUsersError("");
+    try {
+      const res = await fetch("/api/admin/users");
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminUsersError(data.error || "Failed to load users.");
+        setAdminUsersLoading(false);
+        return;
+      }
+      setAdminUsers(data.users || []);
+    } catch {
+      setAdminUsersError("Network error loading users.");
+    }
+    setAdminUsersLoading(false);
+  };
+
+  const updateUserRole = async (accountId: string, role: "super_admin" | "correspondent") => {
+    setAdminRoleUpdatingId(accountId);
+    setAdminUsersError("");
+    try {
+      const res = await fetch("/api/admin/update-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, role })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminUsersError(data.error || "Failed to update role.");
+        setAdminRoleUpdatingId(null);
+        return;
+      }
+      setAdminUsers((prev) => prev.map((u) => (u.id === accountId ? { ...u, role: data.account.role } : u)));
+      setSavedSuccessToast(`${data.account.callsign} is now ${data.account.role === "super_admin" ? "a super admin" : "a correspondent"}.`);
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setAdminUsersError("Network error updating role.");
+    }
+    setAdminRoleUpdatingId(null);
+  };
 
   const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
     setPressPass((prev) => {
@@ -6321,10 +6372,16 @@ ${shareUrl}`;
 
             {/* Drawer Tabs */}
             <div className="flex border-b border-zinc-800 font-mono text-xs overflow-x-auto">
-              {(["quicklinks", "profile", "drafts", "bookmarks", "archives", "appearance", "system"] as const).map((tab) => (
+              {([
+                "quicklinks", "profile", "drafts", "bookmarks", "archives", "appearance", "system",
+                ...(authAccount?.role === "super_admin" ? ["admin" as const] : [])
+              ] as const).map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setSettingsActiveTab(tab)}
+                  onClick={() => {
+                    setSettingsActiveTab(tab);
+                    if (tab === "admin") loadAdminUsers();
+                  }}
                   className={`px-3 py-2 transition capitalize flex-shrink-0 cursor-pointer ${
                     settingsActiveTab === tab
                       ? "border-b-2 border-amber-500 text-amber-400 font-bold"
@@ -6675,6 +6732,86 @@ ${shareUrl}`;
                       {offlineCacheEnabled ? "Enabled" : "Disabled"}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* TAB: ADMIN — role management, super_admin only. The tab itself
+                  is only rendered into the tab bar when authAccount.role is
+                  super_admin (see tab list above), and every mutation is
+                  re-checked server-side in /api/admin/*, so this panel being
+                  hidden client-side is a UX nicety, not the security boundary. */}
+              {settingsActiveTab === "admin" && authAccount?.role === "super_admin" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Correspondent Accounts</p>
+                    <button
+                      type="button"
+                      onClick={loadAdminUsers}
+                      disabled={adminUsersLoading}
+                      className="text-[10px] underline underline-offset-2 text-amber-400 hover:text-amber-300 disabled:opacity-50 cursor-pointer"
+                    >
+                      {adminUsersLoading ? "Refreshing..." : "Refresh"}
+                    </button>
+                  </div>
+
+                  {adminUsersError && (
+                    <div className="flex items-start gap-1.5 text-rose-500 text-[11px]">
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{adminUsersError}</span>
+                    </div>
+                  )}
+
+                  {adminUsersLoading && adminUsers.length === 0 ? (
+                    <p className={subTextThemeClass}>Loading accounts...</p>
+                  ) : adminUsers.length === 0 ? (
+                    <p className={subTextThemeClass}>No accounts found.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {adminUsers.map((u) => {
+                        const isSuper = u.role === "super_admin";
+                        const isSelf = u.id === authAccount.id;
+                        const busy = adminRoleUpdatingId === u.id;
+                        return (
+                          <div
+                            key={u.id}
+                            className={`p-3 rounded-lg border flex items-center gap-3 ${subCardThemeClass}`}
+                          >
+                            <img
+                              src={u.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.callsign)}`}
+                              alt=""
+                              className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-zinc-700"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold truncate">{u.name} <span className="text-zinc-500">@{u.callsign}</span></p>
+                              <p className={`truncate ${subTextThemeClass}`}>{u.email}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isSuper ? "bg-amber-500/20 text-amber-400" : "bg-zinc-800 text-zinc-400"
+                              }`}>
+                                {isSuper ? "Super Admin" : "Correspondent"}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={busy || isSelf}
+                                title={isSelf ? "Use another super admin account to change this account's role" : undefined}
+                                onClick={() => updateUserRole(u.id, isSuper ? "correspondent" : "super_admin")}
+                                className={`text-[10px] underline underline-offset-2 cursor-pointer disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed ${
+                                  isSuper ? "text-rose-400 hover:text-rose-300" : "text-emerald-400 hover:text-emerald-300"
+                                }`}
+                              >
+                                {busy ? "Updating..." : isSuper ? "Demote" : "Promote"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <p className={`text-[10px] leading-relaxed ${subTextThemeClass}`}>
+                    Role changes take effect immediately and are enforced server-side. FieldPress always keeps at least one super admin — the last one can't be demoted.
+                  </p>
                 </div>
               )}
 

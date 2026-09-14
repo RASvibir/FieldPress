@@ -1,7 +1,33 @@
 import crypto from "crypto";
+import { neon } from "@neondatabase/serverless";
 
 export const SESSION_COOKIE_NAME = "fieldpress_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+let _sql = null;
+function getSql() {
+  if (!_sql) _sql = neon(process.env.DATABASE_URL);
+  return _sql;
+}
+
+// Resolves the requesting account (including role) from the session cookie.
+// Returns null if there's no valid, unexpired session. Shared by any
+// endpoint that needs to know who's calling and what they're allowed to do.
+export async function getAuthenticatedAccount(req) {
+  const cookies = parseCookies(req);
+  const token = cookies[SESSION_COOKIE_NAME];
+  if (!token) return null;
+
+  const sql = getSql();
+  const rows = await sql`
+    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role
+    FROM fieldpress_sessions s
+    JOIN fieldpress_accounts a ON a.id = s.account_id
+    WHERE s.token = ${token} AND s.expires_at > now()
+    LIMIT 1;
+  `;
+  return rows.length > 0 ? rows[0] : null;
+}
 
 export function generateToken() {
   return crypto.randomBytes(32).toString("hex");
