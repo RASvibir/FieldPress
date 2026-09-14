@@ -189,11 +189,74 @@ async function handleMe(req, res) {
   }
 }
 
+async function handleUpdateProfile(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  try {
+    const cookies = parseCookies(req);
+    const token = cookies[SESSION_COOKIE_NAME];
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+
+    const authRows = await sql`
+      SELECT account_id FROM fieldpress_sessions
+      WHERE token = ${token} AND expires_at > now()
+      LIMIT 1;
+    `;
+    if (authRows.length === 0) {
+      res.status(401).json({ error: "Session expired." });
+      return;
+    }
+    const accountId = authRows[0].account_id;
+
+    const { name, callsign, bureau } = req.body || {};
+
+    const cleanName = typeof name === "string" ? name.trim().slice(0, 200) : "";
+    if (!cleanName) {
+      res.status(400).json({ error: "Please enter a name." });
+      return;
+    }
+    const cleanCallsign = typeof callsign === "string" ? callsign.trim().replace(/^@/, "") : "";
+    if (!isValidCallsign(cleanCallsign)) {
+      res.status(400).json({ error: "Callsign must be 3-32 characters: letters, numbers, dots, underscores." });
+      return;
+    }
+    const cleanBureau = typeof bureau === "string" ? bureau.trim().slice(0, 200) : "Midwest Corridor Wire";
+
+    const conflict = await sql`
+      SELECT id FROM fieldpress_accounts
+      WHERE lower(callsign) = lower(${cleanCallsign}) AND id != ${accountId}
+      LIMIT 1;
+    `;
+    if (conflict.length > 0) {
+      res.status(409).json({ error: "That callsign is already taken." });
+      return;
+    }
+
+    const [account] = await sql`
+      UPDATE fieldpress_accounts
+      SET name = ${cleanName}, callsign = ${cleanCallsign}, bureau = ${cleanBureau}
+      WHERE id = ${accountId}
+      RETURNING id, email, callsign, name, bureau, avatar_url, role;
+    `;
+
+    res.status(200).json({ account: publicAccount(account) });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    res.status(500).json({ error: "Failed to save profile. Please try again." });
+  }
+}
+
 const ACTIONS = {
   signup: handleSignup,
   login: handleLogin,
   logout: handleLogout,
-  me: handleMe
+  me: handleMe,
+  "update-profile": handleUpdateProfile
 };
 
 export default async function handler(req, res) {
