@@ -1650,14 +1650,31 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 2500);
   };
 
-  // Live Dispatches & Press Roll (Staged Drafts)
-  const [dispatches, setDispatches] = useState<Dispatch[]>(() => {
+  // Live Dispatches & Press Roll (Staged Drafts) — now backed by Neon via
+  // /api/dispatches, scoped per account_id instead of shared browser
+  // localStorage. Seeded with the demo array so the feed isn't empty while
+  // the first fetch is in flight; replaced as soon as the API responds.
+  const [dispatches, setDispatches] = useState<Dispatch[]>(INITIAL_DISPATCHES);
+  const [dispatchesLoaded, setDispatchesLoaded] = useState<boolean>(false);
+
+  const refreshPublicFeed = async () => {
     try {
-      const saved = localStorage.getItem("fieldpress_dispatches");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_DISPATCHES;
-  });
+      const res = await fetch("/api/dispatches");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.dispatches)) {
+        setDispatches(data.dispatches.length > 0 ? data.dispatches : INITIAL_DISPATCHES);
+      }
+    } catch {
+      // Network hiccup — keep whatever's currently shown.
+    } finally {
+      setDispatchesLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshPublicFeed();
+  }, []);
 
   // Deep-link routing: shared URLs point to `#dispatch-<id>`. Open the
   // matching dispatch on load and whenever the hash changes (e.g. the
@@ -1876,26 +1893,29 @@ export const FieldPressMaster: React.FC = () => {
         .slice(0, 8)
     : [];
 
-  const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
-    try {
-      const saved = localStorage.getItem("fieldpress_pressroll");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [
-      {
-        id: "pr-1",
-        title: "Draft: Vermilion River Silt Deposition Analysis Following August Rains",
-        category: "Field Notes",
-        author: "Victor Birkle",
-        callsign: "ras.ip",
-        bureau: "Midwest Corridor Dispatch",
-        timestamp: "Staged Draft",
-        location: "Danville, IL",
-        content: "Field telemetry samples indicate a 14% elevation in suspended solids along the northern drainage junction. Follow-up turbidity inspection scheduled with county water board.",
-        isPressRoll: true
-      }
-    ];
-  });
+  const [pressRoll, setPressRoll] = useState<Dispatch[]>([]);
+
+  // Press Roll is account-scoped now, so it only exists once someone is
+  // signed in. Fetch on login; clear on logout so the previous account's
+  // drafts never leak into the next session on a shared browser.
+  useEffect(() => {
+    if (!authAccount) {
+      setPressRoll([]);
+      return;
+    }
+    let isMounted = true;
+    fetch("/api/dispatches?mine=1")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        const mine: Dispatch[] = Array.isArray(data.dispatches) ? data.dispatches : [];
+        setPressRoll(mine.filter((d) => d.isPressRoll));
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [authAccount]);
 
   // Saved Bookmarks
   const [bookmarks, setBookmarks] = useState<string[]>(() => {
@@ -2266,8 +2286,12 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Save Draft Handler (Stage to Press Roll)
-  const handleSaveDraft = (e?: React.FormEvent) => {
+  const handleSaveDraft = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!authAccount) {
+      setFormValidationError("Sign in to stage a draft.");
+      return;
+    }
     if (!newTitle.trim() && !newContent.trim()) {
       setFormValidationError("Please enter at least a title or draft notes to stage.");
       return;
@@ -2300,29 +2324,38 @@ export const FieldPressMaster: React.FC = () => {
       isPressRoll: true
     };
 
-    let updated: Dispatch[];
-    if (editingDraftId) {
-      updated = pressRoll.map((p) => (p.id === editingDraftId ? draftItem : p));
-    } else {
-      updated = [draftItem, ...pressRoll];
-    }
-
-    setPressRoll(updated);
     try {
-      localStorage.setItem("fieldpress_pressroll", JSON.stringify(updated));
-    } catch {}
+      const res = await fetch("/api/dispatches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...draftItem, isPressRoll: true })
+      });
+      if (!res.ok) throw new Error("save failed");
+      const { dispatch: saved } = await res.json();
 
-    setShowPressieBuilderModal(false);
-    setFormValidationError(null);
-    setSavedSuccessToast("Dispatch staged to Press Roll.");
-    setTimeout(() => setSavedSuccessToast(""), 3500);
+      const updated: Dispatch[] = editingDraftId
+        ? pressRoll.map((p) => (p.id === editingDraftId ? saved : p))
+        : [saved, ...pressRoll];
+      setPressRoll(updated);
+
+      setShowPressieBuilderModal(false);
+      setFormValidationError(null);
+      setSavedSuccessToast("Dispatch staged to Press Roll.");
+      setTimeout(() => setSavedSuccessToast(""), 3500);
+    } catch {
+      setFormValidationError("Couldn't save the draft — check your connection and try again.");
+    }
   };
 
   // Publish to Live Feed Handler
-  const handleCreatePressie = (e?: React.FormEvent) => {
+  const handleCreatePressie = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newTitle.trim()) {
       setFormValidationError("Please enter a headline for your dispatch.");
+      return;
+    }
+    if (!authAccount) {
+      setFormValidationError("Sign in to publish a dispatch.");
       return;
     }
 
@@ -2357,35 +2390,48 @@ export const FieldPressMaster: React.FC = () => {
       sharingOption: newSharingOption
     };
 
-    if (editingDraftId) {
-      const updatedRoll = pressRoll.filter((p) => p.id !== editingDraftId);
-      setPressRoll(updatedRoll);
-      try {
-        localStorage.setItem("fieldpress_pressroll", JSON.stringify(updatedRoll));
-      } catch {}
-    }
-
-    const updatedDispatches = [pressieItem, ...dispatches];
-    setDispatches(updatedDispatches);
     try {
-      localStorage.setItem("fieldpress_dispatches", JSON.stringify(updatedDispatches));
-    } catch {}
+      const res = await fetch("/api/dispatches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+      });
+      if (!res.ok) throw new Error("publish failed");
+      const { dispatch: published } = await res.json();
 
-    setShowPressieBuilderModal(false);
-    setFormValidationError(null);
-    setSavedSuccessToast("Dispatch published to Front-Page Feed!");
-    setActiveTab("edition"); // Immediately show at top of front-page edition!
-    setTimeout(() => setSavedSuccessToast(""), 3500);
+      if (editingDraftId) {
+        // Promoting a staged draft: remove it from the press roll both
+        // server-side and locally rather than leaving a duplicate row.
+        fetch(`/api/dispatches/${editingDraftId}`, { method: "DELETE" }).catch(() => {});
+        setPressRoll((prev) => prev.filter((p) => p.id !== editingDraftId));
+      }
+
+      setDispatches((prev) => [published, ...prev]);
+
+      setShowPressieBuilderModal(false);
+      setFormValidationError(null);
+      setSavedSuccessToast("Dispatch published to Front-Page Feed!");
+      setActiveTab("edition"); // Immediately show at top of front-page edition!
+      setTimeout(() => setSavedSuccessToast(""), 3500);
+    } catch {
+      setFormValidationError("Couldn't publish — check your connection and try again.");
+    }
   };
 
-  const deleteDraft = (id: string) => {
-    const updated = pressRoll.filter((p) => p.id !== id);
-    setPressRoll(updated);
-    try {
-      localStorage.setItem("fieldpress_pressroll", JSON.stringify(updated));
-    } catch {}
+  const deleteDraft = async (id: string) => {
+    const previous = pressRoll;
+    setPressRoll((prev) => prev.filter((p) => p.id !== id));
     setSavedSuccessToast("Draft removed from Press Roll.");
     setTimeout(() => setSavedSuccessToast(""), 2500);
+    try {
+      const res = await fetch(`/api/dispatches/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+    } catch {
+      // Roll back the optimistic removal if the server didn't confirm it.
+      setPressRoll(previous);
+      setSavedSuccessToast("Couldn't remove the draft — try again.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
   };
 
   const toggleBookmark = (id: string) => {
@@ -6646,18 +6692,16 @@ ${shareUrl}`;
                   </div>
 
                   <div className={`p-4 rounded-lg border space-y-2 border-rose-900/40 bg-rose-950/10`}>
-                    <h5 className="font-bold text-rose-400">Reset Local Store</h5>
+                    <h5 className="font-bold text-rose-400">Reset Local Cache</h5>
                     <p className={`text-xs ${subTextThemeClass}`}>
-                      Restore default broadsheet dispatches and purge local browser cache.
+                      Clear local device preferences and re-sync dispatches from the server (your published content and drafts are unaffected — they live in your account, not this browser).
                     </p>
                     <button
                       type="button"
                       onClick={() => {
                         localStorage.clear();
-                        setDispatches(INITIAL_DISPATCHES);
-                        setPressRoll([]);
-                        setBookmarks(["d-1"]);
-                        setSavedSuccessToast("Local storage reset to default wire.");
+                        refreshPublicFeed();
+                        setSavedSuccessToast("Local cache cleared and re-synced.");
                         setTimeout(() => setSavedSuccessToast(""), 2500);
                       }}
                       className="px-3 py-1.5 rounded border border-rose-800 text-rose-400 hover:bg-rose-900/40 transition"
