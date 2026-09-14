@@ -2184,6 +2184,11 @@ export const FieldPressMaster: React.FC = () => {
     setShowPressPassModal(true); // Open Press Pass Credential Studio
   };
 
+  // Dispatch IDs: Fp_ + 13 digits (matches the site's FP_ branding).
+  // Date.now() is 13 digits through the year 2286, so this is stable for
+  // the foreseeable future without needing padding logic.
+  const generateDispatchId = () => `Fp_${Date.now()}`;
+
   // Save Draft Handler (Stage to Press Roll)
   const handleSaveDraft = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -2208,7 +2213,7 @@ export const FieldPressMaster: React.FC = () => {
     }
 
     const draftItem: Dispatch = {
-      id: editingDraftId || `pr-${Date.now()}`,
+      id: editingDraftId || generateDispatchId(),
       title: finalTitle,
       category: newCategory,
       author: pressPass.name,
@@ -2272,7 +2277,7 @@ export const FieldPressMaster: React.FC = () => {
     const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
 
     const pressieItem: Dispatch = {
-      id: `disp-${Date.now()}`,
+      id: generateDispatchId(),
       title: newTitle.trim(),
       category: "Field Dispatch",
       author: pressPass.name,
