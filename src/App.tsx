@@ -203,6 +203,7 @@ export interface CorrespondentUser {
 
 export interface Dispatch {
   id: string;
+  accountId?: string;
   title: string;
   category: string;
   author: string;
@@ -1811,6 +1812,13 @@ export const FieldPressMaster: React.FC = () => {
 
   // Pressie Builder Form State
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  // Separate from editingDraftId: set when editing an already-published
+  // dispatch (owner editing) rather than promoting a staged Press Roll
+  // draft. The two need different save semantics -- promoting a draft
+  // deletes the draft row and creates a new published row, while owner
+  // editing must PUT in place so the dispatch keeps its id, createdAt,
+  // and anything (forks, shares) already pointing at it.
+  const [editingPublishedId, setEditingPublishedId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("Field Dispatch");
   const [newLocation, setNewLocation] = useState("Midwest Corridor");
@@ -2133,6 +2141,11 @@ export const FieldPressMaster: React.FC = () => {
   // CRITICAL: NEVER opens the Press Pass Credential Editor!
   // =========================================================================
   const openCreatePressie = (draftToEdit?: Dispatch) => {
+    // Always clear a stale published-edit id first. openEditPublished
+    // calls this function then sets editingPublishedId immediately after,
+    // so this only matters for every other entry point (new dispatch,
+    // editing a staged draft) where it must not carry over.
+    setEditingPublishedId(null);
     if (draftToEdit) {
       setEditingDraftId(draftToEdit.id);
       setNewTitle(draftToEdit.title.replace(/^Draft:\s*/i, ""));
@@ -2173,6 +2186,16 @@ export const FieldPressMaster: React.FC = () => {
     setFormValidationError(null);
     setShowPressPassModal(false); // ENSURE PRESS PASS IS NOT OPEN
     setShowPressieBuilderModal(true); // OPEN EXACT PRESSIE BUILDER
+  };
+
+  // Owner Editing: open the same composer, pre-filled from a published
+  // dispatch, but tagged as editingPublishedId rather than editingDraftId
+  // so the save handler PUTs the existing row instead of creating a new
+  // one or running the draft-promotion delete flow.
+  const openEditPublished = (dispatch: Dispatch) => {
+    setEditingDraftId(null);
+    openCreatePressie(dispatch);
+    setEditingPublishedId(dispatch.id);
   };
 
   // =========================================================================
@@ -2277,7 +2300,7 @@ export const FieldPressMaster: React.FC = () => {
     const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
 
     const pressieItem: Dispatch = {
-      id: generateDispatchId(),
+      id: editingPublishedId || generateDispatchId(),
       title: newTitle.trim(),
       category: "Field Dispatch",
       author: pressPass.name,
@@ -2295,12 +2318,21 @@ export const FieldPressMaster: React.FC = () => {
     };
 
     try {
-      const res = await fetch("/api/dispatches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...pressieItem, isPressRoll: false })
-      });
-      if (!res.ok) throw new Error("publish failed");
+      // Owner editing an already-published dispatch PUTs in place;
+      // everything else (new dispatch, or promoting a staged draft)
+      // POSTs a new row.
+      const res = editingPublishedId
+        ? await fetch(`/api/dispatches/${editingPublishedId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+          })
+        : await fetch("/api/dispatches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+          });
+      if (!res.ok) throw new Error(editingPublishedId ? "update failed" : "publish failed");
       const { dispatch: published } = await res.json();
 
       if (editingDraftId) {
@@ -2325,12 +2357,19 @@ export const FieldPressMaster: React.FC = () => {
         }
       }
 
-      setDispatches((prev) => [published, ...prev]);
+      if (editingPublishedId) {
+        setDispatches((prev) => prev.map((d) => (d.id === editingPublishedId ? published : d)));
+      } else {
+        setDispatches((prev) => [published, ...prev]);
+      }
 
       setShowPressieBuilderModal(false);
       setFormValidationError(null);
-      setSavedSuccessToast("Dispatch published to Front-Page Feed!");
-      setActiveTab("edition"); // Immediately show at top of front-page edition!
+      setSavedSuccessToast(editingPublishedId ? "Dispatch updated." : "Dispatch published to Front-Page Feed!");
+      if (!editingPublishedId) {
+        setActiveTab("edition"); // Immediately show at top of front-page edition, for new publishes only.
+      }
+      setEditingPublishedId(null);
       setTimeout(() => setSavedSuccessToast(""), 3500);
     } catch {
       setFormValidationError("Couldn't publish — check your connection and try again.");
@@ -3228,6 +3267,21 @@ export const FieldPressMaster: React.FC = () => {
                         <span>{bookmarks.includes(d.id) ? "Saved" : "Save"}</span>
                       </button>
 
+                      {authAccount && d.accountId === authAccount.id && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditPublished(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Edit this dispatch"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+
                       {d.sharingOption === "fork" && (
                         <button
                           type="button"
@@ -3444,6 +3498,19 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="pt-3 border-t border-zinc-700/40 flex items-center justify-between text-[11px] font-mono">
                         <span>{disp.location}</span>
                         <div className="flex items-center gap-2">
+                          {authAccount && disp.accountId === authAccount.id && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditPublished(disp);
+                              }}
+                              className="hover:text-amber-500 p-1 rounded transition cursor-pointer"
+                              title="Edit this dispatch"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                            </button>
+                          )}
                           {disp.sharingOption === "fork" && (
                             <button
                               type="button"
@@ -3675,6 +3742,19 @@ export const FieldPressMaster: React.FC = () => {
                         >
                           <Bookmark className={`h-3.5 w-3.5 ${bookmarks.includes(d.id) ? "fill-amber-500 text-amber-500" : ""}`} />
                         </button>
+                        {authAccount && d.accountId === authAccount.id && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditPublished(d);
+                            }}
+                            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-amber-500 transition"
+                            title="Edit this dispatch"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
 {d.sharingOption === "fork" && (
                           <button
                             type="button"
@@ -3887,7 +3967,11 @@ export const FieldPressMaster: React.FC = () => {
               <div className="flex items-center gap-2.5 font-mono">
                 <Send className="h-5 w-5 text-amber-500" />
                 <h3 className="font-bold text-base">
-                  {editingDraftId ? "New Field Dispatch or Press Roll • Editing Staged Draft" : "New Field Dispatch or Press Roll"}
+                  {editingPublishedId
+                    ? "Editing Published Dispatch"
+                    : editingDraftId
+                    ? "New Field Dispatch or Press Roll • Editing Staged Draft"
+                    : "New Field Dispatch or Press Roll"}
                 </h3>
               </div>
               <button 
@@ -4273,10 +4357,10 @@ export const FieldPressMaster: React.FC = () => {
                   type="button"
                   onClick={() => handleCreatePressie()}
                   className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                  title="Publish dispatch to Live Feed"
+                  title={editingPublishedId ? "Save changes to this dispatch" : "Publish dispatch to Live Feed"}
                 >
-                  <Send className="h-4 w-4" />
-                  <span>Publish to Live Feed</span>
+                  {editingPublishedId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                  <span>{editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
                 </button>
               </div>
             </div>
