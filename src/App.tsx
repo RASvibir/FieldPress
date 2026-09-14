@@ -3179,6 +3179,8 @@ export const FieldPressMaster: React.FC = () => {
                         </span>
                         <span className="text-zinc-400">•</span>
                         <span className="text-zinc-400">{d.timestamp}</span>
+                        <span className="text-zinc-400">•</span>
+                        <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{d.id}</span>
                       </div>
 
                       {/* Headline with Heavy Authentic Edition Character */}
@@ -4858,6 +4860,7 @@ export const FieldPressMaster: React.FC = () => {
                   {selectedStory.category}
                 </span>
                 <span className="text-zinc-400 text-xs">[{selectedStory.location}]</span>
+                <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{selectedStory.id}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
