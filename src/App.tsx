@@ -964,6 +964,45 @@ export const FieldPressMaster: React.FC = () => {
     } catch {}
   };
 
+  // Report / flag intake (closes issue #144 -- no report mechanism existed
+  // anywhere in the codebase). Intentionally minimal: files a report to the
+  // server-side admin queue, no client-side moderation logic or auto-hiding
+  // of content. See api/reports/[action].mjs.
+  const [reportSubmittedId, setReportSubmittedId] = useState<string | null>(null);
+  const [reportInFlightId, setReportInFlightId] = useState<string | null>(null);
+
+  const handleReportDispatch = async (dispatchId: string) => {
+    const reason = window.prompt(
+      "What's the issue with this dispatch? (e.g. misinformation, harassment, spam, other)"
+    );
+    if (!reason || !reason.trim()) return;
+
+    setReportInFlightId(dispatchId);
+    try {
+      const res = await fetch("/api/reports/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          targetType: "dispatch",
+          targetId: dispatchId,
+          reason: reason.trim()
+        })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        window.alert(body.error || "Couldn't submit report. Please try again.");
+        return;
+      }
+      setReportSubmittedId(dispatchId);
+      setTimeout(() => setReportSubmittedId((cur) => (cur === dispatchId ? null : cur)), 4000);
+    } catch {
+      window.alert("Couldn't submit report. Please check your connection and try again.");
+    } finally {
+      setReportInFlightId(null);
+    }
+  };
+
   // Instant Messaging (Field Comms Wire: DMs & Groups)
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
@@ -4950,6 +4989,19 @@ export const FieldPressMaster: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleReportDispatch(selectedStory.id)}
+                    disabled={reportInFlightId === selectedStory.id}
+                    className="px-2 py-1 rounded-lg border text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer select-none bg-zinc-800/40 hover:bg-rose-500/10 hover:border-rose-500/40 text-zinc-500 hover:text-rose-400 border-zinc-700/50 disabled:opacity-50"
+                    title="Report this dispatch to admins"
+                  >
+                    <span className="text-xs">🚩</span>
+                    <span>{reportSubmittedId === selectedStory.id ? "Reported" : "Report"}</span>
+                  </button>
                 </div>
               </div>
 
