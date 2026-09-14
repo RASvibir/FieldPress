@@ -1907,18 +1907,51 @@ export const FieldPressMaster: React.FC = () => {
   const borderThemeClass = isDark ? "border-zinc-800" : "border-zinc-200";
   const subTextThemeClass = isDark ? "text-zinc-400" : "text-zinc-600";
 
-  // Photo Avatar Handler
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Photo Avatar Handler — uploads immediately to durable storage (Vercel
+  // Blob) and persists to the account server-side, rather than holding a
+  // local-only base64 preview. The old version looked like it worked (it
+  // updated editPassForm/localStorage) but never touched the database, so
+  // the photo vanished the moment a fresh tab re-fetched /api/auth/me.
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Show an immediate local preview while the real upload is in flight.
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
-      if (result) {
-        setEditPassForm((prev) => ({ ...prev, avatarUrl: result }));
-      }
+      if (result) setEditPassForm((prev) => ({ ...prev, avatarUrl: result }));
     };
     reader.readAsDataURL(file);
+
+    if (!authAccount) {
+      // Guest editing a local-only press pass: no account to persist
+      // to server-side, so the local preview + localStorage save is all
+      // there is. Nothing further to do here.
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      const uploadRes = await fetch("/api/upload-avatar", {
+        method: "POST",
+        body: file,
+        headers: { "Content-Type": file.type }
+      });
+      if (uploadRes.ok) {
+        const uploadData = await uploadRes.json();
+        setEditPassForm((prev) => ({ ...prev, avatarUrl: uploadData.url }));
+        setAuthAccount((prev) => (prev ? { ...prev, avatarUrl: uploadData.url } : prev));
+      } else {
+        setSavedSuccessToast("Photo upload failed. Please try again.");
+        setTimeout(() => setSavedSuccessToast(""), 3000);
+      }
+    } catch {
+      setSavedSuccessToast("Photo upload failed. Please try again.");
+      setTimeout(() => setSavedSuccessToast(""), 3000);
+    }
+    setAvatarUploading(false);
   };
 
   // Save Press Pass Credentials

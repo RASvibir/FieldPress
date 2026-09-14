@@ -65,7 +65,7 @@ async function handleSignup(req, res) {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const id = `acc-${generateToken().slice(0, 16)}`;
-    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanCallsign)}`;
+    const avatarUrl = "/pressie.svg";
     const cleanBureau = typeof bureau === "string" ? bureau.trim().slice(0, 200) : "Midwest Corridor Wire";
 
     const role = email.toLowerCase() === SUPER_ADMIN_EMAIL ? 'super_admin' : 'correspondent';
