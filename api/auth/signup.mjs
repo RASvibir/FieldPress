@@ -10,6 +10,7 @@ import {
 } from "../_lib/auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
+const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "vibir@fieldpress.studio").toLowerCase();
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -53,11 +54,14 @@ export default async function handler(req, res) {
     const id = `acc-${generateToken().slice(0, 16)}`;
     const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanCallsign)}`;
     const cleanBureau = typeof bureau === "string" ? bureau.trim().slice(0, 200) : "Midwest Corridor Wire";
+    
+    // Assign role based on email match against env var
+    const role = email.toLowerCase() === SUPER_ADMIN_EMAIL ? 'super_admin' : 'correspondent';
 
     const [account] = await sql`
-      INSERT INTO fieldpress_accounts (id, email, password_hash, callsign, name, bureau, avatar_url)
-      VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${cleanCallsign}, ${cleanName}, ${cleanBureau}, ${avatarUrl})
-      RETURNING id, email, callsign, name, bureau, avatar_url;
+      INSERT INTO fieldpress_accounts (id, email, password_hash, callsign, name, bureau, avatar_url, role)
+      VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${cleanCallsign}, ${cleanName}, ${cleanBureau}, ${avatarUrl}, ${role})
+      RETURNING id, email, callsign, name, bureau, avatar_url, role;
     `;
 
     const token = generateToken();
@@ -70,6 +74,7 @@ export default async function handler(req, res) {
     res.setHeader("Set-Cookie", sessionCookieHeader(token));
     res.status(201).json({ account: publicAccount(account) });
   } catch (err) {
+    console.error("Signup error:", err);
     res.status(500).json({ error: "Signup failed. Please try again." });
   }
 }

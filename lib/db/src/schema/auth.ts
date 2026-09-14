@@ -9,6 +9,7 @@ export const fieldpressAccounts = pgTable('fieldpress_accounts', {
   name: varchar('name', { length: 200 }).notNull(),
   bureau: varchar('bureau', { length: 200 }).notNull(),
   avatarUrl: text('avatar_url'),
+  role: varchar('role', { length: 32 }).notNull().default('correspondent'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -330,6 +330,20 @@ const CORRIDOR_DATELINES = [
   "Chicago Loop Core"
 ];
 
+// Every dispatch share link gets a fresh cache-busting query param. Link
+// unfurl crawlers (Facebook, Slack, Discord, etc.) cache Open Graph data
+// per *exact* URL, sometimes stubbornly -- a manual "Scrape Again" doesn't
+// always actually clear it. Appending a unique, harmless `v` param means
+// each share is a URL those crawlers have never seen before, so they're
+// forced to fetch fresh instead of serving back a stale cached object
+// (e.g. an old generic image from before this dispatch existed or was
+// last updated). The API route ignores `v` entirely -- it's args-only for
+// the crawler's cache key, not used for the dispatch lookup itself.
+export const buildDispatchShareUrl = (id: string): string => {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  return `${origin}/api/dispatch/${id}?v=${Date.now()}`;
+};
+
 export const getEditionClasses = (style?: string, isDark: boolean = true) => {
   switch (style) {
     case "newspaper":
@@ -1482,7 +1496,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // --- Real cross-device accounts (email + password) ---
   const [authAccount, setAuthAccount] = useState<{
-    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string;
+    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string;
   } | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
@@ -1491,6 +1505,8 @@ export const FieldPressMaster: React.FC = () => {
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [authAvatarFile, setAuthAvatarFile] = useState<File | null>(null);
+  const authAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
     setPressPass((prev) => {
@@ -1538,11 +1554,34 @@ export const FieldPressMaster: React.FC = () => {
       }
       setAuthAccount(data.account);
       applyAccountToPressPass(data.account);
+      
+      // If signup and user selected an avatar, upload it
+      if (isSignup && authAvatarFile) {
+        try {
+          const uploadRes = await fetch("/api/upload-avatar", {
+            method: "POST",
+            body: authAvatarFile,
+            headers: { "Content-Type": authAvatarFile.type }
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            // Update local account with new avatar URL
+            const updatedAccount = { ...data.account, avatarUrl: uploadData.url };
+            setAuthAccount(updatedAccount);
+            applyAccountToPressPass(updatedAccount);
+          }
+        } catch (uploadErr) {
+          // Avatar upload failed, but auth succeeded; log and continue
+          console.error("Avatar upload failed:", uploadErr);
+        }
+      }
+      
       setAuthModalMode(null);
       setAuthEmail("");
       setAuthPassword("");
       setAuthCallsign("");
       setAuthName("");
+      setAuthAvatarFile(null);
       setSavedSuccessToast(isSignup ? "Account created. You're signed in on this device." : "Signed in.");
       setTimeout(() => setSavedSuccessToast(""), 2500);
     } catch {
@@ -2311,7 +2350,7 @@ export const FieldPressMaster: React.FC = () => {
 
   const handleShareStory = (disp: Dispatch) => {
     setShareModalStory(disp);
-    const shareUrl = `${window.location.origin}/api/dispatch/${disp.id}`;
+    const shareUrl = `${buildDispatchShareUrl(disp.id)}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(shareUrl).catch(() => {});
     }
@@ -4613,6 +4652,17 @@ export const FieldPressMaster: React.FC = () => {
                       placeholder="jreporter"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Profile Photo (optional)</label>
+                    <input
+                      ref={authAvatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setAuthAvatarFile(e.target.files?.[0] || null)}
+                      className={`w-full text-xs ${inputThemeClass}`}
+                    />
+                    {authAvatarFile && <p className={`text-[11px] ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>Selected: {authAvatarFile.name}</p>}
+                  </div>
                 </>
               )}
 
@@ -4980,7 +5030,7 @@ export const FieldPressMaster: React.FC = () => {
                       disabled={!pressieCardBlob}
                       onClick={async () => {
                         if (!pressieCardBlob) return;
-                        const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
+                        const shareUrl = `${buildDispatchShareUrl(shareModalStory.id)}`;
                         const shareText = `📰 FIELDPRESS DISPATCH: "${shareModalStory.title}" [${shareModalStory.location}] by ${shareModalStory.author} (@${shareModalStory.callsign})
 
 ${shareUrl}`;
@@ -5111,7 +5161,7 @@ ${shareUrl}`;
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]\n\n"${shareModalStory.content.slice(0, 110)}..."\n\nBy @${shareModalStory.callsign}`)}&url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]\n\n"${shareModalStory.content.slice(0, 110)}..."\n\nBy @${shareModalStory.callsign}`)}&url=${encodeURIComponent(`${buildDispatchShareUrl(shareModalStory.id)}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-zinc-700 bg-black text-white hover:bg-zinc-800 transition flex items-center justify-center gap-2 font-bold cursor-pointer"
@@ -5121,7 +5171,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`📰 FieldPress: "${shareModalStory.title}" [${shareModalStory.location}]\nBy @${shareModalStory.callsign}\n\n${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
+                    href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`📰 FieldPress: "${shareModalStory.title}" [${shareModalStory.location}]\nBy @${shareModalStory.callsign}\n\n${buildDispatchShareUrl(shareModalStory.id)}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-sky-500/40 bg-sky-600/10 text-sky-400 hover:bg-sky-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5131,7 +5181,7 @@ ${shareUrl}`;
                   </a>
 
 <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${buildDispatchShareUrl(shareModalStory.id)}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-blue-600/40 bg-[#1877F2]/15 text-[#1877F2] hover:bg-[#1877F2]/25 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5141,7 +5191,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}&title=${encodeURIComponent(`[FieldPress] ${shareModalStory.title} (${shareModalStory.location})`)}`}
+                    href={`https://www.reddit.com/submit?url=${encodeURIComponent(`${buildDispatchShareUrl(shareModalStory.id)}`)}&title=${encodeURIComponent(`[FieldPress] ${shareModalStory.title} (${shareModalStory.location})`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-orange-500/40 bg-orange-600/10 text-orange-500 hover:bg-orange-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5150,7 +5200,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📰 *FieldPress Dispatch*: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content.slice(0, 140)}..."\n\n${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`📰 *FieldPress Dispatch*: "${shareModalStory.title}"\n📍 [${shareModalStory.location}] By ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content.slice(0, 140)}..."\n\n${buildDispatchShareUrl(shareModalStory.id)}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-emerald-500/40 bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5159,7 +5209,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}&text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}`}
+                    href={`https://t.me/share/url?url=${encodeURIComponent(`${buildDispatchShareUrl(shareModalStory.id)}`)}&text=${encodeURIComponent(`📰 FieldPress Dispatch: "${shareModalStory.title}" [${shareModalStory.location}]`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-cyan-500/40 bg-cyan-600/10 text-cyan-400 hover:bg-cyan-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5168,7 +5218,7 @@ ${shareUrl}`;
                   </a>
 
                   <a
-                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/api/dispatch/${shareModalStory.id}`)}`}
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${buildDispatchShareUrl(shareModalStory.id)}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg border border-blue-500/40 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 transition flex items-center justify-center gap-1.5 font-bold cursor-pointer"
@@ -5183,7 +5233,7 @@ ${shareUrl}`;
                 <button
                   type="button"
                   onClick={() => {
-                    const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
+                    const shareUrl = `${buildDispatchShareUrl(shareModalStory.id)}`;
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(shareUrl);
                     }
@@ -5199,7 +5249,7 @@ ${shareUrl}`;
                 <button
                   type="button"
                   onClick={() => {
-                    const shareUrl = `${window.location.origin}/api/dispatch/${shareModalStory.id}`;
+                    const shareUrl = `${buildDispatchShareUrl(shareModalStory.id)}`;
                     const text = `📰 FIELDPRESS WIRE DISPATCH: "${shareModalStory.title}"\n📍 Location: [${shareModalStory.location}] | Category: [${shareModalStory.category}]\n✍️ Byline: ${shareModalStory.author} (@${shareModalStory.callsign})\n\n"${shareModalStory.content}"\n\n🔗 Verified Dispatch Link: ${shareUrl}`;
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(text);
