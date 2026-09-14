@@ -1962,14 +1962,50 @@ export const FieldPressMaster: React.FC = () => {
     setAvatarUploading(false);
   };
 
-  // Save Press Pass Credentials
-  const savePass = (newData: PressPassData) => {
+  // Save Press Pass Credentials — persists name/callsign/bureau to the
+  // account server-side when signed in, in addition to local state and
+  // localStorage. The old version only did the latter two, which meant
+  // edits looked saved but were silently reverted by the /api/auth/me
+  // fetch on the next page load (which pulls those fields straight from
+  // the DB row, unchanged since signup).
+  const [pressPassSaving, setPressPassSaving] = useState(false);
+  const savePass = async (newData: PressPassData) => {
+    // Local state + localStorage save first so guests (no account) and
+    // local-only fields (accent color, provenance ping, etc.) still work
+    // exactly as before.
     setPressPass(newData);
     try {
       localStorage.setItem("fieldpress_press_pass", JSON.stringify(newData));
     } catch {}
-    setSavedSuccessToast("Press Pass credentials & badge updated.");
-    setTimeout(() => setSavedSuccessToast(""), 3000);
+
+    if (!authAccount) {
+      setSavedSuccessToast("Press Pass credentials & badge updated.");
+      setTimeout(() => setSavedSuccessToast(""), 3000);
+      return;
+    }
+
+    setPressPassSaving(true);
+    try {
+      const res = await fetch("/api/auth/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newData.name, callsign: newData.callsign, bureau: newData.bureau })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSavedSuccessToast(data.error || "Saved locally, but couldn't sync to your account.");
+        setTimeout(() => setSavedSuccessToast(""), 4000);
+        setPressPassSaving(false);
+        return;
+      }
+      setAuthAccount(data.account);
+      setSavedSuccessToast("Press Pass credentials & badge updated.");
+      setTimeout(() => setSavedSuccessToast(""), 3000);
+    } catch {
+      setSavedSuccessToast("Saved locally, but couldn't sync to your account (network error).");
+      setTimeout(() => setSavedSuccessToast(""), 4000);
+    }
+    setPressPassSaving(false);
   };
 
   // Image helpers for Pressie Builder
