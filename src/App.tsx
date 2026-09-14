@@ -1,34 +1,4 @@
 
-export interface CohortItem {
-  id: string;
-  name: string;
-  callsign: string;
-  bureau: string;
-  region: string;
-  description: string;
-  leadName: string;
-  leadCallsign: string;
-  membersCount: number;
-  avatarUrl?: string;
-  status: "active" | "pending";
-  isJoined: boolean;
-}
-
-export interface CohortRequest {
-  id: string;
-  cohortId?: string;
-  cohortName: string;
-  callsign: string;
-  bureau: string;
-  region: string;
-  requesterName: string;
-  requesterCallsign: string;
-  requesterAvatar?: string;
-  justification: string;
-  status: "pending" | "accepted" | "declined";
-  requestedAt: string;
-}
-
 export interface FieldMessage {
   id: string;
   chatId: string;
@@ -998,155 +968,23 @@ export const FieldPressMaster: React.FC = () => {
   const [showMessengerModal, setShowMessengerModal] = useState(false);
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
-  const [messengerDirectoryTab, setMessengerDirectoryTab] = useState<"cohorts" | "requests" | "directory">("cohorts");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
-  const [cohortReqName, setCohortReqName] = useState("");
-  const [cohortReqCallsign, setCohortReqCallsign] = useState("");
-  const [cohortReqBureau, setCohortReqBureau] = useState("Midwest Corridor Wire");
-  const [cohortReqRegion, setCohortReqRegion] = useState("IL / IN Corridor");
-  const [cohortReqJustification, setCohortReqJustification] = useState("");
+  const [cohortDirectoryQuery, setCohortDirectoryQuery] = useState("");
+  const [cohortDirectoryResults, setCohortDirectoryResults] = useState<Array<{
+    id: string; callsign: string; name: string; bureau: string; avatarUrl?: string;
+    relation: "none" | "pending_sent" | "pending_received" | "cohort"; requestId: string | null;
+  }>>([]);
+  const [cohortDirectoryLoading, setCohortDirectoryLoading] = useState(false);
+  const [cohortActionPendingId, setCohortActionPendingId] = useState<string | null>(null);
 
-  const [cohorts, setCohorts] = useState<CohortItem[]>(() => {
-    const defaultCohorts: CohortItem[] = [
-    ];
-    try {
-      const saved = localStorage.getItem("fieldpress_cohorts");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return defaultCohorts;
-  });
-
-  const [cohortRequests, setCohortRequests] = useState<CohortRequest[]>(() => {
-    const defaultRequests: CohortRequest[] = [
-    ];
-    try {
-      const saved = localStorage.getItem("fieldpress_cohort_requests");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return defaultRequests;
-  });
-
-  const handleAcceptCohortRequest = (reqId: string) => {
-    const req = cohortRequests.find((r) => r.id === reqId);
-    if (!req) return;
-
-    const updatedRequests = cohortRequests.map((r) =>
-      r.id === reqId ? { ...r, status: "accepted" as const } : r
-    );
-    setCohortRequests(updatedRequests);
-    try {
-      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(updatedRequests));
-    } catch {}
-
-    const existingCohort = cohorts.find((c) => c.callsign.toLowerCase() === req.callsign.toLowerCase());
-    let targetCohortId = existingCohort?.id;
-
-    if (!existingCohort) {
-      const newCohort: CohortItem = {
-        id: `cohort-${req.callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-        name: req.cohortName,
-        callsign: req.callsign,
-        bureau: req.bureau,
-        region: req.region,
-        description: req.justification,
-        leadName: req.requesterName,
-        leadCallsign: req.requesterCallsign,
-        membersCount: 2,
-        status: "active",
-        isJoined: true
-      };
-      targetCohortId = newCohort.id;
-      const nextCohorts = [newCohort, ...cohorts];
-      setCohorts(nextCohorts);
-      try {
-        localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
-      } catch {}
-    } else {
-      const nextCohorts = cohorts.map((c) => (c.id === existingCohort.id ? { ...c, isJoined: true } : c));
-      setCohorts(nextCohorts);
-      try {
-        localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
-      } catch {}
-    }
-
-    if (targetCohortId) setActiveChatId(targetCohortId);
-    setSavedSuccessToast(`Cohort request accepted. Encrypted wire active for ${req.cohortName}.`);
-    setTimeout(() => setSavedSuccessToast(""), 3000);
-  };
-
-  const handleDeclineCohortRequest = (reqId: string) => {
-    const updated = cohortRequests.map((r) =>
-      r.id === reqId ? { ...r, status: "declined" as const } : r
-    );
-    setCohortRequests(updated);
-    try {
-      localStorage.setItem("fieldpress_cohort_requests", JSON.stringify(updated));
-    } catch {}
-    setSavedSuccessToast("Cohort wire request declined.");
-    setTimeout(() => setSavedSuccessToast(""), 2500);
-  };
-
-  const handleSubmitCohortRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cohortReqName.trim() || !cohortReqCallsign.trim() || !cohortReqBureau.trim()) {
-      setFormValidationError("Please provide cohort title, callsign, and bureau.");
-      return;
-    }
-
-    const cleanCallsign = cohortReqCallsign.trim().replace(/^@/, "");
-    const newReq: CohortRequest = {
-      id: `cr-${Date.now()}`,
-      cohortName: cohortReqName.trim(),
-      callsign: cleanCallsign,
-      bureau: cohortReqBureau.trim(),
-      region: cohortReqRegion.trim() || "Midwest Corridor (IL / IN)",
-      requesterName: pressPass.name || "Victor Birkle",
-      requesterCallsign: pressPass.callsign || "ViBiR",
-      requesterAvatar: pressPass.avatarUrl,
-      justification: cohortReqJustification.trim() || "Encrypted regional journalism & telemetry coordination wire.",
-      status: "pending",
-      requestedAt: "Just now"
-    };
-
-    // Directly establish the real cohort desk
-    const newCohort: CohortItem = {
-      id: `cohort-${cleanCallsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-      name: cohortReqName.trim(),
-      callsign: cleanCallsign,
-      bureau: cohortReqBureau.trim(),
-      region: cohortReqRegion.trim() || "Midwest Corridor (IL / IN)",
-      description: cohortReqJustification.trim() || "Editorial cohort & dispatch desk.",
-      leadName: pressPass.name || "Victor Birkle",
-      leadCallsign: pressPass.callsign || "ViBiR",
-      membersCount: 1,
-      status: "active",
-      isJoined: true
-    };
-
-    const nextCohorts = [newCohort, ...cohorts];
-    setCohorts(nextCohorts);
-    try {
-      localStorage.setItem("fieldpress_cohorts", JSON.stringify(nextCohorts));
-    } catch {}
-
-    // Switch straight to the newly created channel
-    setActiveChatId(newCohort.id);
-
-    setCohortReqName("");
-    setCohortReqCallsign("");
-    setCohortReqBureau("Midwest Corridor Wire");
-    setCohortReqRegion("IL / IN Corridor");
-    setCohortReqJustification("");
-    setShowCohortRequestModal(false);
-    setSavedSuccessToast(`Cohort desk established: ${newCohort.name}`);
-    setTimeout(() => setSavedSuccessToast(""), 2500);
-  };
+  type CohortConnectionUser = { id: string; callsign: string; name: string; bureau: string; avatarUrl?: string };
+  const [cohorts, setCohorts] = useState<Array<{ requestId: string; user: CohortConnectionUser }>>([]);
+  const [incomingCohortRequests, setIncomingCohortRequests] = useState<Array<{
+    requestId: string; message: string; createdAt: string; user: CohortConnectionUser;
+  }>>([]);
+  const [outgoingCohortRequests, setOutgoingCohortRequests] = useState<Array<{
+    requestId: string; message: string; createdAt: string; user: CohortConnectionUser;
+  }>>([]);
   const [messengerInput, setMessengerInput] = useState("");
   const [messengerSearchQuery, setMessengerSearchQuery] = useState("");
   const [messengerImageUrl, setMessengerImageUrl] = useState("");
@@ -1440,6 +1278,109 @@ export const FieldPressMaster: React.FC = () => {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Real cohorts (accepted mutual requests) + pending requests, sourced
+  // from the Neon-backed accounts system. Replaces the old system where
+  // "establishing a cohort" just wrote a made-up entity into localStorage
+  // with no other real account involved.
+  const loadMyCohorts = async () => {
+    if (!authAccount) return;
+    try {
+      const res = await fetch("/api/cohorts/mine");
+      if (!res.ok) return;
+      const data = await res.json();
+      setCohorts(data.cohorts || []);
+      setIncomingCohortRequests(data.incoming || []);
+      setOutgoingCohortRequests(data.outgoing || []);
+      // Merge accepted cohorts into the messenger's contact list so they're
+      // immediately messageable, using the same shape/mechanism the rest
+      // of the messenger UI already relies on.
+      setRegisteredUsers((prev) => {
+        const byId = new Map(prev.map((u) => [u.id, u]));
+        for (const c of (data.cohorts || [])) {
+          byId.set(c.user.id, {
+            id: c.user.id,
+            name: c.user.name,
+            callsign: c.user.callsign,
+            email: "",
+            role: "Field Correspondent",
+            bureau: c.user.bureau || "",
+            location: "",
+            pressPassAvatar: c.user.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(c.user.callsign)}`,
+            isLinked: true,
+            isAdmin: false
+          });
+        }
+        return Array.from(byId.values());
+      });
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (authAccount) loadMyCohorts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
+
+  const searchCohortDirectory = async (query: string) => {
+    if (!authAccount) return;
+    setCohortDirectoryLoading(true);
+    try {
+      const res = await fetch(`/api/cohorts/directory?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (res.ok) setCohortDirectoryResults(data.users || []);
+    } catch {}
+    setCohortDirectoryLoading(false);
+  };
+
+  const sendCohortRequest = async (recipientId: string) => {
+    setCohortActionPendingId(recipientId);
+    try {
+      const res = await fetch("/api/cohorts/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSavedSuccessToast(data.error || "Couldn't send that request.");
+      } else {
+        setSavedSuccessToast("Cohort request sent.");
+        setCohortDirectoryResults((prev) =>
+          prev.map((u) => (u.id === recipientId ? { ...u, relation: "pending_sent", requestId: data.request.id } : u))
+        );
+        loadMyCohorts();
+      }
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setSavedSuccessToast("Network error sending request.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+    setCohortActionPendingId(null);
+  };
+
+  const respondToCohortRequest = async (requestId: string, action: "accept" | "decline") => {
+    setCohortActionPendingId(requestId);
+    try {
+      const res = await fetch("/api/cohorts/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, action })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSavedSuccessToast(data.error || "Couldn't update that request.");
+      } else {
+        setSavedSuccessToast(action === "accept" ? "Cohort request accepted." : "Cohort request declined.");
+        setIncomingCohortRequests((prev) => prev.filter((r) => r.requestId !== requestId));
+        if (action === "accept") loadMyCohorts();
+      }
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setSavedSuccessToast("Network error updating request.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+    setCohortActionPendingId(null);
+  };
 
   const submitAuthForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -5516,15 +5457,15 @@ ${shareUrl}`;
       {/* 8B. INSTANT MESSAGING DRAWER / MODAL (FIELD COMMS WIRE: DMs & GROUPS)     */}
       {/* ========================================================================= */}
             {/* 8D. COHORT REQUEST & PROPOSAL MODAL */}
-      {showCohortRequestModal && (
+{showCohortRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
-          <div className={`w-full max-w-lg rounded-2xl border shadow-2xl p-6 space-y-4 ${
+          <div className={`w-full max-w-lg max-h-[80vh] rounded-2xl border shadow-2xl p-6 space-y-4 flex flex-col ${
             isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
-            <div className="flex items-center justify-between border-b pb-3 border-zinc-700">
+            <div className="flex items-center justify-between border-b pb-3 border-zinc-700 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <Radio className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-sm">Establish New Cohort Desk</h3>
+                <Users className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-sm">Find Cohorts</h3>
               </div>
               <button
                 type="button"
@@ -5535,101 +5476,75 @@ ${shareUrl}`;
               </button>
             </div>
 
-            <p className={`text-[11px] leading-relaxed ${subTextThemeClass}`}>
-              Submit a charter request to establish a dedicated encrypted cohort frequency for specialized regional investigative journalism, shared sensor telemetry, and cross-bureau coordination.
+            <p className={`text-[11px] leading-relaxed flex-shrink-0 ${subTextThemeClass}`}>
+              Search real registered correspondents by name or callsign. Send a cohort request — once they accept, you're both linked and can message directly.
             </p>
 
-            <form onSubmit={handleSubmitCohortRequest} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
-                  Cohort Name / Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cohortReqName}
-                  onChange={(e) => setCohortReqName(e.target.value)}
-                  placeholder="e.g. Wabash Valley Energy & Transit Cohort"
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <input
+                type="text"
+                value={cohortDirectoryQuery}
+                onChange={(e) => {
+                  setCohortDirectoryQuery(e.target.value);
+                  searchCohortDirectory(e.target.value);
+                }}
+                placeholder="Search by name or callsign..."
+                className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                autoFocus
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold mb-1 text-zinc-300">
-                    Cohort Callsign *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cohortReqCallsign}
-                    onChange={(e) => setCohortReqCallsign(e.target.value)}
-                    placeholder="e.g. wv.energy"
-                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold mb-1 text-zinc-300">
-                    Bureau Affiliation *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cohortReqBureau}
-                    onChange={(e) => setCohortReqBureau(e.target.value)}
-                    placeholder="e.g. Wabash Valley Desk"
-                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
-                  Regional Operational Corridor
-                </label>
-                <input
-                  type="text"
-                  value={cohortReqRegion}
-                  onChange={(e) => setCohortReqRegion(e.target.value)}
-                  placeholder="e.g. Danville, IL - Lafayette, IN - Terre Haute"
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold mb-1 text-zinc-300">
-                  Wire Charter & Telemetry Justification *
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={cohortReqJustification}
-                  onChange={(e) => setCohortReqJustification(e.target.value)}
-                  placeholder="Detail the collaborative reporting mission, telemetry datasets, or sensor tracking this cohort will manage..."
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setShowCohortRequestModal(false)}
-                  className="px-3 py-2 rounded border border-zinc-700 hover:bg-zinc-800 text-zinc-300 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition cursor-pointer shadow-xs"
-                >
-                  Establish Cohort Desk
-                </button>
-              </div>
-            </form>
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-[200px]">
+              {cohortDirectoryLoading ? (
+                <p className={`text-[11px] text-center py-8 ${subTextThemeClass}`}>Searching...</p>
+              ) : cohortDirectoryResults.length === 0 ? (
+                <p className={`text-[11px] text-center py-8 ${subTextThemeClass}`}>
+                  {cohortDirectoryQuery.trim() ? "No correspondents found." : "Start typing to search the correspondent directory."}
+                </p>
+              ) : (
+                cohortDirectoryResults.map((u) => (
+                  <div
+                    key={u.id}
+                    className={`p-2.5 rounded-xl flex items-center gap-2.5 border ${subCardThemeClass}`}
+                  >
+                    <img
+                      src={u.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.callsign)}`}
+                      alt={u.name}
+                      className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{u.name}</p>
+                      <p className={`text-xs truncate ${subTextThemeClass}`}>@{u.callsign} · {u.bureau}</p>
+                    </div>
+                    {u.relation === "cohort" ? (
+                      <span className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11px] font-bold flex-shrink-0">
+                        Cohort
+                      </span>
+                    ) : u.relation === "pending_sent" ? (
+                      <span className="px-2.5 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-[11px] font-bold flex-shrink-0">
+                        Requested
+                      </span>
+                    ) : u.relation === "pending_received" ? (
+                      <span className="px-2.5 py-1.5 rounded-lg border border-amber-500/40 text-amber-400 text-[11px] font-bold flex-shrink-0">
+                        Check Requests
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={cohortActionPendingId === u.id}
+                        onClick={() => sendCohortRequest(u.id)}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition text-[11px] flex-shrink-0 cursor-pointer disabled:opacity-60"
+                      >
+                        {cohortActionPendingId === u.id ? "Sending..." : "Request"}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
-
       {showMessengerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md font-sans">
           <div className={`w-full max-w-5xl h-[85vh] max-h-[720px] rounded-2xl border shadow-2xl flex flex-col md:flex-row overflow-hidden transition ${
@@ -5667,12 +5582,50 @@ ${shareUrl}`;
                     className={`p-1.5 rounded-lg border transition cursor-pointer ${
                       isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
                     }`}
-                    title="Start new conversation"
+                    title="Find cohorts to connect with"
                   >
                     <PlusCircle className="h-4 w-4" />
                   </button>
                 </div>
               </div>
+
+              {/* Pending Cohort Requests — someone wants to connect */}
+              {incomingCohortRequests.length > 0 && (
+                <div className="px-3 pb-2 space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500 px-1">
+                    Cohort Requests ({incomingCohortRequests.length})
+                  </p>
+                  {incomingCohortRequests.map((r) => (
+                    <div key={r.requestId} className={`p-2.5 rounded-xl flex items-center gap-2.5 border ${subCardThemeClass}`}>
+                      <img
+                        src={r.user.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(r.user.callsign)}`}
+                        alt={r.user.name}
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold truncate">{r.user.name}</p>
+                        <p className={`text-[10px] truncate ${subTextThemeClass}`}>@{r.user.callsign}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={cohortActionPendingId === r.requestId}
+                        onClick={() => respondToCohortRequest(r.requestId, "accept")}
+                        className="px-2 py-1 rounded-lg bg-emerald-500 text-zinc-950 font-bold text-[10px] cursor-pointer disabled:opacity-60"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={cohortActionPendingId === r.requestId}
+                        onClick={() => respondToCohortRequest(r.requestId, "decline")}
+                        className="px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 font-bold text-[10px] cursor-pointer disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Simple search */}
               <div className="px-3 pt-3 pb-2">
