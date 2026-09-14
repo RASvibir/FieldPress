@@ -2542,7 +2542,12 @@ export const FieldPressMaster: React.FC = () => {
           className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden opacity-[0.035] select-none"
         >
           <div className="flex flex-col items-center justify-center transform -rotate-12 scale-125">
-            <PressieMark className="h-[420px] w-[420px] mb-2" />
+            <div className="flex items-center gap-4 mb-2">
+              <span className={`font-mono text-8xl font-black ${
+                isDark ? "text-zinc-100" : "text-zinc-900"
+              }`}>Fp_</span>
+              <img src="/pressie.svg" alt="" className="h-[280px] w-[280px] flex-shrink-0" />
+            </div>
             <span className={`font-mono text-8xl font-black tracking-widest uppercase ${
               isDark ? "text-zinc-100" : "text-zinc-900"
             }`}>
