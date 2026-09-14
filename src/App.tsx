@@ -2184,7 +2184,7 @@ export const FieldPressMaster: React.FC = () => {
     setShowPressPassModal(true); // Open Press Pass Credential Studio
   };
 
-  // Dispatch IDs: Fp_ + 13 digits (matches the site's FP_ branding).
+  // Dispatch IDs: Fp_ + 13 digits (matches the site's Fp_ branding).
   // Date.now() is 13 digits through the year 2286, so this is stable for
   // the foreseeable future without needing padding logic.
   const generateDispatchId = () => `Fp_${Date.now()}`;
@@ -2571,14 +2571,14 @@ export const FieldPressMaster: React.FC = () => {
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
           
-          {/* Logo Header: FP_* FieldPress */}
+          {/* Logo Header: Fp_ + favicon + FieldPress */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => setActiveTab("edition")}
               className="flex items-center gap-1.5 font-mono text-base font-bold tracking-tight hover:opacity-80 transition cursor-pointer"
             >
-              <span className="text-amber-500 font-black">FP_</span>
-              <PressieMark className="h-5 w-5 text-emerald-500" />
+              <span className="text-amber-500 font-black">Fp_</span>
+              <img src="/pressie.svg" alt="" className="h-5 w-5 flex-shrink-0" />
               <span className={`font-bold tracking-wide ${isDark ? "text-zinc-100" : "text-zinc-900"}`}>
                 FieldPress
               </span>
@@ -4325,8 +4325,8 @@ export const FieldPressMaster: React.FC = () => {
 
                   <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 pt-1">
                     <div className="flex items-center gap-1.5 font-mono text-xs font-black tracking-tight">
-                      <span className="text-amber-500">FP_</span>
-                      <PressieMark className="h-4 w-4" />
+                      <span className="text-amber-500">Fp_</span>
+                      <img src="/pressie.svg" alt="" className="h-4 w-4 flex-shrink-0" />
                       <span className="font-bold text-zinc-100 ml-0.5">FIELDPRESS</span>
                       <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 ml-1">PRESS CORPS</span>
                     </div>
@@ -5129,7 +5129,7 @@ ${shareUrl}`;
                 } shadow-sm space-y-3`}>
                   <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 text-[10px] text-zinc-400">
                     <div className="flex items-center gap-1.5 font-bold">
-                      <span className="text-amber-500 font-black">FP_</span>
+                      <span className="text-amber-500 font-black">Fp_</span>
                       <span>FIELDPRESS SYNDICATED WIRE</span>
                     </div>
                     <span>{shareModalStory.timestamp}</span>
