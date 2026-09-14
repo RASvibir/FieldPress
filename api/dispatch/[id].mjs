@@ -125,6 +125,14 @@ export default async function handler(req, res) {
   // This is both more reliable than a meta-refresh and, critically, means
   // crawlers (which take a different path below) are the only ones who
   // ever see the OG-tagged HTML at all.
+  // The edge/CDN cache is keyed per-URL and does NOT vary by User-Agent by
+  // default, so a crawler-served response (below) and a human-served 302
+  // (above) would otherwise clobber each other for the same URL within the
+  // cache window -- whichever request happened to populate the cache wins
+  // for everyone else until it expires. Vary: User-Agent forces the CDN to
+  // cache crawler and human responses separately.
+  res.setHeader("Vary", "User-Agent");
+
   if (!bot && id) {
     res.setHeader("Cache-Control", "no-store");
     res.writeHead(302, { Location: spaUrl });
