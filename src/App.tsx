@@ -2300,9 +2300,24 @@ export const FieldPressMaster: React.FC = () => {
 
       if (editingDraftId) {
         // Promoting a staged draft: remove it from the press roll both
-        // server-side and locally rather than leaving a duplicate row.
-        fetch(`/api/dispatches/${editingDraftId}`, { method: "DELETE" }).catch(() => {});
-        setPressRoll((prev) => prev.filter((p) => p.id !== editingDraftId));
+        // server-side and locally. Only drop it from local state once the
+        // server confirms the delete — previously this removed it
+        // optimistically regardless of outcome, so a failed request left
+        // an orphaned duplicate row in fieldpress_dispatches that was
+        // invisible client-side (same silent-failure shape as other
+        // fixes in this codebase; see repo notes on .catch(() => {})).
+        try {
+          const delRes = await fetch(`/api/dispatches/${editingDraftId}`, { method: "DELETE" });
+          if (delRes.ok) {
+            setPressRoll((prev) => prev.filter((p) => p.id !== editingDraftId));
+          } else {
+            setSavedSuccessToast("Published, but couldn't clear the draft copy — check your Press Roll.");
+            setTimeout(() => setSavedSuccessToast(""), 4000);
+          }
+        } catch {
+          setSavedSuccessToast("Published, but couldn't clear the draft copy — check your Press Roll.");
+          setTimeout(() => setSavedSuccessToast(""), 4000);
+        }
       }
 
       setDispatches((prev) => [published, ...prev]);
@@ -3203,17 +3218,19 @@ export const FieldPressMaster: React.FC = () => {
                         <span>{bookmarks.includes(d.id) ? "Saved" : "Save"}</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleForkPressie(d);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
-                        title="Fork this pressie into composer with attribution"
-                      >
-                        <span>🔀 Fork Pressie</span>
-                      </button>
+                      {d.sharingOption === "fork" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleForkPressie(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Fork this pressie into composer with attribution"
+                        >
+                          <span>🔀 Fork Pressie</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={(e) => {
@@ -3417,17 +3434,19 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="pt-3 border-t border-zinc-700/40 flex items-center justify-between text-[11px] font-mono">
                         <span>{disp.location}</span>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleForkPressie(disp);
-                            }}
-                            className="hover:text-emerald-400 p-1 rounded transition cursor-pointer"
-                            title="Fork pressie by Pressy'o"
-                          >
-                            <span className="text-xs">🔀</span>
-                          </button>
+                          {disp.sharingOption === "fork" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleForkPressie(disp);
+                              }}
+                              className="hover:text-emerald-400 p-1 rounded transition cursor-pointer"
+                              title="Fork pressie by Pressy'o"
+                            >
+                              <span className="text-xs">🔀</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
