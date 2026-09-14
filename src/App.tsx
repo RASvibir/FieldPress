@@ -1496,7 +1496,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // --- Real cross-device accounts (email + password) ---
   const [authAccount, setAuthAccount] = useState<{
-    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string;
+    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string;
   } | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
@@ -1505,6 +1505,8 @@ export const FieldPressMaster: React.FC = () => {
   const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [authAvatarFile, setAuthAvatarFile] = useState<File | null>(null);
+  const authAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
     setPressPass((prev) => {
@@ -1552,11 +1554,34 @@ export const FieldPressMaster: React.FC = () => {
       }
       setAuthAccount(data.account);
       applyAccountToPressPass(data.account);
+      
+      // If signup and user selected an avatar, upload it
+      if (isSignup && authAvatarFile) {
+        try {
+          const uploadRes = await fetch("/api/upload-avatar", {
+            method: "POST",
+            body: authAvatarFile,
+            headers: { "Content-Type": authAvatarFile.type }
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            // Update local account with new avatar URL
+            const updatedAccount = { ...data.account, avatarUrl: uploadData.url };
+            setAuthAccount(updatedAccount);
+            applyAccountToPressPass(updatedAccount);
+          }
+        } catch (uploadErr) {
+          // Avatar upload failed, but auth succeeded; log and continue
+          console.error("Avatar upload failed:", uploadErr);
+        }
+      }
+      
       setAuthModalMode(null);
       setAuthEmail("");
       setAuthPassword("");
       setAuthCallsign("");
       setAuthName("");
+      setAuthAvatarFile(null);
       setSavedSuccessToast(isSignup ? "Account created. You're signed in on this device." : "Signed in.");
       setTimeout(() => setSavedSuccessToast(""), 2500);
     } catch {
@@ -4626,6 +4651,17 @@ export const FieldPressMaster: React.FC = () => {
                       className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
                       placeholder="jreporter"
                     />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Profile Photo (optional)</label>
+                    <input
+                      ref={authAvatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setAuthAvatarFile(e.target.files?.[0] || null)}
+                      className={`w-full text-xs ${inputThemeClass}`}
+                    />
+                    {authAvatarFile && <p className={`text-[11px] ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>Selected: {authAvatarFile.name}</p>}
                   </div>
                 </>
               )}

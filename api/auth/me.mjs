@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     }
 
     const rows = await sql`
-      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url
+      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role
       FROM fieldpress_sessions s
       JOIN fieldpress_accounts a ON a.id = s.account_id
       WHERE s.token = ${token} AND s.expires_at > now()

@@ -31,8 +31,8 @@ export function parseCookies(req) {
 
 export function publicAccount(account) {
   if (!account) return null;
-  const { id, email, callsign, name, bureau, avatar_url } = account;
-  return { id, email, callsign, name, bureau, avatar_url };
+  const { id, email, callsign, name, bureau, avatar_url, role } = account;
+  return { id, email, callsign, name, bureau, avatar_url, role };
 }
 
 export function isValidEmail(email) {

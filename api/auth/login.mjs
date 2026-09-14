@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     }
 
     const rows = await sql`
-      SELECT id, email, password_hash, callsign, name, bureau, avatar_url
+      SELECT id, email, password_hash, callsign, name, bureau, avatar_url, role
       FROM fieldpress_accounts
       WHERE lower(email) = lower(${email})
       LIMIT 1;
@@ -50,6 +50,7 @@ export default async function handler(req, res) {
     res.setHeader("Set-Cookie", sessionCookieHeader(token));
     res.status(200).json({ account: publicAccount(account) });
   } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ error: "Login failed. Please try again." });
   }
 }
