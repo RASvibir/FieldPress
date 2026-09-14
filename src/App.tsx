@@ -163,23 +163,29 @@ export interface PressPassData {
   isAdmin?: boolean;
 }
 
+// Shown only for unauthenticated visitors, before /api/auth/me resolves
+// (or if it resolves to no account). Intentionally generic — this used to
+// be a real admin's persona (Victor Birkle) and rendered for every fresh
+// browser and all signed-out traffic, which made anonymous visitors look
+// like the signed-in bureau chief. Do not put a real person's identity or
+// admin flag here; real identity/role always comes from authAccount.
 export const DEFAULT_PRESS_PASS: PressPassData = {
-  name: "Victor Birkle",
-  callsign: "ViBiR",
-  email: "vibir@fieldpress.studio",
-  role: "Bureau Chief & Master Admin",
+  name: "Field Correspondent",
+  callsign: "",
+  email: undefined,
+  role: "Guest (signed out)",
   bureau: "Midwest Corridor Dispatch",
-  location: "Danville, IL",
-  coordinates: [-87.6298, 40.1245],
+  location: undefined,
+  coordinates: undefined,
   provenanceEnabled: false,
-  badgeId: "FP-8492-X",
-  issueDate: "2026-2027",
+  badgeId: "",
+  issueDate: "",
   accentColor: "amber",
-  avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-  bio: "Independent field journalist and sole bureau administrator covering regional infrastructure, autonomous tech, and community affairs along the IL/IN corridor.",
-  pgpKey: "4A8F 90B2 31CD E840 92F1",
-  contactSignal: "@vibir.01",
-  isAdmin: true
+  avatarUrl: "/pressyo-icon.jpg",
+  bio: "",
+  pgpKey: "",
+  contactSignal: "",
+  isAdmin: false
 };
 
 export interface CorrespondentUser {
@@ -216,67 +222,6 @@ export interface Dispatch {
 }
 
 export const INITIAL_DISPATCHES: Dispatch[] = [
-  {
-    id: "d-1",
-    title: "Regional Grid Resiliency: Autonomous Micro-Substations Go Live Across Wabash Valley",
-    category: "Infrastructure",
-    author: "Pressy'o",
-    callsign: "pressyo",
-    bureau: "FieldPress Syndicate",
-    timestamp: "12m ago",
-    location: "Danville, IL",
-    coordinates: [-87.6298, 40.1245],
-    content: "Local cooperative power authorities today commissioned three self-healing modular distribution nodes along the central rail corridor, securing redundant municipal telemetry against severe autumn weather fronts. Operating on decentralised edge microcontrollers, the stations balance loads autonomously without relying on central switching networks.",
-    imageUrl: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1200&q=80",
-    imageCaption: "Automated distribution node and telemetry array on the Danville corridor.",
-    isLead: true,
-    editionStyle: "newspaper",
-    sharingOption: "fork"
-  },
-  {
-    id: "d-2",
-    title: "County Open Data Initiative Publishes Full Historical Drainage & Watershed Maps",
-    category: "Civic Wire",
-    author: "Pressy'o",
-    callsign: "pressyo",
-    bureau: "FieldPress Syndicate",
-    timestamp: "48m ago",
-    location: "Lafayette, IN",
-    coordinates: [-86.8753, 40.4173],
-    content: "Over 80 years of high-resolution watershed topographical surveys were digitized and released under public domain archives this morning, opening critical environmental data to citizen hydrologists and agricultural planners across the Wabash basin.",
-    imageUrl: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80",
-    imageCaption: "Digitized watershed survey cartography from Tippecanoe basin.",
-    editionStyle: "tactical",
-    sharingOption: "fork"
-  },
-  {
-    id: "d-3",
-    title: "Independent Transit Co-op Tests Battery-Electric Shuttles on State Route 63",
-    category: "Transit",
-    author: "Pressy'o",
-    callsign: "pressyo",
-    bureau: "FieldPress Syndicate",
-    timestamp: "2h ago",
-    location: "Covington, IN",
-    coordinates: [-87.3928, 40.1406],
-    content: "Early metrics from the 100-day freight and commuter corridor pilot show a 68% drop in fleet operating expenses, paving the way for expanded multi-county commuter routes next spring connecting rural factory hubs.",
-    editionStyle: "magazine",
-    sharingOption: "fork"
-  },
-  {
-    id: "d-4",
-    title: "Community Fiber Exchange Deploys Optical Splice Ring Across Vermilion County",
-    category: "Telecom",
-    author: "Pressy'o",
-    callsign: "pressyo",
-    bureau: "FieldPress Syndicate",
-    timestamp: "4h ago",
-    location: "Catlin, IL",
-    coordinates: [-87.7056, 40.0664],
-    content: "A volunteer-backed telecommunications collective has completed the final segment of a 40-mile dark fiber loop connecting municipal emergency shelters and public library networks with gigabit uplinks.",
-    editionStyle: "comic",
-    sharingOption: "fork"
-  }
 ];
 
 export interface ClassifiedItem {
@@ -290,45 +235,8 @@ export interface ClassifiedItem {
 }
 
 export const INITIAL_CLASSIFIEDS: ClassifiedItem[] = [
-  {
-    id: "c-1",
-    tag: "NOTICE",
-    tagColor: "amber",
-    title: "Municipal Solar Siting Public Hearing",
-    details: "County Board Room B • Discussion on rural solar easement standards and community battery storage.",
-    contact: "clerk@vermilioncounty.gov",
-    timestamp: "Sep 18, 6:00 PM"
-  },
-  {
-    id: "c-2",
-    tag: "EQUIPMENT",
-    tagColor: "emerald",
-    title: "Mobile Broadcast Transceiver Testing",
-    details: "Volunteer field operators wanted for 2-meter packet radio emergency mesh check-in along Route 1.",
-    contact: "radio@midwestcorridor.org",
-    timestamp: "Weekly Tue 19:00"
-  },
-  {
-    id: "c-3",
-    tag: "TRANSIT",
-    tagColor: "cyan",
-    title: "Shared Route 63 Commuter Shuttle Feedback",
-    details: "Seeking survey responses from second-shift manufacturing commuters traveling between Danville and Covington.",
-    contact: "transit@wabashcoop.net",
-    timestamp: "Open through Oct 1"
-  }
 ];
 
-const CORRIDOR_DATELINES = [
-  "Danville, IL • Vermilion Line",
-  "Danville Junction Spur",
-  "Champaign-Urbana Transit Line",
-  "Lafayette, IN • Tippecanoe Desk",
-  "Covington, IN • Wabash Corridor",
-  "Catlin, IL • Fiber Loop Beat",
-  "Evansville Crossing Line",
-  "Chicago Loop Core"
-];
 
 // Every dispatch share link gets a fresh cache-busting query param. Link
 // unfurl crawlers (Facebook, Slack, Discord, etc.) cache Open Graph data
@@ -717,34 +625,23 @@ export const FieldPressMaster: React.FC = () => {
   const [regLocation, setRegLocation] = useState("Danville, IL");
   const [regAvatar, setRegAvatar] = useState("");
 
-  // Real Registered User Database: Seeded strictly with Victor Birkle as the sole admin
+  // Legacy client-only directory, predating the real Neon-backed accounts
+  // system. It no longer seeds a hardcoded admin user or grants isAdmin by
+  // callsign (that was a local-only flag disconnected from the server's
+  // actual role check, and matched "vibir"/"ras.ip" specifically — a
+  // stale backdoor with no purpose now that /api/admin/* enforces
+  // authAccount.role === "super_admin" server-side).
   const [registeredUsers, setRegisteredUsers] = useState<CorrespondentUser[]>(() => {
-    const adminUser: CorrespondentUser = {
-      id: "usr-vibir",
-      name: "Victor Birkle",
-      callsign: "ViBiR",
-      email: "vibir@fieldpress.studio",
-      role: "Bureau Chief & Master Admin",
-      bureau: "Midwest Corridor Dispatch",
-      location: "Danville, IL",
-      pressPassAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      isLinked: true,
-      isAdmin: true
-    };
     try {
       const saved = localStorage.getItem("fieldpress_registered_users");
       if (saved) {
         const parsed = JSON.parse(saved) as CorrespondentUser[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Guarantee Victor remains the sole admin
-          return parsed.map((u) => ({
-            ...u,
-            isAdmin: (u.email === "vibir@fieldpress.studio" || u.callsign.toLowerCase() === "vibir" || u.callsign.toLowerCase() === "ras.ip")
-          }));
+        if (Array.isArray(parsed)) {
+          return parsed.map((u) => ({ ...u, isAdmin: false }));
         }
       }
     } catch {}
-    return [adminUser];
+    return [];
   });
 
   const handleRegisterCorrespondent = (e: React.FormEvent) => {
@@ -755,20 +652,20 @@ export const FieldPressMaster: React.FC = () => {
     }
 
     const cleanCallsign = regCallsign.trim().replace(/^@/, "");
-    // Strictly prevent non-Victor accounts from claiming admin
-    const isAdminUser = (regEmail.trim() === "vibir@fieldpress.studio" || cleanCallsign.toLowerCase() === "vibir" || cleanCallsign.toLowerCase() === "ras.ip");
+    // Admin status is never granted here — it's server-side only
+    // (fieldpress_accounts.role, set via /api/admin/update-role).
 
     const newUser: CorrespondentUser = {
       id: `usr-${Date.now()}`,
       name: regName.trim(),
       callsign: cleanCallsign,
       email: regEmail.trim(),
-      role: isAdminUser ? "Bureau Chief & Master Admin" : "Field Correspondent",
+      role: "Field Correspondent",
       bureau: regBureau.trim() || "Midwest Corridor",
       location: regLocation.trim() || "Danville, IL",
       pressPassAvatar: regAvatar.trim() || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
       isLinked: true,
-      isAdmin: isAdminUser
+      isAdmin: false
     };
 
     const updated = [...registeredUsers.filter((u) => u.email !== newUser.email), newUser];
@@ -1110,45 +1007,6 @@ export const FieldPressMaster: React.FC = () => {
 
   const [cohorts, setCohorts] = useState<CohortItem[]>(() => {
     const defaultCohorts: CohortItem[] = [
-      {
-        id: "cohort-vermilion-grid",
-        name: "Vermilion Microgrid Resiliency Cohort",
-        callsign: "vermilion.grid",
-        bureau: "Midwest Corridor Dispatch",
-        region: "Danville, IL & Vermilion County",
-        description: "Autonomous substation monitoring, edge sensor packet logs, and public co-op power telemetry.",
-        leadName: "Victor Birkle",
-        leadCallsign: "ViBiR",
-        membersCount: 6,
-        status: "active",
-        isJoined: true
-      },
-      {
-        id: "cohort-wabash-transit",
-        name: "Wabash Freight & Transit Cohort",
-        callsign: "wabash.transit",
-        bureau: "Wabash Rail Logistics",
-        region: "Wabash Valley (IL / IN)",
-        description: "Battery-electric shuttle telemetry, Route 63 corridor logistics, and shared freight reporting.",
-        leadName: "Marcus Vance",
-        leadCallsign: "vance.lead",
-        membersCount: 5,
-        status: "active",
-        isJoined: true
-      },
-      {
-        id: "cohort-civic-hydrology",
-        name: "Civic Hydrology & Watershed Cohort",
-        callsign: "civic.hydro",
-        bureau: "Tippecanoe Desk",
-        region: "Wabash River Basin",
-        description: "Over 80 years of topographical maps, citizen weir monitoring, and river basin turbidity telemetry.",
-        leadName: "Elena Rostova",
-        leadCallsign: "elena.wire",
-        membersCount: 4,
-        status: "active",
-        isJoined: true
-      }
     ];
     try {
       const saved = localStorage.getItem("fieldpress_cohorts");
@@ -1162,19 +1020,6 @@ export const FieldPressMaster: React.FC = () => {
 
   const [cohortRequests, setCohortRequests] = useState<CohortRequest[]>(() => {
     const defaultRequests: CohortRequest[] = [
-      {
-        id: "cr-101",
-        cohortName: "Central Illinois Autonomous Ag Cohort",
-        callsign: "ag.auto",
-        bureau: "Champaign Agronomy Wire",
-        region: "Champaign-Urbana & Central IL",
-        requesterName: "Dr. Aris Thorne",
-        requesterCallsign: "thorne.ag",
-        requesterAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-        justification: "Requesting encrypted field comms channel to cross-reference agricultural soil telemetry with municipal weather sensor packets.",
-        status: "pending",
-        requestedAt: "18m ago"
-      }
     ];
     try {
       const saved = localStorage.getItem("fieldpress_cohort_requests");
@@ -1488,8 +1333,11 @@ export const FieldPressMaster: React.FC = () => {
     return DEFAULT_PRESS_PASS;
   });
 
-  // Admin Governance: Strictly Victor Birkle (vibir@fieldpress.studio / @ViBiR) ONLY
-  const isCurrentUserAdmin = (pressPass.email === "vibir@fieldpress.studio" || pressPass.callsign?.toLowerCase() === "vibir" || pressPass.callsign?.toLowerCase() === "ras.ip");
+  // Real admin status comes from the server-verified session
+  // (authAccount.role === "super_admin"), set further down. The old
+  // local-only check here matched on pressPass.email/callsign — which is
+  // just client state anyone's browser can hold — so it's removed rather
+  // than left around unused.
 
   const [editPassForm, setEditPassForm] = useState<PressPassData>(pressPass);
   const [savedSuccessToast, setSavedSuccessToast] = useState("");
@@ -1576,6 +1424,16 @@ export const FieldPressMaster: React.FC = () => {
         if (data?.account) {
           setAuthAccount(data.account);
           applyAccountToPressPass(data.account);
+        } else {
+          // No valid session. Don't trust a cached press pass from a
+          // previous account on this device (e.g. an expired cookie
+          // after someone else's session, or a stale admin persona
+          // saved before this was fixed) — fall back to the neutral
+          // guest identity instead.
+          setPressPass(DEFAULT_PRESS_PASS);
+          try {
+            localStorage.removeItem("fieldpress_press_pass");
+          } catch {}
         }
       })
       .catch(() => {});
@@ -1646,24 +1504,49 @@ export const FieldPressMaster: React.FC = () => {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {}
     setAuthAccount(null);
+    // Clear the locally-cached identity too — otherwise the previous
+    // account's name/avatar/callsign stayed on screen (and in
+    // localStorage) after logout, on this device and on any fresh
+    // session that inherited it.
+    setPressPass(DEFAULT_PRESS_PASS);
+    try {
+      localStorage.removeItem("fieldpress_press_pass");
+    } catch {}
     setSavedSuccessToast("Signed out.");
     setTimeout(() => setSavedSuccessToast(""), 2500);
   };
 
-  // Live Dispatches & Press Roll (Staged Drafts)
-  const [dispatches, setDispatches] = useState<Dispatch[]>(() => {
+  // Live Dispatches & Press Roll (Staged Drafts) — now backed by Neon via
+  // /api/dispatches, scoped per account_id instead of shared browser
+  // localStorage. Starts empty and is populated as soon as the API
+  // responds.
+  const [dispatches, setDispatches] = useState<Dispatch[]>(INITIAL_DISPATCHES);
+  const [dispatchesLoaded, setDispatchesLoaded] = useState<boolean>(false);
+
+  const refreshPublicFeed = async () => {
     try {
-      const saved = localStorage.getItem("fieldpress_dispatches");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_DISPATCHES;
-  });
+      const res = await fetch("/api/dispatches");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.dispatches)) {
+        setDispatches(data.dispatches.length > 0 ? data.dispatches : INITIAL_DISPATCHES);
+      }
+    } catch {
+      // Network hiccup — keep whatever's currently shown.
+    } finally {
+      setDispatchesLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshPublicFeed();
+  }, []);
 
   // Deep-link routing: shared URLs point to `#dispatch-<id>`. Open the
   // matching dispatch on load and whenever the hash changes (e.g. the
   // person navigates back/forward, or opens a second share link in the
   // same tab). Falls back to a toast if the dispatch can't be found
-  // (e.g. it was a demo dispatch that never persisted for this visitor).
+  // (e.g. an old share link for a dispatch that has since been deleted).
   useEffect(() => {
     const openFromHash = () => {
       const hash = window.location.hash;
@@ -1876,26 +1759,29 @@ export const FieldPressMaster: React.FC = () => {
         .slice(0, 8)
     : [];
 
-  const [pressRoll, setPressRoll] = useState<Dispatch[]>(() => {
-    try {
-      const saved = localStorage.getItem("fieldpress_pressroll");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [
-      {
-        id: "pr-1",
-        title: "Draft: Vermilion River Silt Deposition Analysis Following August Rains",
-        category: "Field Notes",
-        author: "Victor Birkle",
-        callsign: "ras.ip",
-        bureau: "Midwest Corridor Dispatch",
-        timestamp: "Staged Draft",
-        location: "Danville, IL",
-        content: "Field telemetry samples indicate a 14% elevation in suspended solids along the northern drainage junction. Follow-up turbidity inspection scheduled with county water board.",
-        isPressRoll: true
-      }
-    ];
-  });
+  const [pressRoll, setPressRoll] = useState<Dispatch[]>([]);
+
+  // Press Roll is account-scoped now, so it only exists once someone is
+  // signed in. Fetch on login; clear on logout so the previous account's
+  // drafts never leak into the next session on a shared browser.
+  useEffect(() => {
+    if (!authAccount) {
+      setPressRoll([]);
+      return;
+    }
+    let isMounted = true;
+    fetch("/api/dispatches?mine=1")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        const mine: Dispatch[] = Array.isArray(data.dispatches) ? data.dispatches : [];
+        setPressRoll(mine.filter((d) => d.isPressRoll));
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [authAccount]);
 
   // Saved Bookmarks
   const [bookmarks, setBookmarks] = useState<string[]>(() => {
@@ -2266,8 +2152,12 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Save Draft Handler (Stage to Press Roll)
-  const handleSaveDraft = (e?: React.FormEvent) => {
+  const handleSaveDraft = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!authAccount) {
+      setFormValidationError("Sign in to stage a draft.");
+      return;
+    }
     if (!newTitle.trim() && !newContent.trim()) {
       setFormValidationError("Please enter at least a title or draft notes to stage.");
       return;
@@ -2300,29 +2190,38 @@ export const FieldPressMaster: React.FC = () => {
       isPressRoll: true
     };
 
-    let updated: Dispatch[];
-    if (editingDraftId) {
-      updated = pressRoll.map((p) => (p.id === editingDraftId ? draftItem : p));
-    } else {
-      updated = [draftItem, ...pressRoll];
-    }
-
-    setPressRoll(updated);
     try {
-      localStorage.setItem("fieldpress_pressroll", JSON.stringify(updated));
-    } catch {}
+      const res = await fetch("/api/dispatches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...draftItem, isPressRoll: true })
+      });
+      if (!res.ok) throw new Error("save failed");
+      const { dispatch: saved } = await res.json();
 
-    setShowPressieBuilderModal(false);
-    setFormValidationError(null);
-    setSavedSuccessToast("Dispatch staged to Press Roll.");
-    setTimeout(() => setSavedSuccessToast(""), 3500);
+      const updated: Dispatch[] = editingDraftId
+        ? pressRoll.map((p) => (p.id === editingDraftId ? saved : p))
+        : [saved, ...pressRoll];
+      setPressRoll(updated);
+
+      setShowPressieBuilderModal(false);
+      setFormValidationError(null);
+      setSavedSuccessToast("Dispatch staged to Press Roll.");
+      setTimeout(() => setSavedSuccessToast(""), 3500);
+    } catch {
+      setFormValidationError("Couldn't save the draft — check your connection and try again.");
+    }
   };
 
   // Publish to Live Feed Handler
-  const handleCreatePressie = (e?: React.FormEvent) => {
+  const handleCreatePressie = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newTitle.trim()) {
       setFormValidationError("Please enter a headline for your dispatch.");
+      return;
+    }
+    if (!authAccount) {
+      setFormValidationError("Sign in to publish a dispatch.");
       return;
     }
 
@@ -2357,35 +2256,48 @@ export const FieldPressMaster: React.FC = () => {
       sharingOption: newSharingOption
     };
 
-    if (editingDraftId) {
-      const updatedRoll = pressRoll.filter((p) => p.id !== editingDraftId);
-      setPressRoll(updatedRoll);
-      try {
-        localStorage.setItem("fieldpress_pressroll", JSON.stringify(updatedRoll));
-      } catch {}
-    }
-
-    const updatedDispatches = [pressieItem, ...dispatches];
-    setDispatches(updatedDispatches);
     try {
-      localStorage.setItem("fieldpress_dispatches", JSON.stringify(updatedDispatches));
-    } catch {}
+      const res = await fetch("/api/dispatches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+      });
+      if (!res.ok) throw new Error("publish failed");
+      const { dispatch: published } = await res.json();
 
-    setShowPressieBuilderModal(false);
-    setFormValidationError(null);
-    setSavedSuccessToast("Dispatch published to Front-Page Feed!");
-    setActiveTab("edition"); // Immediately show at top of front-page edition!
-    setTimeout(() => setSavedSuccessToast(""), 3500);
+      if (editingDraftId) {
+        // Promoting a staged draft: remove it from the press roll both
+        // server-side and locally rather than leaving a duplicate row.
+        fetch(`/api/dispatches/${editingDraftId}`, { method: "DELETE" }).catch(() => {});
+        setPressRoll((prev) => prev.filter((p) => p.id !== editingDraftId));
+      }
+
+      setDispatches((prev) => [published, ...prev]);
+
+      setShowPressieBuilderModal(false);
+      setFormValidationError(null);
+      setSavedSuccessToast("Dispatch published to Front-Page Feed!");
+      setActiveTab("edition"); // Immediately show at top of front-page edition!
+      setTimeout(() => setSavedSuccessToast(""), 3500);
+    } catch {
+      setFormValidationError("Couldn't publish — check your connection and try again.");
+    }
   };
 
-  const deleteDraft = (id: string) => {
-    const updated = pressRoll.filter((p) => p.id !== id);
-    setPressRoll(updated);
-    try {
-      localStorage.setItem("fieldpress_pressroll", JSON.stringify(updated));
-    } catch {}
+  const deleteDraft = async (id: string) => {
+    const previous = pressRoll;
+    setPressRoll((prev) => prev.filter((p) => p.id !== id));
     setSavedSuccessToast("Draft removed from Press Roll.");
     setTimeout(() => setSavedSuccessToast(""), 2500);
+    try {
+      const res = await fetch(`/api/dispatches/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+    } catch {
+      // Roll back the optimistic removal if the server didn't confirm it.
+      setPressRoll(previous);
+      setSavedSuccessToast("Couldn't remove the draft — try again.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
   };
 
   const toggleBookmark = (id: string) => {
@@ -5623,7 +5535,7 @@ ${shareUrl}`;
                   )
                   .map((u) => {
                   const isSelected = activeChatId === u.id;
-                  const isUserAdminAccount = u.isAdmin || u.email === "vibir@fieldpress.studio" || u.callsign.toLowerCase() === "vibir";
+                  const isUserAdminAccount = false; // admin badge is server-verified only now; see /api/admin/users
                   const lastMsg = [...messengerMessages].filter((m) => m.chatId === u.id).pop();
 
                   return (
@@ -5667,10 +5579,15 @@ ${shareUrl}`;
               {/* Your Press Pass Identity Footer */}
               <div className={`p-3 border-t flex items-center justify-between text-xs font-mono ${borderThemeClass} ${subTextThemeClass}`}>
                 <div className="flex items-center gap-2 truncate">
-                  <img src={pressPass.avatarUrl || DEFAULT_PRESS_PASS.avatarUrl} alt="Victor" className="w-5 h-5 rounded-full object-cover border border-amber-500/50" />
-                  <span className="truncate">@{pressPass.callsign || "ViBiR"} (Master Admin)</span>
+                  <img src={pressPass.avatarUrl || "/pressyo-icon.jpg"} alt={pressPass.callsign || "Guest"} className="w-5 h-5 rounded-full object-cover border border-amber-500/50" />
+                  <span className="truncate">
+                    @{pressPass.callsign || "guest"}
+                    {authAccount?.role === "super_admin" && " (Bureau Chief)"}
+                  </span>
                 </div>
-                <span className="text-[10px] text-amber-400 font-bold">ADMIN</span>
+                {authAccount?.role === "super_admin" && (
+                  <span className="text-[10px] text-amber-400 font-bold">ADMIN</span>
+                )}
               </div>
             </div>
 
@@ -6646,18 +6563,16 @@ ${shareUrl}`;
                   </div>
 
                   <div className={`p-4 rounded-lg border space-y-2 border-rose-900/40 bg-rose-950/10`}>
-                    <h5 className="font-bold text-rose-400">Reset Local Store</h5>
+                    <h5 className="font-bold text-rose-400">Reset Local Cache</h5>
                     <p className={`text-xs ${subTextThemeClass}`}>
-                      Restore default broadsheet dispatches and purge local browser cache.
+                      Clear local device preferences and re-sync dispatches from the server (your published content and drafts are unaffected — they live in your account, not this browser).
                     </p>
                     <button
                       type="button"
                       onClick={() => {
                         localStorage.clear();
-                        setDispatches(INITIAL_DISPATCHES);
-                        setPressRoll([]);
-                        setBookmarks(["d-1"]);
-                        setSavedSuccessToast("Local storage reset to default wire.");
+                        refreshPublicFeed();
+                        setSavedSuccessToast("Local cache cleared and re-synced.");
                         setTimeout(() => setSavedSuccessToast(""), 2500);
                       }}
                       className="px-3 py-1.5 rounded border border-rose-800 text-rose-400 hover:bg-rose-900/40 transition"
