@@ -22,8 +22,8 @@ import {
   publicAccount,
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS
-} from "../_lib/auth.mjs";
-import { sendMail } from "../_lib/mailer.mjs";
+} from "../auth.mjs";
+import { sendMail } from "../mailer.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "vibir@fieldpress.studio").toLowerCase();

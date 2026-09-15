@@ -9,7 +9,7 @@
 // serverless function cap. Each handler below is otherwise unchanged.
 
 import { neon } from "@neondatabase/serverless";
-import { getAuthenticatedAccount } from "../_lib/auth.mjs";
+import { getAuthenticatedAccount } from "../auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const VALID_ROLES = new Set(["super_admin", "correspondent"]);

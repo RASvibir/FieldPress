@@ -12,7 +12,7 @@
 // localStorage with no other real account involved on the other end.
 
 import { neon } from "@neondatabase/serverless";
-import { getAuthenticatedAccount } from "../_lib/auth.mjs";
+import { getAuthenticatedAccount } from "../auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 

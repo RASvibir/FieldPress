@@ -20,7 +20,7 @@
 // domain as reports/disputed anyway.
 
 import { neon } from "@neondatabase/serverless";
-import { getAuthenticatedAccount } from "../_lib/auth.mjs";
+import { getAuthenticatedAccount } from "../auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 

@@ -10,7 +10,7 @@
 // is sent or accepted, not derived/polled here.
 
 import { neon } from "@neondatabase/serverless";
-import { getAuthenticatedAccount } from "../_lib/auth.mjs";
+import { getAuthenticatedAccount } from "../auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
