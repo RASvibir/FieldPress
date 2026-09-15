@@ -6190,7 +6190,7 @@ ${shareUrl}`;
       {/* ========================================================================= */}
             {/* 8D. COHORT REQUEST & PROPOSAL MODAL */}
 {showCohortRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
           <div className={`w-full max-w-lg max-h-[80vh] rounded-2xl border shadow-2xl p-6 space-y-4 flex flex-col ${
             isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
