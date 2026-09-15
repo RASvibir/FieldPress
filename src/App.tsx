@@ -1529,7 +1529,7 @@ export const FieldPressMaster: React.FC = () => {
   const loadMyBlocks = async () => {
     if (!authAccount) return;
     try {
-      const res = await fetch("/api/blocks/mine");
+      const res = await fetch("/api/cohorts/blockedMine");
       if (!res.ok) return;
       const data = await res.json();
       setBlockedUserIds(new Set(data.blockedIds || []));
@@ -1545,7 +1545,7 @@ export const FieldPressMaster: React.FC = () => {
     const isCurrentlyBlocked = blockedUserIds.has(userId);
     setBlockActionPendingId(userId);
     try {
-      const res = await fetch(`/api/blocks/${isCurrentlyBlocked ? "unblock" : "block"}`, {
+      const res = await fetch(`/api/cohorts/${isCurrentlyBlocked ? "unblock" : "block"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

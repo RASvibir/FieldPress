@@ -1,15 +1,27 @@
-// Consolidated cohorts endpoint (one serverless function, routed by the
-// [action] dynamic segment, same pattern as api/auth/[action].mjs to stay
-// under Vercel's per-plan function cap):
+// Consolidated cohorts + blocks endpoint (one serverless function, routed
+// by the [action] dynamic segment, same pattern as api/auth/[action].mjs
+// to stay under Vercel's per-plan function cap):
 //   GET  /api/cohorts/directory   - browse/search real accounts
 //   POST /api/cohorts/request     - send a cohort request
 //   POST /api/cohorts/respond     - accept/decline an incoming request
 //   GET  /api/cohorts/mine        - my cohorts + incoming + outgoing requests
+//   POST /api/cohorts/block       - block another account
+//   POST /api/cohorts/unblock     - remove an existing block
+//   GET  /api/cohorts/blockedMine - list ids this account has blocked
 //
 // A "cohort" is not a separate row/table - it's simply an accepted
 // fieldpress_cohort_requests row (from either direction). This replaces
 // the old client-only-fake cohort system that let a user "establish a
 // cohort desk" out of typed-in text with no other real account involved.
+//
+// Blocking (closes #145) was originally its own api/blocks/[action].mjs
+// function; folded in here to stay under Vercel's per-plan serverless
+// function cap once api/messenger/[action].mjs pushed the count over the
+// limit. Blocking is one-directional and unilateral (no accept/decline,
+// unlike cohort requests) and shares this file's auth pattern, DB client,
+// and "relationship between two accounts" domain, so the merge is a
+// natural fit rather than a forced one. Its "mine" action is renamed to
+// "blockedMine" here to avoid colliding with this file's own /mine.
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../_lib/auth.mjs";
@@ -231,18 +243,83 @@ async function handleMine(req, res, me) {
   res.status(200).json({ cohorts, incoming, outgoing });
 }
 
+async function handleBlock(req, res, me) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  const blockedId = typeof req.body?.blockedId === "string" ? req.body.blockedId : "";
+  if (!blockedId) {
+    res.status(400).json({ error: "blockedId is required." });
+    return;
+  }
+  if (blockedId === me.id) {
+    res.status(400).json({ error: "You can't block yourself." });
+    return;
+  }
+
+  const [target] = await sql`SELECT id FROM fieldpress_accounts WHERE id = ${blockedId} LIMIT 1;`;
+  if (!target) {
+    res.status(404).json({ error: "That account doesn't exist." });
+    return;
+  }
+
+  await sql`
+    INSERT INTO fieldpress_blocks (blocker_id, blocked_id)
+    VALUES (${me.id}, ${blockedId})
+    ON CONFLICT (blocker_id, blocked_id) DO NOTHING;
+  `;
+
+  res.status(200).json({ blocked: true });
+}
+
+async function handleUnblock(req, res, me) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  const blockedId = typeof req.body?.blockedId === "string" ? req.body.blockedId : "";
+  if (!blockedId) {
+    res.status(400).json({ error: "blockedId is required." });
+    return;
+  }
+
+  await sql`
+    DELETE FROM fieldpress_blocks
+    WHERE blocker_id = ${me.id} AND blocked_id = ${blockedId};
+  `;
+
+  res.status(200).json({ blocked: false });
+}
+
+async function handleBlockedMine(req, res, me) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const rows = await sql`
+    SELECT blocked_id FROM fieldpress_blocks WHERE blocker_id = ${me.id};
+  `;
+
+  res.status(200).json({ blockedIds: rows.map((r) => r.blocked_id) });
+}
+
 const ACTIONS = {
   directory: handleDirectory,
   request: handleRequest,
   respond: handleRespond,
-  mine: handleMine
+  mine: handleMine,
+  block: handleBlock,
+  unblock: handleUnblock,
+  blockedMine: handleBlockedMine
 };
 
 export default async function handler(req, res) {
   const action = req.query?.action;
   const fn = typeof action === "string" ? ACTIONS[action] : undefined;
   if (!fn) {
-    res.status(404).json({ error: "Unknown cohorts action." });
+    res.status(404).json({ error: "Unknown cohorts/blocks action." });
     return;
   }
 
