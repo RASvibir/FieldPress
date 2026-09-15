@@ -87,6 +87,7 @@ import {
   Smile,
   Paperclip,
   Bot,
+  SquarePen,
   LogIn,
   UserPlus,
   LogOut,
@@ -592,21 +593,27 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
 
 export const FieldPressMaster: React.FC = () => {
   // Pressy'o AI Newsroom Copilot State
+  const PRESSYO_GREETING = "Greetings Bureau Chief! I am Pressy'o, your autonomous field newsroom assistant. I can draft dispatches across all 5 edition styles (Broadsheet, Comic, Arcade, Tactical, Sleek), generate Pollinations visual prompts, or fact-check your corridor telemetry. How can I assist your reporting today?";
+  type PressyoMessage = { sender: "user" | "pressyo"; text: string; actionData?: { title: string; content: string; style: "newspaper" | "comic" | "arcade" | "tactical" | "magazine"; prompt?: string } };
   const [showPressyoModal, setShowPressyoModal] = useState(false);
   const [pressyoInput, setPressyoInput] = useState("");
   const [isPressyoLoading, setIsPressyoLoading] = useState(false);
-  const [pressyoChat, setPressyoChat] = useState<Array<{ sender: "user" | "pressyo"; text: string; actionData?: { title: string; content: string; style: "newspaper" | "comic" | "arcade" | "tactical" | "magazine"; prompt?: string } }>>(() => {
+  const [pressyoChat, setPressyoChat] = useState<PressyoMessage[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressyo_chat");
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      {
-        sender: "pressyo",
-        text: "Greetings Bureau Chief! I am Pressy'o, your autonomous field newsroom assistant. I can draft dispatches across all 5 edition styles (Broadsheet, Comic, Arcade, Tactical, Sleek), generate Pollinations visual prompts, or fact-check your corridor telemetry. How can I assist your reporting today?"
-      }
-    ];
+    return [{ sender: "pressyo", text: PRESSYO_GREETING }];
   });
+
+  const handleNewPressyoChat = () => {
+    const fresh: PressyoMessage[] = [{ sender: "pressyo", text: PRESSYO_GREETING }];
+    setPressyoChat(fresh);
+    setPressyoInput("");
+    try {
+      localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(fresh));
+    } catch {}
+  };
 
   // User Registration State for Genuine Field Correspondents
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -6993,61 +7000,88 @@ ${shareUrl}`;
       {/* ========================================================================= */}
       {showPressyoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md font-sans">
-          <div className={`w-full max-w-2xl h-[80vh] max-h-[660px] rounded-2xl border shadow-2xl flex flex-col overflow-hidden transition ${
+          <div className={`w-full max-w-2xl h-[85vh] max-h-[720px] rounded-2xl border shadow-2xl flex flex-col overflow-hidden transition ${
             isDark ? "bg-zinc-900 border-amber-500/50 text-zinc-100" : "bg-white border-amber-500/40 text-zinc-900"
           }`}>
-            {/* Pressy'o Header */}
+            {/* Pressy'o Header — large, clear crest + New Chat / Close */}
             <div className={`p-4 border-b flex items-center justify-between flex-shrink-0 ${borderThemeClass} ${
               isDark ? "bg-zinc-950/80" : "bg-amber-50/60"
             }`}>
-              <div className="flex items-center gap-3">
-                <img src="/pressyo-icon.jpg" alt="Pressy'O Crest" className="w-10 h-10 rounded-xl object-cover border-2 border-amber-500 shadow-md bg-white flex-shrink-0" />
-                <div>
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="relative flex-shrink-0">
+                  <img
+                    src="/pressyo-icon.jpg"
+                    alt="Pressy'O Crest"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500 shadow-lg bg-white"
+                  />
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-zinc-950" title="Online" />
+                </div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="font-mono text-sm font-bold text-amber-500">
-                      Pressy'o • Autonomous Field Editor
+                    <h2 className="font-mono text-base font-bold text-amber-500 truncate">
+                      Pressy'o
                     </h2>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold flex-shrink-0">
                       COPILOT
                     </span>
                   </div>
-                  <p className={`text-[11px] ${subTextThemeClass}`}>
-                    AI assistant for story drafting, Pollinations prompt writing, and telemetry verification.
+                  <p className={`text-xs font-mono ${subTextThemeClass}`}>Autonomous Field Editor</p>
+                  <p className={`text-[11px] mt-0.5 truncate ${subTextThemeClass}`}>
+                    Story drafting, Pollinations prompts &amp; telemetry checks
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowPressyoModal(false)}
-                className="p-1.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleNewPressyoChat}
+                  title="Start a new chat"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-semibold transition cursor-pointer ${
+                    isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-300" : "border-zinc-300 hover:bg-zinc-100 text-zinc-700"
+                  }`}
+                >
+                  <SquarePen className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">New Chat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPressyoModal(false)}
+                  className="p-1.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Pressy'o Quick Action Chips */}
-            <div className={`p-2.5 border-b flex flex-wrap gap-1.5 text-xs font-mono ${borderThemeClass} ${
-              isDark ? "bg-zinc-950/40" : "bg-zinc-100"
-            }`}>
-              <span className="text-[10px] text-zinc-400 flex items-center mr-1">Quick Draft:</span>
-              {[
-                { label: "📰 Broadsheet Story", query: "Draft a 1920s Broadsheet newspaper dispatch about regional railroad electrification" },
-                { label: "💥 Comic Strip", query: "Draft a superhero Comic Strip dispatch about defeating signal jammers" },
-                { label: "🕹️ 8-Bit Arcade", query: "Draft an 8-bit arcade telemetry story about optical fiber splice rings" },
-                { label: "🛰️ Tactical Intel", query: "Compile a tactical intelligence reconnaissance report on autonomous micro-substations" },
-                { label: "🎨 Visual Prompt", query: "Generate a high-detail Pollinations visual prompt for an infrastructure photojournalism still" }
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => handlePressyoSend(chip.query)}
-                  disabled={isPressyoLoading}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-semibold transition cursor-pointer shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
+            {/* Quick Draft — only shown for a fresh chat, so it doesn't
+                clutter an in-progress conversation */}
+            {pressyoChat.length <= 1 && (
+              <div className={`p-3 border-b grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono ${borderThemeClass} ${
+                isDark ? "bg-zinc-950/40" : "bg-zinc-100"
+              }`}>
+                {[
+                  { emoji: "📰", label: "Broadsheet Story", query: "Draft a 1920s Broadsheet newspaper dispatch about regional railroad electrification" },
+                  { emoji: "💥", label: "Comic Strip", query: "Draft a superhero Comic Strip dispatch about defeating signal jammers" },
+                  { emoji: "🕹️", label: "8-Bit Arcade", query: "Draft an 8-bit arcade telemetry story about optical fiber splice rings" },
+                  { emoji: "🛰️", label: "Tactical Intel", query: "Compile a tactical intelligence reconnaissance report on autonomous micro-substations" },
+                  { emoji: "🎨", label: "Visual Prompt", query: "Generate a high-detail Pollinations visual prompt for an infrastructure photojournalism still" }
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => handlePressyoSend(chip.query)}
+                    disabled={isPressyoLoading}
+                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      isDark ? "bg-zinc-900 border-zinc-800 hover:border-amber-500/40 hover:bg-amber-500/5" : "bg-white border-zinc-200 hover:border-amber-400/60 hover:bg-amber-50"
+                    }`}
+                  >
+                    <span className="text-base flex-shrink-0">{chip.emoji}</span>
+                    <span className="text-amber-500 font-semibold text-[11px] leading-tight">{chip.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Chat Stream */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -7057,9 +7091,9 @@ ${shareUrl}`;
                   className={`flex gap-3 ${msg.sender === "user" ? "flex-row-reverse" : "flex-row"} items-start`}
                 >
                   {msg.sender === "pressyo" ? (
-                    <img src="/pressyo-icon.jpg" alt="Pressy'O" className="w-8 h-8 rounded-xl object-cover border border-amber-500/50 shadow-xs flex-shrink-0 bg-white" />
+                    <img src="/pressyo-icon.jpg" alt="Pressy'O" className="w-9 h-9 rounded-xl object-cover border border-amber-500/50 shadow-xs flex-shrink-0 bg-white" />
                   ) : (
-                    <div className="w-8 h-8 rounded-xl bg-zinc-800 text-zinc-200 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-zinc-700">
+                    <div className="w-9 h-9 rounded-xl bg-zinc-800 text-zinc-200 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-zinc-700">
                       You
                     </div>
                   )}
@@ -7110,7 +7144,7 @@ ${shareUrl}`;
                   <img
                     src="/pressyo-icon.jpg"
                     alt="Pressy'O drafting"
-                    className="w-8 h-8 rounded-xl object-cover border border-amber-500/80 shadow-md bg-white animate-pulse flex-shrink-0"
+                    className="w-9 h-9 rounded-xl object-cover border border-amber-500/80 shadow-md bg-white animate-pulse flex-shrink-0"
                   />
                   <div className={`rounded-2xl p-3.5 text-xs sm:text-sm border shadow-xs rounded-tl-xs ${
                     isDark ? "bg-zinc-800/90 border-zinc-700 text-zinc-400" : "bg-zinc-100 border-zinc-300 text-zinc-500"
