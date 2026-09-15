@@ -1160,6 +1160,7 @@ export const FieldPressMaster: React.FC = () => {
   const handleSendMessengerMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()) return;
+    if (blockedUserIds.has(activeChatId)) return;
 
     const newMsg: FieldMessage = {
       id: `msg-${Date.now()}`,
@@ -1359,6 +1360,62 @@ export const FieldPressMaster: React.FC = () => {
     if (authAccount) loadMyCohorts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authAccount?.id]);
+
+  // Block/mute (closes issue #145 -- no block/mute mechanism existed for
+  // other users, in messenger or cohorts). One-directional and unilateral:
+  // no accept/decline. Enforcement is client-side (hide from contact list,
+  // disable sending) since messenger history has no server-side table to
+  // enforce against directly.
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [blockActionPendingId, setBlockActionPendingId] = useState<string | null>(null);
+
+  const loadMyBlocks = async () => {
+    if (!authAccount) return;
+    try {
+      const res = await fetch("/api/blocks/mine");
+      if (!res.ok) return;
+      const data = await res.json();
+      setBlockedUserIds(new Set(data.blockedIds || []));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (authAccount) loadMyBlocks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
+
+  const handleToggleBlock = async (userId: string) => {
+    const isCurrentlyBlocked = blockedUserIds.has(userId);
+    setBlockActionPendingId(userId);
+    try {
+      const res = await fetch(`/api/blocks/${isCurrentlyBlocked ? "unblock" : "block"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ blockedId: userId })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSavedSuccessToast(body.error || "Couldn't update block.");
+      } else {
+        setBlockedUserIds((prev) => {
+          const next = new Set(prev);
+          if (isCurrentlyBlocked) next.delete(userId);
+          else next.add(userId);
+          return next;
+        });
+        setSavedSuccessToast(isCurrentlyBlocked ? "Unblocked." : "Blocked. They're hidden from your messenger.");
+        if (!isCurrentlyBlocked && activeChatId === userId) {
+          setActiveChatId("midwest-bureau");
+        }
+      }
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setSavedSuccessToast("Network error updating block.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+    setBlockActionPendingId(null);
+  };
 
   const searchCohortDirectory = async (query: string) => {
     if (!authAccount) return;
@@ -5718,6 +5775,7 @@ ${shareUrl}`;
               {/* Conversation list — people only, no jargon */}
               <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-2">
                 {registeredUsers
+                  .filter((u) => !blockedUserIds.has(u.id))
                   .filter((u) =>
                     !messengerSearchQuery.trim() ||
                     u.name.toLowerCase().includes(messengerSearchQuery.toLowerCase()) ||
@@ -5818,14 +5876,31 @@ ${shareUrl}`;
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowMessengerModal(false)}
-                      className="p-1.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
-                      title="Close messages"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {activeUser && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBlock(activeUser.id)}
+                          disabled={blockActionPendingId === activeUser.id}
+                          className={`px-2 py-1.5 rounded-lg border text-[11px] font-mono transition cursor-pointer disabled:opacity-50 ${
+                            blockedUserIds.has(activeUser.id)
+                              ? "border-rose-500 bg-rose-500/10 text-rose-300"
+                              : "border-zinc-700/60 hover:bg-rose-500/10 hover:border-rose-500/40 text-zinc-400 hover:text-rose-400"
+                          }`}
+                          title={blockedUserIds.has(activeUser.id) ? "Unblock this correspondent" : "Block this correspondent"}
+                        >
+                          {blockedUserIds.has(activeUser.id) ? "Unblock" : "Block"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowMessengerModal(false)}
+                        className="p-1.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
+                        title="Close messages"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })()}
