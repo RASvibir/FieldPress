@@ -980,6 +980,36 @@ export const FieldPressMaster: React.FC = () => {
       localStorage.setItem(`fieldpress_reacts_${storyId}`, JSON.stringify(nextReacts));
       localStorage.setItem(`fieldpress_user_react_${storyId}`, JSON.stringify(nextUser));
     } catch {}
+
+    // "Disputed" is server-backed (#146, #175 - a trust & safety signal
+    // needs to be a real per-account toggle, not a per-browser count) --
+    // everything above is optimistic UI; this reconciles with the source
+    // of truth. Other reaction keys stop here and stay client-side.
+    if (reactKey === "dispute" && authAccount) {
+      fetch("/api/reports/dispute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dispatchId: storyId })
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data) return;
+          setAllReacts((prev) => {
+            const merged = { ...prev, [storyId]: { ...(prev[storyId] || nextReacts), dispute: data.count } };
+            try { localStorage.setItem("fieldpress_all_reacts", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+          setAllUserReacts((prev) => {
+            const merged = { ...prev, [storyId]: { ...(prev[storyId] || nextUser), dispute: data.disputed } };
+            try { localStorage.setItem("fieldpress_all_user_reacts", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        })
+        .catch(() => {
+          // Network hiccup - the optimistic local toggle above still stands
+          // until the next successful sync.
+        });
+    }
   };
 
   // Report / flag intake (closes issue #144 -- no report mechanism existed
@@ -1219,7 +1249,7 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Settings Sub-tab
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system" | "admin">("quicklinks");
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system" | "admin" | "moderation">("quicklinks");
 
   // Press Pass State
   const [pressPass, setPressPass] = useState<PressPassData>(() => {
@@ -1320,6 +1350,68 @@ export const FieldPressMaster: React.FC = () => {
       setAdminUsersError("Network error updating role.");
     }
     setAdminRoleUpdatingId(null);
+  };
+
+  // --- Moderation queue (super_admin only): merges the reports intake
+  // (#144/#171, live since #180 but never had a UI consumer) with
+  // disputed dispatches (#146/#175, "Disputed" reaction crossing a
+  // threshold). Two independent server signals, one screen. ---
+  const [modReports, setModReports] = useState<Array<{
+    id: string; target_type: string; target_id: string; reason: string; details: string;
+    status: string; created_at: string; reporter_id: string; reporter_callsign: string;
+  }>>([]);
+  const [modDisputed, setModDisputed] = useState<Array<{
+    dispatch_id: string; dispute_count: number; last_disputed_at: string;
+  }>>([]);
+  const [modLoading, setModLoading] = useState(false);
+  const [modError, setModError] = useState("");
+  const [modResolvingId, setModResolvingId] = useState<string | null>(null);
+
+  const loadModerationData = async () => {
+    setModLoading(true);
+    setModError("");
+    try {
+      const [reportsRes, disputedRes] = await Promise.all([
+        fetch("/api/reports/queue"),
+        fetch("/api/reports/disputed")
+      ]);
+      const reportsData = await reportsRes.json();
+      const disputedData = await disputedRes.json();
+      if (!reportsRes.ok) {
+        setModError(reportsData.error || "Failed to load reports.");
+      } else {
+        setModReports(reportsData.reports || []);
+      }
+      if (disputedRes.ok) {
+        setModDisputed(disputedData.disputed || []);
+      }
+    } catch {
+      setModError("Network error loading the moderation queue.");
+    }
+    setModLoading(false);
+  };
+
+  const resolveReport = async (reportId: string, status: "reviewed" | "dismissed") => {
+    setModResolvingId(reportId);
+    try {
+      const res = await fetch("/api/reports/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId, status })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setModError(data.error || "Failed to resolve report.");
+        setModResolvingId(null);
+        return;
+      }
+      setModReports((prev) => prev.filter((r) => r.id !== reportId));
+      setSavedSuccessToast(status === "reviewed" ? "Report marked reviewed." : "Report dismissed.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setModError("Network error resolving report.");
+    }
+    setModResolvingId(null);
   };
 
   const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
@@ -6942,13 +7034,14 @@ ${shareUrl}`;
             <div className="flex border-b border-zinc-800 font-mono text-xs overflow-x-auto">
               {([
                 "quicklinks", "profile", "drafts", "bookmarks", "archives", "appearance", "system",
-                ...(authAccount?.role === "super_admin" ? ["admin" as const] : [])
+                ...(authAccount?.role === "super_admin" ? ["admin" as const, "moderation" as const] : [])
               ] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => {
                     setSettingsActiveTab(tab);
                     if (tab === "admin") loadAdminUsers();
+                    if (tab === "moderation") loadModerationData();
                   }}
                   className={`px-3 py-2 transition capitalize flex-shrink-0 cursor-pointer ${
                     settingsActiveTab === tab
@@ -7377,6 +7470,111 @@ ${shareUrl}`;
 
                   <p className={`text-[10px] leading-relaxed ${subTextThemeClass}`}>
                     Role changes take effect immediately and are enforced server-side. FieldPress always keeps at least one super admin — the last one can't be demoted.
+                  </p>
+                </div>
+              )}
+
+              {/* TAB: MODERATION — reports queue + disputed dispatches,
+                  super_admin only. Both signals are server-backed and
+                  re-checked server-side, same trust boundary as ADMIN. */}
+              {settingsActiveTab === "moderation" && authAccount?.role === "super_admin" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Moderation Queue</p>
+                    <button
+                      type="button"
+                      onClick={loadModerationData}
+                      disabled={modLoading}
+                      className="text-[10px] underline underline-offset-2 text-amber-400 hover:text-amber-300 disabled:opacity-50 cursor-pointer"
+                    >
+                      {modLoading ? "Refreshing..." : "Refresh"}
+                    </button>
+                  </div>
+
+                  {modError && (
+                    <div className="flex items-start gap-1.5 text-rose-500 text-[11px]">
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{modError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Open Reports ({modReports.length})</p>
+                    {modLoading && modReports.length === 0 ? (
+                      <p className={subTextThemeClass}>Loading reports...</p>
+                    ) : modReports.length === 0 ? (
+                      <p className={subTextThemeClass}>No open reports.</p>
+                    ) : (
+                      modReports.map((r) => {
+                        const busy = modResolvingId === r.id;
+                        return (
+                          <div key={r.id} className={`p-3 rounded-lg border space-y-1.5 ${subCardThemeClass}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-400 uppercase">
+                                {r.target_type}
+                              </span>
+                              <span className={`text-[10px] ${subTextThemeClass}`}>@{r.reporter_callsign}</span>
+                            </div>
+                            <p className="font-bold">{r.reason}</p>
+                            {r.details && <p className={subTextThemeClass}>{r.details}</p>}
+                            <p className={`text-[10px] ${subTextThemeClass}`}>Target: {r.target_id}</p>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => resolveReport(r.id, "reviewed")}
+                                className="text-[10px] underline underline-offset-2 text-emerald-400 hover:text-emerald-300 disabled:opacity-40 cursor-pointer"
+                              >
+                                {busy ? "Working..." : "Mark Reviewed"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => resolveReport(r.id, "dismissed")}
+                                className="text-[10px] underline underline-offset-2 text-zinc-400 hover:text-zinc-300 disabled:opacity-40 cursor-pointer"
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Disputed Dispatches ({modDisputed.length})</p>
+                    {modLoading && modDisputed.length === 0 ? (
+                      <p className={subTextThemeClass}>Loading...</p>
+                    ) : modDisputed.length === 0 ? (
+                      <p className={subTextThemeClass}>No dispatches over the dispute threshold.</p>
+                    ) : (
+                      modDisputed.map((d) => {
+                        const disp = dispatches.find((x) => x.id === d.dispatch_id);
+                        return (
+                          <button
+                            key={d.dispatch_id}
+                            type="button"
+                            onClick={() => {
+                              if (disp) {
+                                setSelectedStory(disp);
+                                setShowSettingsDrawer(false);
+                              }
+                            }}
+                            className={`w-full text-left p-3 rounded-lg border flex items-center justify-between gap-2 ${subCardThemeClass}`}
+                          >
+                            <span className="truncate font-bold">{disp ? disp.title : d.dispatch_id}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-400 flex-shrink-0">
+                              🔻 {d.dispute_count}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <p className={`text-[10px] leading-relaxed ${subTextThemeClass}`}>
+                    Reports are user-filed flags on a dispatch, comment, or user. Disputed dispatches are surfaced automatically once the "Disputed" reaction crosses a threshold. Neither takes automated action on the content itself.
                   </p>
                 </div>
               )}

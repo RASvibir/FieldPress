@@ -1,15 +1,23 @@
 // Consolidated reports endpoint (one serverless function, routed by the
 // [action] dynamic segment, same pattern as api/cohorts/[action].mjs and
 // api/admin/[action].mjs to stay under Vercel's per-plan function cap):
-//   POST /api/reports/submit  - file a report against a dispatch/comment/user
-//   GET  /api/reports/queue   - super_admin only: list open reports
-//   POST /api/reports/resolve - super_admin only: mark a report reviewed/dismissed
+//   POST /api/reports/submit         - file a report against a dispatch/comment/user
+//   GET  /api/reports/queue          - super_admin only: list open reports
+//   POST /api/reports/resolve        - super_admin only: mark a report reviewed/dismissed
+//   GET  /api/reports/disputed       - super_admin only: dispatches over the dispute threshold
+//   POST /api/reports/dispute        - toggle the caller's dispute flag on a dispatch
+//   GET  /api/reports/dispute-count  - dispute counts (+ caller's own flag) for dispatch ids
 //
 // This is intentionally an intake mechanism, not a full moderation system
 // (see Competitive & QA Handout Section 5 "Now" list / issue #171). It
 // does not take any automated action against reported content -- it just
 // makes reports visible and actionable to admins instead of nonexistent.
 // Closes issue #144.
+//
+// The dispute/dispute-count actions (#146, #175) live here rather than in
+// their own api/reactions function to stay under Vercel's per-deployment
+// serverless function cap -- they're the same "trust & safety signal"
+// domain as reports/disputed anyway.
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../_lib/auth.mjs";
@@ -86,6 +94,34 @@ async function handleQueue(req, res, me) {
   res.status(200).json({ reports: rows });
 }
 
+const DISPUTE_THRESHOLD = 3;
+
+// Surfaces dispatches whose "Disputed" reaction count has crossed a
+// threshold (#146, #175). Kept in this endpoint rather than a separate
+// one since it's the same super_admin moderation-queue audience as the
+// reports queue above, and the two are meant to render side by side.
+async function handleDisputed(req, res, me) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  if (me.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden." });
+    return;
+  }
+
+  const rows = await sql`
+    SELECT dispatch_id, COUNT(*)::int AS dispute_count, MAX(created_at) AS last_disputed_at
+    FROM fieldpress_dispute_reactions
+    GROUP BY dispatch_id
+    HAVING COUNT(*) >= ${DISPUTE_THRESHOLD}
+    ORDER BY COUNT(*) DESC
+    LIMIT 200;
+  `;
+
+  res.status(200).json({ disputed: rows, threshold: DISPUTE_THRESHOLD });
+}
+
 async function handleResolve(req, res, me) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -120,10 +156,84 @@ async function handleResolve(req, res, me) {
   res.status(200).json({ report: updated });
 }
 
+async function handleDisputeToggle(req, res, me) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const dispatchId = typeof req.body?.dispatchId === "string" ? req.body.dispatchId.trim() : "";
+  if (!dispatchId) {
+    res.status(400).json({ error: "dispatchId is required." });
+    return;
+  }
+
+  const existing = await sql`
+    SELECT id FROM fieldpress_dispute_reactions
+    WHERE dispatch_id = ${dispatchId} AND account_id = ${me.id}
+    LIMIT 1;
+  `;
+
+  let disputed;
+  if (existing.length > 0) {
+    await sql`DELETE FROM fieldpress_dispute_reactions WHERE id = ${existing[0].id};`;
+    disputed = false;
+  } else {
+    await sql`
+      INSERT INTO fieldpress_dispute_reactions (dispatch_id, account_id)
+      VALUES (${dispatchId}, ${me.id})
+      ON CONFLICT (dispatch_id, account_id) DO NOTHING;
+    `;
+    disputed = true;
+  }
+
+  const [{ count }] = await sql`
+    SELECT COUNT(*)::int AS count FROM fieldpress_dispute_reactions WHERE dispatch_id = ${dispatchId};
+  `;
+
+  res.status(200).json({ dispatchId, disputed, count });
+}
+
+async function handleDisputeCounts(req, res, me) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const raw = typeof req.query?.ids === "string" ? req.query.ids : "";
+  const ids = raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
+  if (ids.length === 0) {
+    res.status(200).json({ counts: {}, mine: {} });
+    return;
+  }
+
+  const rows = await sql`
+    SELECT dispatch_id, COUNT(*)::int AS count
+    FROM fieldpress_dispute_reactions
+    WHERE dispatch_id = ANY(${ids})
+    GROUP BY dispatch_id;
+  `;
+  const mineRows = await sql`
+    SELECT dispatch_id
+    FROM fieldpress_dispute_reactions
+    WHERE dispatch_id = ANY(${ids}) AND account_id = ${me.id};
+  `;
+
+  const counts = {};
+  rows.forEach((r) => { counts[r.dispatch_id] = r.count; });
+  const mine = {};
+  mineRows.forEach((r) => { mine[r.dispatch_id] = true; });
+
+  res.status(200).json({ counts, mine });
+}
+
 const ACTIONS = {
   submit: handleSubmit,
   queue: handleQueue,
-  resolve: handleResolve
+  resolve: handleResolve,
+  disputed: handleDisputed,
+  dispute: handleDisputeToggle,
+  "dispute-count": handleDisputeCounts
 };
 
 export default async function handler(req, res) {
