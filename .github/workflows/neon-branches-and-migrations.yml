@@ -1,7 +1,10 @@
-name: Neon preview branches & migrations
+name: Production schema push
 
 # Best-practice notes for maintainers:
-# - Preview branch create/delete uses Neon's official actions, not raw API calls.
+# - Neon's own GitHub App integration already creates/deletes a preview
+#   branch per PR automatically (confirmed via branch creation timestamps
+#   preceding any workflow run) - no workflow file is needed for that, and
+#   one was deliberately NOT added here to avoid duplicating it.
 # - This repo has NO drizzle migration journal (no `migrate`/`generate` scripts, no
 #   migrations-tracking table in the database) - only hand-written numbered SQL files
 #   in migrations/ applied ad hoc, plus a schema-diff "push" flow in lib/db (package
@@ -9,59 +12,28 @@ name: Neon preview branches & migrations
 #   flow rather than inventing a `migrate` command this repo doesn't otherwise use.
 # - Consider adopting drizzle-kit's generate+migrate journal as a follow-up so applied
 #   migrations are tracked in the database instead of relying on manual bookkeeping.
+# - `drizzle-kit push` without a TTY (as in CI) can hit an ambiguous-rename prompt,
+#   print "Interactive prompts require a TTY terminal", and still exit 0 - a known
+#   false-green failure mode. We tee output and explicitly fail on that string so a
+#   skipped schema change surfaces as a red CI run instead of a silent no-op.
+# - --force auto-accepts data-loss confirmations (column drops etc.) since there's no
+#   human in CI to answer them; review schema diffs in PR review before merge, since
+#   CI itself will not pause to ask.
 # - Push only ever runs against DATABASE_URL_UNPOOLED, matching drizzle.config.ts's
 #   own precedence (DATABASE_URL_UNPOOLED ?? DATABASE_URL).
-# - The schema-push job only fires on push to main AND only when the Drizzle schema
-#   changed, so unrelated merges don't touch the database.
-# - Requires repo secrets: NEON_API_KEY, NEON_PROJECT_ID (already configured via the
-#   Neon <> GitHub integration), and DATABASE_URL_UNPOOLED (production, direct/non-pooled).
+# - Only fires on push to main AND only when the Drizzle schema changed, so
+#   unrelated merges don't touch the database.
+# - Requires repo secret DATABASE_URL_UNPOOLED (production, direct/non-pooled;
+#   added 2026-09-15, points at neondb on ep-red-base-a6wm8ix9).
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
   push:
     branches: [main]
     paths:
       - "lib/db/src/schema/**"
 
 jobs:
-  create-branch:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Neon branch for PR
-        uses: neondatabase/create-branch-action@v6
-        id: create-branch
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          parent: main
-          branch_name: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Comment preview branch info on PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `Neon preview branch \`preview/pr-${{ github.event.number }}\` is ready.`
-            })
-
-  delete-branch:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete Neon branch for PR
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
   schema-push-production:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +44,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Push schema to production (drizzle-kit push)
-        run: pnpm --filter @workspace/db push
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          set -o pipefail
+          pnpm --filter @workspace/db push -- --force --verbose 2>&1 | tee push-output.log
+          if grep -qi "Interactive prompts require a TTY" push-output.log; then
+            echo "::error::drizzle-kit push hit an interactive prompt (ambiguous rename) it could not resolve non-interactively. Schema change was NOT applied. Resolve the ambiguity locally (run the push yourself and answer the prompt) or restructure the migration to avoid it."
+            exit 1
+          fi
