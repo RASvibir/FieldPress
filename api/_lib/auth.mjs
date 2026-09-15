@@ -20,7 +20,7 @@ export async function getAuthenticatedAccount(req) {
 
   const sql = getSql();
   const rows = await sql`
-    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role
+    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local
     FROM fieldpress_sessions s
     JOIN fieldpress_accounts a ON a.id = s.account_id
     WHERE s.token = ${token} AND s.expires_at > now()
@@ -64,13 +64,13 @@ export function parseCookies(req) {
 
 export function publicAccount(account) {
   if (!account) return null;
-  const { id, email, callsign, name, bureau, avatar_url, role } = account;
+  const { id, email, callsign, name, bureau, avatar_url, role, verified_local } = account;
   // NOTE: client-side account objects use avatarUrl (camelCase) throughout
   // (authAccount state, applyAccountToPressPass, etc.) - this used to leak
   // the raw snake_case avatar_url here instead, which meant every login,
   // signup, and /api/auth/me call silently set pressPass.avatarUrl to
   // undefined, wiping the user's photo on every fresh page load.
-  return { id, email, callsign, name, bureau, avatarUrl: avatar_url, role };
+  return { id, email, callsign, name, bureau, avatarUrl: avatar_url, role, verifiedLocal: !!verified_local };
 }
 
 export function isValidEmail(email) {

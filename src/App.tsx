@@ -1271,7 +1271,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // --- Real cross-device accounts (email + password) ---
   const [authAccount, setAuthAccount] = useState<{
-    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string;
+    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string; verifiedLocal?: boolean;
   } | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | "forgot" | "reset" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
@@ -1304,11 +1304,12 @@ export const FieldPressMaster: React.FC = () => {
   // --- Admin: role management panel (super_admin only) ---
   const [adminUsers, setAdminUsers] = useState<Array<{
     id: string; email: string; callsign: string; name: string; bureau: string;
-    avatar_url: string | null; role: string; created_at: string;
+    avatar_url: string | null; role: string; verified_local?: boolean; created_at: string;
   }>>([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [adminUsersError, setAdminUsersError] = useState("");
   const [adminRoleUpdatingId, setAdminRoleUpdatingId] = useState<string | null>(null);
+  const [adminVerifiedUpdatingId, setAdminVerifiedUpdatingId] = useState<string | null>(null);
 
   const loadAdminUsers = async () => {
     setAdminUsersLoading(true);
@@ -1350,6 +1351,30 @@ export const FieldPressMaster: React.FC = () => {
       setAdminUsersError("Network error updating role.");
     }
     setAdminRoleUpdatingId(null);
+  };
+
+  const toggleVerifiedLocal = async (accountId: string, verifiedLocal: boolean) => {
+    setAdminVerifiedUpdatingId(accountId);
+    setAdminUsersError("");
+    try {
+      const res = await fetch("/api/admin/toggle-verified", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, verifiedLocal })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminUsersError(data.error || "Failed to update verified-local status.");
+        setAdminVerifiedUpdatingId(null);
+        return;
+      }
+      setAdminUsers((prev) => prev.map((u) => (u.id === accountId ? { ...u, verified_local: data.account.verified_local } : u)));
+      setSavedSuccessToast(`${data.account.callsign} is ${data.account.verified_local ? "now a Verified Local Correspondent." : "no longer marked as verified local."}`);
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setAdminUsersError("Network error updating verified-local status.");
+    }
+    setAdminVerifiedUpdatingId(null);
   };
 
   // --- Moderation queue (super_admin only): merges the reports intake
@@ -4870,9 +4895,20 @@ export const FieldPressMaster: React.FC = () => {
 
                   <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between font-mono text-[10px]">
                     <span className="text-zinc-500">VALID: {editPassForm.issueDate}</span>
-                    <span className={`px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase ${currentAccent.badge}`}>
-                      ACTIVE CREDENTIAL
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {authAccount?.verifiedLocal && (
+                        <span
+                          title="Verified Local Correspondent: identity and local presence manually confirmed by a super admin."
+                          className="flex items-center gap-0.5 px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                        >
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          Verified Local
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase ${currentAccent.badge}`}>
+                        ACTIVE CREDENTIAL
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -7430,6 +7466,7 @@ ${shareUrl}`;
                         const isSuper = u.role === "super_admin";
                         const isSelf = u.id === authAccount.id;
                         const busy = adminRoleUpdatingId === u.id;
+                        const verifiedBusy = adminVerifiedUpdatingId === u.id;
                         return (
                           <div
                             key={u.id}
@@ -7460,6 +7497,20 @@ ${shareUrl}`;
                                 }`}
                               >
                                 {busy ? "Updating..." : isSuper ? "Demote" : "Promote"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={verifiedBusy}
+                                onClick={() => toggleVerifiedLocal(u.id, !u.verified_local)}
+                                title="Toggle the Verified Local Correspondent badge (independent of role)"
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  u.verified_local
+                                    ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                                    : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+                                }`}
+                              >
+                                <ShieldCheck className="h-3 w-3" />
+                                {verifiedBusy ? "Updating..." : u.verified_local ? "Verified Local" : "Mark Verified Local"}
                               </button>
                             </div>
                           </div>

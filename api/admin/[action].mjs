@@ -3,6 +3,7 @@
 // unchanged:
 //   GET  /api/admin/users
 //   POST /api/admin/update-role
+//   POST /api/admin/toggle-verified
 //
 // Merged from two separate files purely to stay under Vercel's per-plan
 // serverless function cap. Each handler below is otherwise unchanged.
@@ -30,7 +31,7 @@ async function handleUsers(req, res) {
     }
 
     const rows = await sql`
-      SELECT id, email, callsign, name, bureau, avatar_url, role, created_at
+      SELECT id, email, callsign, name, bureau, avatar_url, role, verified_local, created_at
       FROM fieldpress_accounts
       ORDER BY created_at ASC;
     `;
@@ -102,9 +103,64 @@ async function handleUpdateRole(req, res) {
   }
 }
 
+// Toggles the "Verified Local Correspondent" badge on an account. This is
+// independent of `role` -- a super_admin manually confirms a correspondent's
+// local presence/identity, and the flag is purely cosmetic (a badge on the
+// Press Pass card), so there's no "last verified account" guard like the
+// one update-role has for the last super_admin.
+async function handleToggleVerified(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  try {
+    const caller = await getAuthenticatedAccount(req);
+    if (!caller) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    if (caller.role !== "super_admin") {
+      res.status(403).json({ error: "Super admin access required." });
+      return;
+    }
+
+    const { accountId, verifiedLocal } = req.body || {};
+    if (typeof accountId !== "string" || !accountId.trim()) {
+      res.status(400).json({ error: "Missing accountId." });
+      return;
+    }
+    if (typeof verifiedLocal !== "boolean") {
+      res.status(400).json({ error: "verifiedLocal must be a boolean." });
+      return;
+    }
+
+    const targetRows = await sql`
+      SELECT id FROM fieldpress_accounts WHERE id = ${accountId} LIMIT 1;
+    `;
+    if (targetRows.length === 0) {
+      res.status(404).json({ error: "Account not found." });
+      return;
+    }
+
+    const [updated] = await sql`
+      UPDATE fieldpress_accounts
+      SET verified_local = ${verifiedLocal}
+      WHERE id = ${accountId}
+      RETURNING id, email, callsign, name, role, verified_local;
+    `;
+
+    console.log(`Verified-local change: ${caller.email} set ${updated.email} verified_local=${verifiedLocal}`);
+    res.status(200).json({ account: updated });
+  } catch (err) {
+    console.error("Admin toggle-verified error:", err);
+    res.status(500).json({ error: "Failed to update verified-local status." });
+  }
+}
+
 const ACTIONS = {
   users: handleUsers,
-  "update-role": handleUpdateRole
+  "update-role": handleUpdateRole,
+  "toggle-verified": handleToggleVerified
 };
 
 export default async function handler(req, res) {
