@@ -90,7 +90,10 @@ import {
   LogIn,
   UserPlus,
   LogOut,
-  Lock
+  Lock,
+  Mail,
+  ArrowLeft,
+  CheckCircle2
 } from "lucide-react";
 import * as maplibregl from "maplibre-gl";
 
@@ -1225,7 +1228,7 @@ export const FieldPressMaster: React.FC = () => {
   const [authAccount, setAuthAccount] = useState<{
     id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string;
   } | null>(null);
-  const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | "forgot" | "reset" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authCallsign, setAuthCallsign] = useState("");
@@ -1234,6 +1237,24 @@ export const FieldPressMaster: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [authAvatarFile, setAuthAvatarFile] = useState<File | null>(null);
   const authAvatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [authResetToken, setAuthResetToken] = useState("");
+  const [authResetSent, setAuthResetSent] = useState(false);
+  const [authResetDone, setAuthResetDone] = useState(false);
+
+  // Auto-open the reset modal if the user arrived via a reset-password
+  // email link (?reset_token=...). Runs once on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("reset_token");
+    if (token) {
+      setAuthResetToken(token);
+      setAuthModalMode("reset");
+      // Strip the token from the visible URL so it isn't re-shared/bookmarked.
+      params.delete("reset_token");
+      const rest = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, []);
 
   // --- Admin: role management panel (super_admin only) ---
   const [adminUsers, setAdminUsers] = useState<Array<{
@@ -1531,6 +1552,54 @@ export const FieldPressMaster: React.FC = () => {
       setAuthAvatarFile(null);
       setSavedSuccessToast(isSignup ? "Account created. You're signed in on this device." : "Signed in.");
       setTimeout(() => setSavedSuccessToast(""), 2500);
+    } catch {
+      setAuthError("Network error. Please try again.");
+    }
+    setAuthLoading(false);
+  };
+
+  const submitForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/request-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authEmail })
+      });
+      // Endpoint always returns a generic ok response by design, so we
+      // just show the "check your email" state regardless of outcome.
+      await res.json().catch(() => {});
+      setAuthResetSent(true);
+    } catch {
+      setAuthError("Network error. Please try again.");
+    }
+    setAuthLoading(false);
+  };
+
+  const submitResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    if (authPassword.length < 8) {
+      setAuthError("Password must be at least 8 characters.");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: authResetToken, password: authPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || "Something went wrong. Please try again.");
+        setAuthLoading(false);
+        return;
+      }
+      setAuthResetDone(true);
+      setAuthPassword("");
     } catch {
       setAuthError("Network error. Please try again.");
     }
@@ -4873,6 +4942,17 @@ export const FieldPressMaster: React.FC = () => {
                   className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
                   placeholder="••••••••"
                 />
+                {authModalMode === "signin" && (
+                  <button
+                    type="button"
+                    onClick={() => { setAuthModalMode("forgot"); setAuthError(""); setAuthResetSent(false); }}
+                    className={`text-[11px] underline underline-offset-2 cursor-pointer ${
+                      isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
 
               {authError && (
@@ -4906,6 +4986,164 @@ export const FieldPressMaster: React.FC = () => {
                   : "Need an account? Sign up"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot-password modal */}
+      {authModalMode === "forgot" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className={`w-full max-w-sm rounded-xl border shadow-2xl overflow-hidden transition ${
+            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono">
+                <Mail className="h-5 w-5 text-cyan-500" />
+                <h3 className="font-bold text-base">Reset Password</h3>
+              </div>
+              <button
+                onClick={() => { setAuthModalMode(null); setAuthError(""); setAuthResetSent(false); }}
+                className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-4 font-mono text-xs">
+              {authResetSent ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <p className={`text-[11px] leading-relaxed ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+                      If that email is registered, a reset link is on its way. Check your inbox — the link expires in 30 minutes.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthModalMode("signin"); setAuthError(""); setAuthResetSent(false); }}
+                    className="w-full px-4 py-2.5 rounded bg-cyan-500 text-zinc-950 font-bold hover:bg-cyan-400 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>Back to sign in</span>
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={submitForgotPassword} className="space-y-4">
+                  <p className={`text-[11px] leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                    Enter the email on your account and we'll send you a link to reset your password.
+                  </p>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>Email</label>
+                    <input
+                      type="email"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      required
+                      className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  {authError && (
+                    <div className="flex items-start gap-1.5 text-rose-500 text-[11px]">
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full px-4 py-2.5 rounded bg-cyan-500 text-zinc-950 font-bold hover:bg-cyan-400 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Mail className="h-4 w-4" />
+                    <span>{authLoading ? "Sending..." : "Send reset link"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthModalMode("signin"); setAuthError(""); }}
+                    className={`w-full text-center text-[11px] underline underline-offset-2 cursor-pointer ${
+                      isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    Back to sign in
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset-password modal (reached via emailed link) */}
+      {authModalMode === "reset" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className={`w-full max-w-sm rounded-xl border shadow-2xl overflow-hidden transition ${
+            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono">
+                <Lock className="h-5 w-5 text-cyan-500" />
+                <h3 className="font-bold text-base">Set New Password</h3>
+              </div>
+              <button
+                onClick={() => { setAuthModalMode(null); setAuthError(""); setAuthResetDone(false); }}
+                className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-4 font-mono text-xs">
+              {authResetDone ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <p className={`text-[11px] leading-relaxed ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+                      Your password has been reset. Sign in with your new password below.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthModalMode("signin"); setAuthError(""); setAuthResetDone(false); }}
+                    className="w-full px-4 py-2.5 rounded bg-cyan-500 text-zinc-950 font-bold hover:bg-cyan-400 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    <span>Sign in</span>
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={submitResetPassword} className="space-y-4">
+                  <p className={`text-[11px] leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                    Choose a new password for your account.
+                  </p>
+                  <div className="space-y-1">
+                    <label className={`block font-bold ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>New password</label>
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      className={`w-full px-3 py-2 rounded border text-xs font-mono ${inputThemeClass}`}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  {authError && (
+                    <div className="flex items-start gap-1.5 text-rose-500 text-[11px]">
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full px-4 py-2.5 rounded bg-cyan-500 text-zinc-950 font-bold hover:bg-cyan-400 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Lock className="h-4 w-4" />
+                    <span>{authLoading ? "Saving..." : "Set new password"}</span>
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}

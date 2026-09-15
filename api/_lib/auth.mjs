@@ -33,6 +33,13 @@ export function generateToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// Password-reset tokens are emailed to the user as the raw value but
+// stored in the DB only as this hash, so a DB read can't be replayed as
+// a valid reset link.
+export function hashResetToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 export function sessionCookieHeader(token) {
   return `${SESSION_COOKIE_NAME}=${token}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Lax`;
 }

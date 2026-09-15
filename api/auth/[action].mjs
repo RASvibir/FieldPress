@@ -13,6 +13,7 @@ import { neon } from "@neondatabase/serverless";
 import bcrypt from "bcryptjs";
 import {
   generateToken,
+  hashResetToken,
   sessionCookieHeader,
   clearCookieHeader,
   parseCookies,
@@ -22,6 +23,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "../_lib/auth.mjs";
+import { sendMail } from "../_lib/mailer.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "vibir@fieldpress.studio").toLowerCase();
@@ -136,6 +138,136 @@ async function handleLogin(req, res) {
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Login failed. Please try again." });
+  }
+}
+
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const RESET_RATE_LIMIT_MS = 60 * 1000; // 1 request per email per minute
+
+async function handleRequestReset(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  // Always return the same generic response regardless of whether the
+  // email exists, to avoid leaking which addresses are registered.
+  const genericResponse = { ok: true, message: "If that email is registered, a reset link has been sent." };
+  try {
+    const { email } = req.body || {};
+    if (!isValidEmail(email)) {
+      res.status(200).json(genericResponse);
+      return;
+    }
+
+    const rows = await sql`
+      SELECT id, email, name FROM fieldpress_accounts
+      WHERE lower(email) = lower(${email})
+      LIMIT 1;
+    `;
+    if (rows.length === 0) {
+      res.status(200).json(genericResponse);
+      return;
+    }
+    const account = rows[0];
+
+    const recent = await sql`
+      SELECT id FROM fieldpress_password_resets
+      WHERE account_id = ${account.id} AND created_at > now() - interval '60 seconds'
+      LIMIT 1;
+    `;
+    if (recent.length > 0) {
+      res.status(200).json(genericResponse);
+      return;
+    }
+
+    const rawToken = generateToken();
+    const tokenHash = hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString();
+
+    await sql`
+      INSERT INTO fieldpress_password_resets (account_id, token_hash, expires_at)
+      VALUES (${account.id}, ${tokenHash}, ${expiresAt});
+    `;
+
+    const appUrl = process.env.APP_URL || "https://fieldpress.studio";
+    const resetLink = `${appUrl}/?reset_token=${rawToken}`;
+
+    try {
+      await sendMail({
+        to: account.email,
+        subject: "Reset your FieldPress password",
+        text: `Hi ${account.name || ""},\n\nSomeone requested a password reset for this FieldPress account. If this was you, use the link below within 30 minutes:\n\n${resetLink}\n\nIf you didn't request this, you can ignore this email.`,
+        html: `<p>Hi ${account.name || ""},</p><p>Someone requested a password reset for this FieldPress account. If this was you, click below within 30 minutes:</p><p><a href="${resetLink}">Reset your password</a></p><p>If you didn't request this, you can ignore this email.</p>`
+      });
+    } catch (mailErr) {
+      // Don't leak mail-provider failures to the client - log and still
+      // return the generic success response.
+      console.error("Password reset email failed to send:", mailErr);
+    }
+
+    res.status(200).json(genericResponse);
+  } catch (err) {
+    console.error("Request-reset error:", err);
+    res.status(200).json(genericResponse);
+  }
+}
+
+async function handleResetPassword(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  try {
+    const { token, password } = req.body || {};
+    if (typeof token !== "string" || !token) {
+      res.status(400).json({ error: "Missing or invalid reset token." });
+      return;
+    }
+    if (typeof password !== "string" || password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters." });
+      return;
+    }
+
+    const tokenHash = hashResetToken(token);
+    const rows = await sql`
+      SELECT id, account_id, expires_at, used_at FROM fieldpress_password_resets
+      WHERE token_hash = ${tokenHash}
+      LIMIT 1;
+    `;
+    if (rows.length === 0) {
+      res.status(400).json({ error: "This reset link is invalid. Please request a new one." });
+      return;
+    }
+    const resetRow = rows[0];
+    if (resetRow.used_at) {
+      res.status(400).json({ error: "This reset link has already been used. Please request a new one." });
+      return;
+    }
+    if (new Date(resetRow.expires_at).getTime() < Date.now()) {
+      res.status(400).json({ error: "This reset link has expired. Please request a new one." });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await sql`
+      UPDATE fieldpress_accounts SET password_hash = ${passwordHash}
+      WHERE id = ${resetRow.account_id};
+    `;
+    await sql`
+      UPDATE fieldpress_password_resets SET used_at = now()
+      WHERE id = ${resetRow.id};
+    `;
+    // Invalidate all existing sessions for this account so a stolen
+    // session cookie doesn't survive a password reset.
+    await sql`
+      DELETE FROM fieldpress_sessions WHERE account_id = ${resetRow.account_id};
+    `;
+
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("Reset-password error:", err);
+    res.status(500).json({ error: "Failed to reset password. Please try again." });
   }
 }
 
@@ -256,7 +388,9 @@ const ACTIONS = {
   login: handleLogin,
   logout: handleLogout,
   me: handleMe,
-  "update-profile": handleUpdateProfile
+  "update-profile": handleUpdateProfile,
+  "request-reset": handleRequestReset,
+  "reset-password": handleResetPassword
 };
 
 export default async function handler(req, res) {
