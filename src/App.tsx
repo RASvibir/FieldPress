@@ -162,19 +162,6 @@ export const DEFAULT_PRESS_PASS: PressPassData = {
   isAdmin: false
 };
 
-export interface CorrespondentUser {
-  id: string;
-  name: string;
-  callsign: string;
-  email: string;
-  role: string;
-  bureau: string;
-  location: string;
-  pressPassAvatar: string;
-  isLinked: boolean;
-  isAdmin: boolean;
-}
-
 export interface Dispatch {
   id: string;
   accountId?: string;
@@ -615,73 +602,6 @@ export const FieldPressMaster: React.FC = () => {
     } catch {}
   };
 
-  // User Registration State for Genuine Field Correspondents
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [regName, setRegName] = useState("");
-  const [regCallsign, setRegCallsign] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regBureau, setRegBureau] = useState("Midwest Corridor");
-  const [regLocation, setRegLocation] = useState("Danville, IL");
-  const [regAvatar, setRegAvatar] = useState("");
-
-  // Legacy client-only directory, predating the real Neon-backed accounts
-  // system. It no longer seeds a hardcoded admin user or grants isAdmin by
-  // callsign (that was a local-only flag disconnected from the server's
-  // actual role check, and matched "vibir"/"ras.ip" specifically — a
-  // stale backdoor with no purpose now that /api/admin/* enforces
-  // authAccount.role === "super_admin" server-side).
-  const [registeredUsers, setRegisteredUsers] = useState<CorrespondentUser[]>(() => {
-    try {
-      const saved = localStorage.getItem("fieldpress_registered_users");
-      if (saved) {
-        const parsed = JSON.parse(saved) as CorrespondentUser[];
-        if (Array.isArray(parsed)) {
-          return parsed.map((u) => ({ ...u, isAdmin: false }));
-        }
-      }
-    } catch {}
-    return [];
-  });
-
-  const handleRegisterCorrespondent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regName.trim() || !regCallsign.trim() || !regEmail.trim()) {
-      setFormValidationError("Please provide name, callsign, and email.");
-      return;
-    }
-
-    const cleanCallsign = regCallsign.trim().replace(/^@/, "");
-    // Admin status is never granted here — it's server-side only
-    // (fieldpress_accounts.role, set via /api/admin/update-role).
-
-    const newUser: CorrespondentUser = {
-      id: `usr-${Date.now()}`,
-      name: regName.trim(),
-      callsign: cleanCallsign,
-      email: regEmail.trim(),
-      role: "Field Correspondent",
-      bureau: regBureau.trim() || "Midwest Corridor",
-      location: regLocation.trim() || "Danville, IL",
-      pressPassAvatar: regAvatar.trim() || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-      isLinked: true,
-      isAdmin: false
-    };
-
-    const updated = [...registeredUsers.filter((u) => u.email !== newUser.email), newUser];
-    setRegisteredUsers(updated);
-    try {
-      localStorage.setItem("fieldpress_registered_users", JSON.stringify(updated));
-    } catch {}
-
-    setRegName("");
-    setRegCallsign("");
-    setRegEmail("");
-    setRegAvatar("");
-    setShowRegisterModal(false);
-    setSavedSuccessToast(`Correspondent @${cleanCallsign} registered & linked.`);
-    setTimeout(() => setSavedSuccessToast(""), 2500);
-  };
-
   const inferEditionStyle = (text: string): "newspaper" | "comic" | "arcade" | "tactical" | "magazine" => {
     const lower = text.toLowerCase();
     if (lower.includes("comic") || lower.includes("kapow") || lower.includes("hero")) return "comic";
@@ -1067,10 +987,11 @@ export const FieldPressMaster: React.FC = () => {
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
   const [cohortDirectoryQuery, setCohortDirectoryQuery] = useState("");
-  const [cohortDirectoryResults, setCohortDirectoryResults] = useState<Array<{
+  type DirectoryUser = {
     id: string; callsign: string; name: string; bureau: string; avatarUrl?: string;
     relation: "none" | "pending_sent" | "pending_received" | "cohort"; requestId: string | null;
-  }>>([]);
+  };
+  const [cohortDirectoryResults, setCohortDirectoryResults] = useState<DirectoryUser[]>([]);
   const [cohortDirectoryLoading, setCohortDirectoryLoading] = useState(false);
   const [cohortActionPendingId, setCohortActionPendingId] = useState<string | null>(null);
 
@@ -1482,6 +1403,100 @@ export const FieldPressMaster: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Real DM threads + history (cohort-gated, text-only for v1 — the
+  // messenger schema has no attachment columns). Group chat ("midwest-
+  // bureau") is explicitly out of scope for this rewire and stays on the
+  // old fake/local messengerMessages system below.
+  type MessengerThread = {
+    user: { id: string; callsign: string; name: string; bureau: string; avatarUrl?: string };
+    lastMessage: { body: string; senderId: string; createdAt: string } | null;
+    unreadCount: number;
+  };
+  type RealMessage = { id: string; senderId: string; body: string; readAt: string | null; createdAt: string };
+  const [messengerThreads, setMessengerThreads] = useState<MessengerThread[]>([]);
+  const [realMessages, setRealMessages] = useState<RealMessage[]>([]);
+  const [realThreadLoading, setRealThreadLoading] = useState(false);
+  const [realMessageSending, setRealMessageSending] = useState(false);
+
+  const loadMessengerThreads = async () => {
+    if (!authAccount) return;
+    try {
+      const res = await fetch("/api/messenger/threads");
+      if (!res.ok) return;
+      const data = await res.json();
+      setMessengerThreads(data.threads || []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (authAccount) loadMessengerThreads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
+
+  const GROUP_CHAT_ID = "midwest-bureau";
+
+  const loadRealThread = async (withId: string) => {
+    setRealThreadLoading(true);
+    try {
+      const res = await fetch(`/api/messenger/thread?withId=${encodeURIComponent(withId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRealMessages(data.messages || []);
+      } else {
+        setRealMessages([]);
+      }
+    } catch {
+      setRealMessages([]);
+    }
+    setRealThreadLoading(false);
+  };
+
+  const markThreadRead = async (withId: string) => {
+    try {
+      await fetch("/api/messenger/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withId })
+      });
+      setMessengerThreads((prev) => prev.map((t) => (t.user.id === withId ? { ...t, unreadCount: 0 } : t)));
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (authAccount && activeChatId && activeChatId !== GROUP_CHAT_ID) {
+      loadRealThread(activeChatId);
+      markThreadRead(activeChatId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId, authAccount?.id]);
+
+  const sendRealMessage = async (recipientId: string, body: string) => {
+    const cleanBody = body.trim();
+    if (!cleanBody) return;
+    setRealMessageSending(true);
+    try {
+      const res = await fetch("/api/messenger/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientId, body: cleanBody })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSavedSuccessToast(data.error || "Couldn't send that message.");
+        setTimeout(() => setSavedSuccessToast(""), 2500);
+      } else {
+        setRealMessages((prev) => [...prev, data.message]);
+        setMessengerInput("");
+        loadMessengerThreads();
+      }
+    } catch {
+      setSavedSuccessToast("Network error sending message.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+    setRealMessageSending(false);
+  };
+
+
   // Real cohorts (accepted mutual requests) + pending requests, sourced
   // from the Neon-backed accounts system. Replaces the old system where
   // "establishing a cohort" just wrote a made-up entity into localStorage
@@ -1495,27 +1510,6 @@ export const FieldPressMaster: React.FC = () => {
       setCohorts(data.cohorts || []);
       setIncomingCohortRequests(data.incoming || []);
       setOutgoingCohortRequests(data.outgoing || []);
-      // Merge accepted cohorts into the messenger's contact list so they're
-      // immediately messageable, using the same shape/mechanism the rest
-      // of the messenger UI already relies on.
-      setRegisteredUsers((prev) => {
-        const byId = new Map(prev.map((u) => [u.id, u]));
-        for (const c of (data.cohorts || [])) {
-          byId.set(c.user.id, {
-            id: c.user.id,
-            name: c.user.name,
-            callsign: c.user.callsign,
-            email: "",
-            role: "Field Correspondent",
-            bureau: c.user.bureau || "",
-            location: "",
-            pressPassAvatar: c.user.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(c.user.callsign)}`,
-            isLinked: true,
-            isAdmin: false
-          });
-        }
-        return Array.from(byId.values());
-      });
     } catch {}
   };
 
@@ -1580,6 +1574,24 @@ export const FieldPressMaster: React.FC = () => {
     setBlockActionPendingId(null);
   };
 
+  // Full, unfiltered directory (relation === "none" entries only matter
+  // for suggestions) — loaded once per session for the Discover tab's
+  // "suggested cohorts" scoring, separate from the query-driven directory
+  // search box which re-fetches on every keystroke.
+  const [directoryAll, setDirectoryAll] = useState<DirectoryUser[]>([]);
+  const loadDirectoryAll = async () => {
+    try {
+      const res = await fetch("/api/cohorts/directory");
+      if (!res.ok) return;
+      const data = await res.json();
+      setDirectoryAll(data.users || []);
+    } catch {}
+  };
+  useEffect(() => {
+    if (authAccount) loadDirectoryAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
+
   const searchCohortDirectory = async (query: string) => {
     if (!authAccount) return;
     setCohortDirectoryLoading(true);
@@ -1605,6 +1617,9 @@ export const FieldPressMaster: React.FC = () => {
       } else {
         setSavedSuccessToast("Cohort request sent.");
         setCohortDirectoryResults((prev) =>
+          prev.map((u) => (u.id === recipientId ? { ...u, relation: "pending_sent", requestId: data.request.id } : u))
+        );
+        setDirectoryAll((prev) =>
           prev.map((u) => (u.id === recipientId ? { ...u, relation: "pending_sent", requestId: data.request.id } : u))
         );
         loadMyCohorts();
@@ -1910,26 +1925,6 @@ export const FieldPressMaster: React.FC = () => {
     }
   };
 
-  // --- Suggested Correspondents: people who've actually engaged with your
-  // dispatches (commented) but aren't linked yet — a real "meet people"
-  // signal drawn from existing interaction data, not a synthetic feed.
-  const suggestedCorrespondents = (() => {
-    const seen = new Set<string>();
-    const suggestions: { name: string; callsign: string }[] = [];
-    for (const [dispId, comments] of Object.entries(allComments)) {
-      if (!dispatches.some((d) => d.id === dispId && (d.author === pressPass.name || d.callsign === pressPass.callsign))) continue;
-      for (const c of comments) {
-        if (c.callsign === pressPass.callsign) continue;
-        if (seen.has(c.callsign)) continue;
-        const existing = registeredUsers.find((u) => u.callsign.toLowerCase() === c.callsign.toLowerCase());
-        if (existing?.isLinked) continue;
-        seen.add(c.callsign);
-        suggestions.push({ name: c.author, callsign: c.callsign });
-      }
-    }
-    return suggestions.slice(0, 6);
-  })();
-
   // --- Suggested Cohorts: people to meet, ranked by real activity overlap
   // (comments on shared dispatches) plus shared beat/category interest.
   // Never surfaces anyone's precise location — only their general bureau,
@@ -1961,7 +1956,7 @@ export const FieldPressMaster: React.FC = () => {
       });
     });
 
-    const candidates = registeredUsers.filter((u) => !u.isLinked && u.callsign !== pressPass.callsign);
+    const candidates = directoryAll.filter((u) => u.relation === "none" && u.callsign !== pressPass.callsign);
 
     const scored = candidates.map((u) => {
       // Shared categories: what this person has posted or commented on
@@ -1994,52 +1989,48 @@ export const FieldPressMaster: React.FC = () => {
       .slice(0, 8);
   })();
 
-  // --- Correspondent card: click any commenter's identity to view/link them ---
+  // --- Correspondent card: click any commenter's identity to view/request a
+  // cohort with them. Comments only carry {name, callsign} text (no
+  // accountId), so on open we resolve the callsign against the real
+  // account directory to find the actual fieldpress_accounts.id and
+  // current relation (none / pending_sent / pending_received / cohort)
+  // before offering any action. This replaces the old fake system, which
+  // never needed a real account since it just wrote a synthetic local
+  // user into localStorage on click.
   const [correspondentPopover, setCorrespondentPopover] = useState<{ name: string; callsign: string } | null>(null);
+  const [correspondentResolved, setCorrespondentResolved] = useState<DirectoryUser | null>(null);
+  const [correspondentResolveState, setCorrespondentResolveState] = useState<"idle" | "loading" | "found" | "not_found">("idle");
 
   const openCorrespondentFromComment = (name: string, callsign: string) => {
     if (callsign === pressPass.callsign) return; // don't offer to link yourself
     setCorrespondentPopover({ name, callsign });
+    setCorrespondentResolved(null);
+    setCorrespondentResolveState("loading");
+    fetch(`/api/cohorts/directory?query=${encodeURIComponent(callsign)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        const match = (data.users || []).find(
+          (u: DirectoryUser) => u.callsign.toLowerCase() === callsign.toLowerCase()
+        );
+        if (match) {
+          setCorrespondentResolved(match);
+          setCorrespondentResolveState("found");
+        } else {
+          setCorrespondentResolveState("not_found");
+        }
+      })
+      .catch(() => setCorrespondentResolveState("not_found"));
   };
 
-  const resolveCorrespondent = (callsign: string): CorrespondentUser | null =>
-    registeredUsers.find((u) => u.callsign.toLowerCase() === callsign.toLowerCase()) || null;
-
-  const linkCorrespondent = (name: string, callsign: string) => {
-    const existing = resolveCorrespondent(callsign);
-    let updated: CorrespondentUser[];
-    if (existing) {
-      updated = registeredUsers.map((u) => (u.id === existing.id ? { ...u, isLinked: true } : u));
-    } else {
-      const newUser: CorrespondentUser = {
-        id: `usr-${callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-        name,
-        callsign,
-        email: "",
-        role: "Field Correspondent",
-        bureau: "Midwest Corridor Wire",
-        location: "",
-        pressPassAvatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(callsign)}`,
-        isLinked: true,
-        isAdmin: false
-      };
-      updated = [...registeredUsers, newUser];
-    }
-    setRegisteredUsers(updated);
-    try {
-      localStorage.setItem("fieldpress_registered_users", JSON.stringify(updated));
-    } catch {}
-    setSavedSuccessToast(`@${callsign} linked as a correspondent.`);
-    setTimeout(() => setSavedSuccessToast(""), 2500);
+  const requestCohortFromPopover = () => {
+    if (!correspondentResolved) return;
+    sendCohortRequest(correspondentResolved.id);
+    setCorrespondentResolved({ ...correspondentResolved, relation: "pending_sent" });
   };
 
-  const messageCorrespondent = (name: string, callsign: string) => {
-    let user = resolveCorrespondent(callsign);
-    if (!user) {
-      linkCorrespondent(name, callsign);
-      user = { id: `usr-${callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}` } as CorrespondentUser;
-    }
-    setActiveChatId(user.id);
+  const messageFromPopover = () => {
+    if (!correspondentResolved || correspondentResolved.relation !== "cohort") return;
+    setActiveChatId(correspondentResolved.id);
     setCorrespondentPopover(null);
     setShowMessengerModal(true);
   };
@@ -4401,7 +4392,7 @@ export const FieldPressMaster: React.FC = () => {
                     <div key={u.id} className={`p-4 rounded-xl border ${subCardThemeClass}`}>
                       <div className="flex items-start gap-3">
                         <img
-                          src={u.pressPassAvatar}
+                          src={u.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.callsign)}`}
                           alt={u.name}
                           className="w-11 h-11 rounded-full object-cover flex-shrink-0"
                         />
@@ -4432,19 +4423,11 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="flex items-center gap-2 mt-3">
                         <button
                           type="button"
-                          onClick={() => linkCorrespondent(u.name, u.callsign)}
-                          className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition cursor-pointer"
+                          onClick={() => sendCohortRequest(u.id)}
+                          disabled={cohortActionPendingId === u.id}
+                          className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition cursor-pointer disabled:opacity-60"
                         >
-                          Connect
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => messageCorrespondent(u.name, u.callsign)}
-                          className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition cursor-pointer ${
-                            isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-300" : "border-zinc-300 hover:bg-zinc-100 text-zinc-700"
-                          }`}
-                        >
-                          Message
+                          {cohortActionPendingId === u.id ? "Sending..." : "Request Cohort"}
                         </button>
                       </div>
                     </div>
@@ -6402,19 +6385,19 @@ ${shareUrl}`;
                 </div>
               </div>
 
-              {/* Conversation list — people only, no jargon */}
+              {/* Conversation list — real cohorts only, one thread per accepted
+                  cohort request. Blocked cohorts are already excluded
+                  server-side in /api/messenger/threads. */}
               <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-2">
-                {registeredUsers
-                  .filter((u) => !blockedUserIds.has(u.id))
-                  .filter((u) =>
+                {messengerThreads
+                  .filter((t) =>
                     !messengerSearchQuery.trim() ||
-                    u.name.toLowerCase().includes(messengerSearchQuery.toLowerCase()) ||
-                    u.callsign.toLowerCase().includes(messengerSearchQuery.toLowerCase())
+                    t.user.name.toLowerCase().includes(messengerSearchQuery.toLowerCase()) ||
+                    t.user.callsign.toLowerCase().includes(messengerSearchQuery.toLowerCase())
                   )
-                  .map((u) => {
+                  .map((t) => {
+                  const u = t.user;
                   const isSelected = activeChatId === u.id;
-                  const isUserAdminAccount = false; // admin badge is server-verified only now; see /api/admin/users
-                  const lastMsg = [...messengerMessages].filter((m) => m.chatId === u.id).pop();
 
                   return (
                     <div
@@ -6428,30 +6411,33 @@ ${shareUrl}`;
                     >
                       <div className="relative flex-shrink-0">
                         <img
-                          src={u.pressPassAvatar}
+                          src={u.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.callsign)}`}
                           alt={u.name}
                           className="w-9 h-9 rounded-full object-cover"
                         />
-                        {u.isLinked && (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-zinc-950" />
-                        )}
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-zinc-950" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-semibold truncate">{u.name}</span>
-                          {isUserAdminAccount && (
-                            <span className="text-[9px] px-1 rounded bg-amber-500 text-zinc-950 font-bold flex-shrink-0">
-                              Admin
+                          {t.unreadCount > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 font-bold flex-shrink-0">
+                              {t.unreadCount}
                             </span>
                           )}
                         </div>
                         <p className={`text-xs truncate ${subTextThemeClass}`}>
-                          {lastMsg ? lastMsg.text || "Sent an attachment" : `@${u.callsign}`}
+                          {t.lastMessage ? t.lastMessage.body : `@${u.callsign}`}
                         </p>
                       </div>
                     </div>
                   );
                 })}
+                {messengerThreads.length === 0 && (
+                  <p className={`text-xs text-center px-2 py-6 ${subTextThemeClass}`}>
+                    No cohorts yet. Find one from the Discover tab to start a conversation.
+                  </p>
+                )}
               </div>
 
               {/* Your Press Pass Identity Footer */}
@@ -6473,8 +6459,9 @@ ${shareUrl}`;
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* Active Conversation Header */}
               {(() => {
-                const isGroup = activeChatId === "midwest-bureau";
-                const activeUser = registeredUsers.find((u) => u.id === activeChatId);
+                const isGroup = activeChatId === GROUP_CHAT_ID;
+                const activeThread = messengerThreads.find((t) => t.user.id === activeChatId);
+                const activeUser = activeThread?.user;
 
                 return (
                   <div className={`p-4 border-b flex items-center justify-between flex-shrink-0 ${borderThemeClass} ${
@@ -6487,7 +6474,7 @@ ${shareUrl}`;
                         </div>
                       ) : activeUser ? (
                         <img
-                          src={activeUser.pressPassAvatar}
+                          src={activeUser.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(activeUser.callsign)}`}
                           alt={activeUser.name}
                           className="w-10 h-10 rounded-xl object-cover border-2 border-amber-500/60 shadow-xs"
                         />
@@ -6500,7 +6487,7 @@ ${shareUrl}`;
                           {isGroup
                             ? "Group chat"
                             : activeUser
-                              ? `@${activeUser.callsign}${activeUser.location ? " • " + activeUser.location : ""}`
+                              ? `@${activeUser.callsign}${activeUser.bureau ? " • " + activeUser.bureau : ""}`
                               : ""}
                         </p>
                       </div>
@@ -6535,97 +6522,149 @@ ${shareUrl}`;
                 );
               })()}
 
-              {/* Real Messages Stream (Zero Fake Simulated Dialogue!) */}
+              {/* Message Stream — group chat stays on the old fake/local
+                  system (explicitly out of scope for this rewire); real
+                  DMs load from the server, cohort-gated, text-only for v1. */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messengerMessages.filter((m) => m.chatId === activeChatId).length === 0 ? (
+                {activeChatId === GROUP_CHAT_ID ? (
+                  messengerMessages.filter((m) => m.chatId === activeChatId).length === 0 ? (
+                    <div className={`p-8 rounded-lg border text-center text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
+                      <MessageCircle className="h-8 w-8 text-amber-500 mx-auto" />
+                      <p className="font-semibold text-sm">No messages yet</p>
+                      <p className="text-[11px] leading-relaxed text-zinc-400">
+                        Send a message or share a photo below.
+                      </p>
+                    </div>
+                  ) : (
+                    messengerMessages
+                      .filter((m) => m.chatId === activeChatId)
+                      .map((m) => {
+                        const isMe = m.callsign === (pressPass.callsign || "ViBiR") || m.sender === pressPass.name;
+                        const senderAvatar = isMe ? pressPass.avatarUrl : m.avatarUrl;
+
+                        return (
+                          <div
+                            key={m.id}
+                            className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
+                          >
+                            {senderAvatar ? (
+                              <img
+                                src={senderAvatar}
+                                alt={m.sender}
+                                className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
+                                {m.sender[0]}
+                              </div>
+                            )}
+
+                            <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
+                              <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
+                                <span className="font-bold text-zinc-300">{m.sender}</span>
+                                <span className="text-amber-600">@{m.callsign}</span>
+                                <span className="text-zinc-600">•</span>
+                                <span className="text-zinc-600">{m.timestamp}</span>
+                              </div>
+
+                              <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border space-y-2 ${
+                                isMe
+                                  ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
+                                  : isDark
+                                    ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
+                                    : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
+                              }`}>
+                                {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
+
+                                {m.imageUrl && (
+                                  <div className="rounded-lg overflow-hidden border border-zinc-700/50 aspect-video max-h-40 bg-black">
+                                    <img src={m.imageUrl} alt="Shared still" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+
+                                {m.linkUrl && (
+                                  <a
+                                    href={m.linkUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
+                                      isMe
+                                        ? "bg-amber-700/80 text-amber-100 hover:bg-amber-700"
+                                        : isDark
+                                          ? "bg-zinc-950/60 text-cyan-400 hover:text-cyan-300"
+                                          : "bg-zinc-200 text-blue-600 hover:text-blue-700"
+                                    }`}
+                                  >
+                                    <Link2 className="h-3 w-3 flex-shrink-0" />
+                                    <span className="truncate">{m.linkUrl}</span>
+                                    <ExternalLink className="h-3 w-3 ml-auto flex-shrink-0 opacity-70" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )
+                ) : realThreadLoading ? (
+                  <p className={`text-xs text-center py-8 ${subTextThemeClass}`}>Loading conversation...</p>
+                ) : realMessages.length === 0 ? (
                   <div className={`p-8 rounded-lg border text-center text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
                     <MessageCircle className="h-8 w-8 text-amber-500 mx-auto" />
                     <p className="font-semibold text-sm">
-                      {activeChatId === "midwest-bureau"
-                        ? "No messages yet"
-                        : `Start a conversation with ${
-                            registeredUsers.find((u) => u.id === activeChatId)?.name || "this person"
-                          }`}
+                      Start a conversation with {messengerThreads.find((t) => t.user.id === activeChatId)?.user.name || "this cohort"}
                     </p>
                     <p className="text-[11px] leading-relaxed text-zinc-400">
-                      Send a message or share a photo below.
+                      Send a message below.
                     </p>
                   </div>
                 ) : (
-                  messengerMessages
-                    .filter((m) => m.chatId === activeChatId)
-                    .map((m) => {
-                      const isMe = m.callsign === (pressPass.callsign || "ViBiR") || m.sender === pressPass.name;
-                      const senderUser = registeredUsers.find((u) => u.callsign === m.callsign);
-                      const senderAvatar = isMe ? pressPass.avatarUrl : (m.avatarUrl || senderUser?.pressPassAvatar);
+                  realMessages.map((m) => {
+                    const isMe = m.senderId === authAccount?.id;
+                    const activeUser = messengerThreads.find((t) => t.user.id === activeChatId)?.user;
+                    const senderAvatar = isMe ? pressPass.avatarUrl : activeUser?.avatarUrl;
+                    const senderName = isMe ? (pressPass.name || "You") : (activeUser?.name || "them");
+                    const senderCallsign = isMe ? (pressPass.callsign || "") : (activeUser?.callsign || "");
+                    const timeLabel = new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-                      return (
-                        <div
-                          key={m.id}
-                          className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
-                        >
-                          {/* Press Pass Avatar next to message */}
-                          {senderAvatar ? (
-                            <img
-                              src={senderAvatar}
-                              alt={m.sender}
-                              className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
-                              {m.sender[0]}
-                            </div>
-                          )}
+                    return (
+                      <div
+                        key={m.id}
+                        className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
+                      >
+                        {senderAvatar ? (
+                          <img
+                            src={senderAvatar}
+                            alt={senderName}
+                            className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
+                            {senderName[0]}
+                          </div>
+                        )}
 
-                          <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
-                            <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
-                              <span className="font-bold text-zinc-300">{m.sender}</span>
-                              <span className="text-amber-600">@{m.callsign}</span>
-                              <span className="text-zinc-600">•</span>
-                              <span className="text-zinc-600">{m.timestamp}</span>
-                            </div>
+                        <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
+                          <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
+                            <span className="font-bold text-zinc-300">{senderName}</span>
+                            <span className="text-amber-600">@{senderCallsign}</span>
+                            <span className="text-zinc-600">•</span>
+                            <span className="text-zinc-600">{timeLabel}</span>
+                          </div>
 
-                            <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border space-y-2 ${
-                              isMe
-                                ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
-                                : isDark
-                                  ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
-                                  : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
-                            }`}>
-                              {/* Message Text with Respectful Sizing */}
-                              {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
-
-                              {/* Shared Image Attachment */}
-                              {m.imageUrl && (
-                                <div className="rounded-lg overflow-hidden border border-zinc-700/50 aspect-video max-h-40 bg-black">
-                                  <img src={m.imageUrl} alt="Shared still" className="w-full h-full object-cover" />
-                                </div>
-                              )}
-
-                              {/* Shared Link Attachment */}
-                              {m.linkUrl && (
-                                <a
-                                  href={m.linkUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
-                                    isMe
-                                      ? "bg-amber-700/80 text-amber-100 hover:bg-amber-700"
-                                      : isDark
-                                        ? "bg-zinc-950/60 text-cyan-400 hover:text-cyan-300"
-                                        : "bg-zinc-200 text-blue-600 hover:text-blue-700"
-                                  }`}
-                                >
-                                  <Link2 className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">{m.linkUrl}</span>
-                                  <ExternalLink className="h-3 w-3 ml-auto flex-shrink-0 opacity-70" />
-                                </a>
-                              )}
-                            </div>
+                          <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border ${
+                            isMe
+                              ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
+                              : isDark
+                                ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
+                                : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
+                          }`}>
+                            <p className="whitespace-pre-wrap">{m.body}</p>
                           </div>
                         </div>
-                      );
-                    })
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
@@ -6634,7 +6673,7 @@ ${shareUrl}`;
                 isDark ? "bg-zinc-950/90" : "bg-zinc-50"
               }`}>
                 {/* Expandable Image Attachment Box */}
-                {showAttachImage && (
+                {activeChatId === GROUP_CHAT_ID && showAttachImage && (
                   <div className={`p-2.5 rounded-lg border space-y-2 text-xs font-mono ${subCardThemeClass}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-amber-500 flex items-center gap-1">
@@ -6659,7 +6698,7 @@ ${shareUrl}`;
                 )}
 
                 {/* Expandable Link Attachment Box */}
-                {showAttachLink && (
+                {activeChatId === GROUP_CHAT_ID && showAttachLink && (
                   <div className={`p-2.5 rounded-lg border space-y-2 text-xs font-mono ${subCardThemeClass}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-cyan-400 flex items-center gap-1">
@@ -6683,9 +6722,24 @@ ${shareUrl}`;
                   </div>
                 )}
 
-                {/* Messenger-style composer row: attach, emoji, input, send */}
-                <form onSubmit={handleSendMessengerMessage} className="flex items-center gap-1.5">
-                  {/* Attach menu (Photo / Link), consolidated behind one "+" */}
+                {/* Messenger-style composer row: attach, emoji, input, send.
+                    Real DMs are text-only for v1 (no attachment columns in
+                    the messenger schema), so the attach menu is hidden
+                    outside the group chat rather than offered and silently
+                    dropped. */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (activeChatId === GROUP_CHAT_ID) {
+                      handleSendMessengerMessage(e);
+                    } else {
+                      sendRealMessage(activeChatId, messengerInput);
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  {/* Attach menu (Photo / Link), consolidated behind one "+" — group chat only */}
+                  {activeChatId === GROUP_CHAT_ID && (
                   <div className="relative flex-shrink-0">
                     <button
                       type="button"
@@ -6742,6 +6796,7 @@ ${shareUrl}`;
                       </>
                     )}
                   </div>
+                  )}
 
                   {/* Emoji picker */}
                   <div className="relative flex-shrink-0">
@@ -6794,7 +6849,10 @@ ${shareUrl}`;
                   />
                   <button
                     type="submit"
-                    disabled={!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()}
+                    disabled={
+                      (!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()) ||
+                      (activeChatId !== GROUP_CHAT_ID && realMessageSending)
+                    }
                     className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-500 text-zinc-950 hover:bg-amber-400 transition flex items-center justify-center cursor-pointer disabled:opacity-40 shadow-xs"
                     title="Send"
                   >
@@ -6810,8 +6868,9 @@ ${shareUrl}`;
       {/* Correspondent Card: opens when a commenter's identity is clicked anywhere in the app */}
       {correspondentPopover && (() => {
         const cs = correspondentPopover.callsign;
-        const existing = resolveCorrespondent(cs);
-        const isLinked = existing?.isLinked ?? false;
+        const relation = correspondentResolved?.relation;
+        const isCohort = relation === "cohort";
+        const isPending = relation === "pending_sent" || relation === "pending_received";
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setCorrespondentPopover(null)}>
             <div
@@ -6822,43 +6881,51 @@ ${shareUrl}`;
             >
               <div className="flex items-center gap-3">
                 <img
-                  src={existing?.pressPassAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cs)}`}
+                  src={correspondentResolved?.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cs)}`}
                   alt={correspondentPopover.name}
                   className="w-12 h-12 rounded-xl object-cover border border-amber-500/50 flex-shrink-0"
                 />
                 <div className="min-w-0">
                   <p className="font-mono text-sm font-bold truncate">{correspondentPopover.name}</p>
                   <p className="font-mono text-xs text-amber-500 truncate">@{cs}</p>
-                  {existing?.bureau && (
-                    <p className={`font-mono text-[11px] truncate ${subTextThemeClass}`}>{existing.bureau}</p>
+                  {correspondentResolved?.bureau && (
+                    <p className={`font-mono text-[11px] truncate ${subTextThemeClass}`}>{correspondentResolved.bureau}</p>
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => linkCorrespondent(correspondentPopover.name, cs)}
-                  disabled={isLinked}
-                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-60 ${
-                    isLinked
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                      : "bg-amber-500 text-zinc-950 hover:bg-amber-400"
-                  }`}
-                >
-                  {isLinked ? <Check className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
-                  <span>{isLinked ? "Linked" : "+ Link"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => messageCorrespondent(correspondentPopover.name, cs)}
-                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
-                    isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-200" : "border-zinc-300 hover:bg-zinc-100 text-zinc-800"
-                  }`}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  <span>Message</span>
-                </button>
-              </div>
+              {correspondentResolveState === "not_found" ? (
+                <p className={`font-mono text-[11px] text-center ${subTextThemeClass}`}>
+                  No FieldPress account found for @{cs}.
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={requestCohortFromPopover}
+                    disabled={correspondentResolveState === "loading" || isCohort || isPending}
+                    className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-60 ${
+                      isCohort
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500 text-zinc-950 hover:bg-amber-400"
+                    }`}
+                  >
+                    {isCohort ? <Check className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
+                    <span>{isCohort ? "Cohort" : isPending ? "Request Pending" : "Request Cohort"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={messageFromPopover}
+                    disabled={!isCohort}
+                    title={isCohort ? "" : "Only cohorts can be messaged"}
+                    className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer disabled:opacity-40 ${
+                      isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-200" : "border-zinc-300 hover:bg-zinc-100 text-zinc-800"
+                    }`}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>Message</span>
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setCorrespondentPopover(null)}
@@ -6870,130 +6937,6 @@ ${shareUrl}`;
           </div>
         );
       })()}
-
-      {/* ========================================================================= */}
-      {/* 8C. GENUINE CORRESPONDENT REGISTRATION MODAL                              */}
-      {/* ========================================================================= */}
-      {showRegisterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
-          <div className={`w-full max-w-md rounded-2xl border shadow-2xl p-6 space-y-4 ${
-            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
-          }`}>
-            <div className="flex items-center justify-between border-b pb-3 border-zinc-700">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-sm">Register Field Correspondent</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowRegisterModal(false)}
-                className="text-zinc-400 hover:text-zinc-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className={`text-xs ${subTextThemeClass}`}>
-              Register a genuine correspondent account to link to the Midwest Wire. Note: Admin authority is permanently reserved for Bureau Chief Victor Birkle.
-            </p>
-
-            <form onSubmit={handleRegisterCorrespondent} className="space-y-3">
-              <div>
-                <label className="block font-bold mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  placeholder="e.g. Elena Rostova"
-                  required
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1">Callsign / Handle</label>
-                <div className="flex items-center">
-                  <span className="px-2.5 py-2 rounded-l bg-zinc-800 border border-r-0 border-zinc-700 text-zinc-400 text-xs">@</span>
-                  <input
-                    type="text"
-                    value={regCallsign}
-                    onChange={(e) => setRegCallsign(e.target.value)}
-                    placeholder="elena.wire"
-                    required
-                    className={`w-full rounded-r px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="elena@midwestwire.org"
-                  required
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-bold mb-1">Bureau Desk</label>
-                  <input
-                    type="text"
-                    value={regBureau}
-                    onChange={(e) => setRegBureau(e.target.value)}
-                    placeholder="Tippecanoe Desk"
-                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={regLocation}
-                    onChange={(e) => setRegLocation(e.target.value)}
-                    placeholder="Lafayette, IN"
-                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1">Press Pass Photo URL (Optional)</label>
-                <input
-                  type="text"
-                  value={regAvatar}
-                  onChange={(e) => setRegAvatar(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
-                />
-              </div>
-
-              <div className="p-2 rounded bg-zinc-800/40 border border-zinc-700 text-[11px] text-zinc-400">
-                <span>Account Tier: <strong>Field Correspondent</strong> (Standard Access)</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-700">
-                <button
-                  type="button"
-                  onClick={() => setShowRegisterModal(false)}
-                  className="px-3 py-1.5 rounded border border-zinc-700 hover:bg-zinc-800 text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 shadow-xs"
-                >
-                  Register Correspondent
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* 8D. PRESSY'O AUTONOMOUS NEWSROOM COPILOT CHAT MODAL                       */}
