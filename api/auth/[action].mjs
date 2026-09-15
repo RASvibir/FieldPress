@@ -75,7 +75,7 @@ async function handleSignup(req, res) {
     const [account] = await sql`
       INSERT INTO fieldpress_accounts (id, email, password_hash, callsign, name, bureau, avatar_url, role)
       VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${cleanCallsign}, ${cleanName}, ${cleanBureau}, ${avatarUrl}, ${role})
-      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local;
+      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local, accent_color;
     `;
 
     const token = generateToken();
@@ -106,7 +106,7 @@ async function handleLogin(req, res) {
     }
 
     const rows = await sql`
-      SELECT id, email, password_hash, callsign, name, bureau, avatar_url, role, verified_local
+      SELECT id, email, password_hash, callsign, name, bureau, avatar_url, role, verified_local, accent_color
       FROM fieldpress_accounts
       WHERE lower(email) = lower(${email})
       LIMIT 1;
@@ -303,7 +303,7 @@ async function handleMe(req, res) {
     }
 
     const rows = await sql`
-      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local
+      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local, a.accent_color
       FROM fieldpress_sessions s
       JOIN fieldpress_accounts a ON a.id = s.account_id
       WHERE s.token = ${token} AND s.expires_at > now()
@@ -345,7 +345,14 @@ async function handleUpdateProfile(req, res) {
     }
     const accountId = authRows[0].account_id;
 
-    const { name, callsign, bureau } = req.body || {};
+    const { name, callsign, bureau, accentColor } = req.body || {};
+
+    const VALID_ACCENT_COLORS = new Set(["amber", "emerald", "cyan", "rose", "zinc"]);
+    // null (not "amber") when omitted/invalid, so COALESCE below preserves
+    // whatever the account already has instead of silently resetting a
+    // previously-customized color on requests from older clients that
+    // don't send accentColor at all.
+    const cleanAccentColor = VALID_ACCENT_COLORS.has(accentColor) ? accentColor : null;
 
     const cleanName = typeof name === "string" ? name.trim().slice(0, 200) : "";
     if (!cleanName) {
@@ -371,9 +378,9 @@ async function handleUpdateProfile(req, res) {
 
     const [account] = await sql`
       UPDATE fieldpress_accounts
-      SET name = ${cleanName}, callsign = ${cleanCallsign}, bureau = ${cleanBureau}
+      SET name = ${cleanName}, callsign = ${cleanCallsign}, bureau = ${cleanBureau}, accent_color = COALESCE(${cleanAccentColor}, accent_color)
       WHERE id = ${accountId}
-      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local;
+      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local, accent_color;
     `;
 
     res.status(200).json({ account: publicAccount(account) });
