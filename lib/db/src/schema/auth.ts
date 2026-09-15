@@ -1,4 +1,4 @@
-import { text, varchar, timestamp, pgTable } from 'drizzle-orm/pg-core';
+import { text, varchar, timestamp, pgTable, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const fieldpressAccounts = pgTable('fieldpress_accounts', {
@@ -10,6 +10,7 @@ export const fieldpressAccounts = pgTable('fieldpress_accounts', {
   bureau: varchar('bureau', { length: 200 }).notNull(),
   avatarUrl: text('avatar_url'),
   role: varchar('role', { length: 32 }).notNull().default('correspondent'),
+  verifiedLocal: boolean('verified_local').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

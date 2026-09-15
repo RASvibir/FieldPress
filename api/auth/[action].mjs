@@ -75,7 +75,7 @@ async function handleSignup(req, res) {
     const [account] = await sql`
       INSERT INTO fieldpress_accounts (id, email, password_hash, callsign, name, bureau, avatar_url, role)
       VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${cleanCallsign}, ${cleanName}, ${cleanBureau}, ${avatarUrl}, ${role})
-      RETURNING id, email, callsign, name, bureau, avatar_url, role;
+      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local;
     `;
 
     const token = generateToken();
@@ -106,7 +106,7 @@ async function handleLogin(req, res) {
     }
 
     const rows = await sql`
-      SELECT id, email, password_hash, callsign, name, bureau, avatar_url, role
+      SELECT id, email, password_hash, callsign, name, bureau, avatar_url, role, verified_local
       FROM fieldpress_accounts
       WHERE lower(email) = lower(${email})
       LIMIT 1;
@@ -303,7 +303,7 @@ async function handleMe(req, res) {
     }
 
     const rows = await sql`
-      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role
+      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local
       FROM fieldpress_sessions s
       JOIN fieldpress_accounts a ON a.id = s.account_id
       WHERE s.token = ${token} AND s.expires_at > now()
@@ -373,7 +373,7 @@ async function handleUpdateProfile(req, res) {
       UPDATE fieldpress_accounts
       SET name = ${cleanName}, callsign = ${cleanCallsign}, bureau = ${cleanBureau}
       WHERE id = ${accountId}
-      RETURNING id, email, callsign, name, bureau, avatar_url, role;
+      RETURNING id, email, callsign, name, bureau, avatar_url, role, verified_local;
     `;
 
     res.status(200).json({ account: publicAccount(account) });
