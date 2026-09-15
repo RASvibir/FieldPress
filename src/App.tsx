@@ -1442,9 +1442,9 @@ export const FieldPressMaster: React.FC = () => {
     setModResolvingId(null);
   };
 
-  const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string }) => {
+  const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string; accentColor?: string }) => {
     setPressPass((prev) => {
-      const next = { ...prev, name: account.name, callsign: account.callsign, bureau: account.bureau, avatarUrl: account.avatarUrl, email: account.email };
+      const next = { ...prev, name: account.name, callsign: account.callsign, bureau: account.bureau, avatarUrl: account.avatarUrl, email: account.email, accentColor: account.accentColor || prev.accentColor };
       try {
         localStorage.setItem("fieldpress_press_pass", JSON.stringify(next));
       } catch {}
@@ -2227,6 +2227,11 @@ export const FieldPressMaster: React.FC = () => {
 // Reactions & Commentary are reactively synchronized via getCommentsForDispatch and getReactsForDispatch
 
   const currentAccent = getAccentColorClasses(pressPass.accentColor);
+  // Live preview inside the Edit Press Pass modal must reflect the color
+  // the user is actively selecting in the form (editPassForm), not the
+  // already-saved pressPass value — otherwise clicking a swatch appears
+  // to do nothing until after Save.
+  const editPreviewAccent = getAccentColorClasses(editPassForm.accentColor);
 
   const isDark = theme === "dark";
   const inputThemeClass = isDark
@@ -2315,7 +2320,7 @@ export const FieldPressMaster: React.FC = () => {
       const res = await fetch("/api/auth/update-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newData.name, callsign: newData.callsign, bureau: newData.bureau })
+        body: JSON.stringify({ name: newData.name, callsign: newData.callsign, bureau: newData.bureau, accentColor: newData.accentColor })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -4901,9 +4906,9 @@ export const FieldPressMaster: React.FC = () => {
               {/* Live ID Badge Card Preview (EXACTLY AS IN IMAGE 1) */}
               <div className="flex flex-col items-center">
                 <div className={`w-full max-w-md rounded-xl border-2 p-5 relative overflow-hidden shadow-2xl transition-all duration-300 ${
-                  currentAccent.border
+                  editPreviewAccent.border
                 } ${isDark ? "bg-zinc-950" : "bg-zinc-50"}`}>
-                  <div className={`absolute top-0 left-0 right-0 h-2.5 ${currentAccent.bar}`} />
+                  <div className={`absolute top-0 left-0 right-0 h-2.5 ${editPreviewAccent.bar}`} />
 
                   <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 pt-1">
                     <div className="flex items-center gap-1.5 font-mono text-xs font-black tracking-tight">
@@ -4994,7 +4999,7 @@ export const FieldPressMaster: React.FC = () => {
                           Verified Local
                         </span>
                       )}
-                      <span className={`px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase ${currentAccent.badge}`}>
+                      <span className={`px-2 py-0.5 rounded font-black tracking-widest text-[9px] uppercase ${editPreviewAccent.badge}`}>
                         ACTIVE CREDENTIAL
                       </span>
                     </div>
