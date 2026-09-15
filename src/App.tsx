@@ -1990,9 +1990,13 @@ export const FieldPressMaster: React.FC = () => {
   // --- Correspondent card: click any commenter's identity to view/link them ---
   const [correspondentPopover, setCorrespondentPopover] = useState<{ name: string; callsign: string } | null>(null);
 
-  const openCorrespondentFromComment = (name: string, callsign: string) => {
+  const openUserPressPass = (name: string, callsign: string) => {
     if (callsign === pressPass.callsign) return; // don't offer to link yourself
     setCorrespondentPopover({ name, callsign });
+  };
+
+  const openCorrespondentFromComment = (name: string, callsign: string) => {
+    openUserPressPass(name, callsign);
   };
 
   const resolveCorrespondent = (callsign: string): CorrespondentUser | null =>
@@ -3712,7 +3716,13 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="pt-2 flex items-center justify-between text-xs font-mono text-zinc-400">
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-zinc-300">Byline:</span>
-                          <span>{d.author} (@{d.callsign})</span>
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(d.author, d.callsign)}
+                            className="hover:text-amber-400 transition cursor-pointer text-left"
+                          >
+                            {d.author} (@{d.callsign})
+                          </button>
                           <span>•</span>
                           <span>{d.bureau}</span>
                         </div>
@@ -4261,7 +4271,13 @@ export const FieldPressMaster: React.FC = () => {
                         {d.repostedByCallsign && (
                           <div className="text-[10px] text-indigo-400 mb-0.5">🔁 Shared by @{d.repostedByCallsign}</div>
                         )}
-                        <div className="font-bold">{d.author}</div>
+                        <button
+                          type="button"
+                          onClick={() => openUserPressPass(d.author, d.callsign)}
+                          className="font-bold hover:text-amber-400 transition cursor-pointer text-left"
+                        >
+                          {d.author}
+                        </button>
                         <div className="text-amber-500 font-semibold">@{d.callsign}</div>
                         <div className={`text-[10px] ${subTextThemeClass}`}>{d.bureau}</div>
                       </div>
@@ -4449,8 +4465,20 @@ export const FieldPressMaster: React.FC = () => {
                           className="w-11 h-11 rounded-full object-cover flex-shrink-0"
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold truncate">{u.name}</p>
-                          <p className="text-xs text-amber-500 font-mono truncate">@{u.callsign}</p>
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(u.name, u.callsign)}
+                            className="text-sm font-semibold truncate text-left hover:text-amber-400 transition cursor-pointer"
+                          >
+                            {u.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(u.name, u.callsign)}
+                            className="text-xs text-amber-500 font-mono truncate text-left hover:underline cursor-pointer"
+                          >
+                            @{u.callsign}
+                          </button>
                           {u.bureau ? (
                             <p className={`text-[11px] mt-0.5 truncate ${subTextThemeClass}`}>{u.bureau}</p>
                           ) : null}
@@ -5627,7 +5655,13 @@ export const FieldPressMaster: React.FC = () => {
                 <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${borderThemeClass} ${subTextThemeClass}`}>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-zinc-200">Byline:</span>
-                    <span>{selectedStory.author} (@{selectedStory.callsign})</span>
+                    <button
+                      type="button"
+                      onClick={() => openUserPressPass(selectedStory.author, selectedStory.callsign)}
+                      className="hover:text-amber-400 transition cursor-pointer text-left"
+                    >
+                      {selectedStory.author} (@{selectedStory.callsign})
+                    </button>
                     <span>•</span>
                     <span>{selectedStory.bureau}</span>
                   </div>
@@ -6295,8 +6329,20 @@ ${shareUrl}`;
                       className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{u.name}</p>
-                      <p className={`text-xs truncate ${subTextThemeClass}`}>@{u.callsign} · {u.bureau}</p>
+                      <button
+                        type="button"
+                        onClick={() => openUserPressPass(u.name, u.callsign)}
+                        className="text-sm font-semibold truncate text-left hover:text-amber-400 transition cursor-pointer"
+                      >
+                        {u.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openUserPressPass(u.name, u.callsign)}
+                        className={`text-xs truncate text-left hover:underline cursor-pointer ${subTextThemeClass}`}
+                      >
+                        @{u.callsign} · {u.bureau}
+                      </button>
                     </div>
                     {u.relation === "cohort" ? (
                       <span className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11px] font-bold flex-shrink-0">
