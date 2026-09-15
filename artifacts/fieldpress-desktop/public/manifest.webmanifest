@@ -2,11 +2,14 @@
   "id": "/",
   "name": "FieldPress",
   "short_name": "FieldPress",
-  "description": "Pocket newsroom — capture, produce, publish.",
+  "description": "Pocket newsroom \u2014 capture, produce, publish.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -26,7 +29,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
