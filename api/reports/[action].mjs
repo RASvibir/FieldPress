@@ -86,6 +86,34 @@ async function handleQueue(req, res, me) {
   res.status(200).json({ reports: rows });
 }
 
+const DISPUTE_THRESHOLD = 3;
+
+// Surfaces dispatches whose "Disputed" reaction count has crossed a
+// threshold (#146, #175). Kept in this endpoint rather than a separate
+// one since it's the same super_admin moderation-queue audience as the
+// reports queue above, and the two are meant to render side by side.
+async function handleDisputed(req, res, me) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+  if (me.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden." });
+    return;
+  }
+
+  const rows = await sql`
+    SELECT dispatch_id, COUNT(*)::int AS dispute_count, MAX(created_at) AS last_disputed_at
+    FROM fieldpress_dispute_reactions
+    GROUP BY dispatch_id
+    HAVING COUNT(*) >= ${DISPUTE_THRESHOLD}
+    ORDER BY COUNT(*) DESC
+    LIMIT 200;
+  `;
+
+  res.status(200).json({ disputed: rows, threshold: DISPUTE_THRESHOLD });
+}
+
 async function handleResolve(req, res, me) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -123,7 +151,8 @@ async function handleResolve(req, res, me) {
 const ACTIONS = {
   submit: handleSubmit,
   queue: handleQueue,
-  resolve: handleResolve
+  resolve: handleResolve,
+  disputed: handleDisputed
 };
 
 export default async function handler(req, res) {
