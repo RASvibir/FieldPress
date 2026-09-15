@@ -945,7 +945,7 @@ export const FieldPressMaster: React.FC = () => {
   // Report / flag intake (closes issue #144 -- no report mechanism existed
   // anywhere in the codebase). Intentionally minimal: files a report to the
   // server-side admin queue, no client-side moderation logic or auto-hiding
-  // of content. See api/reports/[action].mjs.
+  // of content. See api/_lib/handlers/reports.mjs.
   const [reportSubmittedId, setReportSubmittedId] = useState<string | null>(null);
   const [reportInFlightId, setReportInFlightId] = useState<string | null>(null);
 
