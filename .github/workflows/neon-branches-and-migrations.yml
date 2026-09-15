@@ -1,7 +1,10 @@
-name: Neon preview branches & migrations
+name: Production schema push
 
 # Best-practice notes for maintainers:
-# - Preview branch create/delete uses Neon's official actions, not raw API calls.
+# - Neon's own GitHub App integration already creates/deletes a preview
+#   branch per PR automatically (confirmed via branch creation timestamps
+#   preceding any workflow run) - no workflow file is needed for that, and
+#   one was deliberately NOT added here to avoid duplicating it.
 # - This repo has NO drizzle migration journal (no `migrate`/`generate` scripts, no
 #   migrations-tracking table in the database) - only hand-written numbered SQL files
 #   in migrations/ applied ad hoc, plus a schema-diff "push" flow in lib/db (package
@@ -11,57 +14,19 @@ name: Neon preview branches & migrations
 #   migrations are tracked in the database instead of relying on manual bookkeeping.
 # - Push only ever runs against DATABASE_URL_UNPOOLED, matching drizzle.config.ts's
 #   own precedence (DATABASE_URL_UNPOOLED ?? DATABASE_URL).
-# - The schema-push job only fires on push to main AND only when the Drizzle schema
-#   changed, so unrelated merges don't touch the database.
-# - Requires repo secrets: NEON_API_KEY, NEON_PROJECT_ID (already configured via the
-#   Neon <> GitHub integration), and DATABASE_URL_UNPOOLED (production, direct/non-pooled).
+# - Only fires on push to main AND only when the Drizzle schema changed, so
+#   unrelated merges don't touch the database.
+# - Requires repo secret DATABASE_URL_UNPOOLED (production, direct/non-pooled;
+#   added tonight, points at neondb on ep-red-base-a6wm8ix9).
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
   push:
     branches: [main]
     paths:
       - "lib/db/src/schema/**"
 
 jobs:
-  create-branch:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Neon branch for PR
-        uses: neondatabase/create-branch-action@v6
-        id: create-branch
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          parent: main
-          branch_name: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Comment preview branch info on PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `Neon preview branch \`preview/pr-${{ github.event.number }}\` is ready.`
-            })
-
-  delete-branch:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete Neon branch for PR
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
   schema-push-production:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
