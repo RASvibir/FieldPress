@@ -986,7 +986,7 @@ export const FieldPressMaster: React.FC = () => {
     // everything above is optimistic UI; this reconciles with the source
     // of truth. Other reaction keys stop here and stay client-side.
     if (reactKey === "dispute" && authAccount) {
-      fetch("/api/reactions/dispute", {
+      fetch("/api/reports/dispute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dispatchId: storyId })
