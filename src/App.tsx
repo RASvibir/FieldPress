@@ -609,6 +609,8 @@ export const FieldPressMaster: React.FC = () => {
   });
 
   // User Registration State for Genuine Field Correspondents
+  // Legacy local-only correspondent registration (kept temporarily for backwards compatibility;
+  // real account creation now lives in the auth modal and /api/auth/signup).
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [regName, setRegName] = useState("");
   const [regCallsign, setRegCallsign] = useState("");
@@ -1059,6 +1061,7 @@ export const FieldPressMaster: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState("midwest-bureau");
   const [activeChatTab, setActiveChatTab] = useState<"groups" | "dms">("groups");
   const [showCohortRequestModal, setShowCohortRequestModal] = useState(false);
+  const [browseUsersModalOpen, setBrowseUsersModalOpen] = useState(false);
   const [cohortDirectoryQuery, setCohortDirectoryQuery] = useState("");
   const [cohortDirectoryResults, setCohortDirectoryResults] = useState<Array<{
     id: string; callsign: string; name: string; bureau: string; avatarUrl?: string;
@@ -1574,7 +1577,12 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   const searchCohortDirectory = async (query: string) => {
-    if (!authAccount) return;
+    if (!authAccount) {
+      setCohortDirectoryResults([]);
+      setSavedSuccessToast("Sign in to browse and request real cohorts.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+      return;
+    }
     setCohortDirectoryLoading(true);
     try {
       const res = await fetch(`/api/cohorts/directory?query=${encodeURIComponent(query)}`);
@@ -1582,6 +1590,17 @@ export const FieldPressMaster: React.FC = () => {
       if (res.ok) setCohortDirectoryResults(data.users || []);
     } catch {}
     setCohortDirectoryLoading(false);
+  };
+
+  const openBrowseUsers = async () => {
+    setBrowseUsersModalOpen(true);
+    setShowCohortRequestModal(false);
+    setCohortDirectoryQuery("");
+    if (!authAccount) {
+      setCohortDirectoryResults([]);
+      return;
+    }
+    await searchCohortDirectory("");
   };
 
   const sendCohortRequest = async (recipientId: string) => {
@@ -2031,10 +2050,12 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   const messageCorrespondent = (name: string, callsign: string) => {
-    let user = resolveCorrespondent(callsign);
-    if (!user) {
-      linkCorrespondent(name, callsign);
-      user = { id: `usr-${callsign.toLowerCase().replace(/[^a-z0-9]/g, "-")}` } as CorrespondentUser;
+    const user = resolveCorrespondent(callsign);
+    if (!user || !user.isLinked) {
+      setCorrespondentPopover({ name, callsign });
+      setSavedSuccessToast("Open the press pass and request a cohort before messaging.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+      return;
     }
     setActiveChatId(user.id);
     setCorrespondentPopover(null);
@@ -3701,7 +3722,13 @@ export const FieldPressMaster: React.FC = () => {
                       {d.repostedByCallsign && (
                         <div className="pt-2 text-[11px] font-mono text-indigo-300 flex items-center gap-1">
                           <span>🔁</span>
-                          <span>Shared by @{d.repostedByCallsign}</span>
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(d.repostedByCallsign!, d.repostedByCallsign!)}
+                            className="hover:text-amber-300 transition cursor-pointer text-left"
+                          >
+                            Shared by @{d.repostedByCallsign}
+                          </button>
                         </div>
                       )}
                       {d.parentDispatchId && (() => {
@@ -3709,7 +3736,13 @@ export const FieldPressMaster: React.FC = () => {
                         return forkParent ? (
                           <div className="pt-1 text-[11px] font-mono text-emerald-400 flex items-center gap-1">
                             <span>🔀</span>
-                            <span>Forked from @{forkParent.callsign}</span>
+                            <button
+                              type="button"
+                              onClick={() => openUserPressPass(forkParent.author, forkParent.callsign)}
+                              className="hover:text-amber-300 transition cursor-pointer text-left"
+                            >
+                              Forked from @{forkParent.callsign}
+                            </button>
                           </div>
                         ) : null;
                       })()}
@@ -4503,19 +4536,19 @@ export const FieldPressMaster: React.FC = () => {
                       <div className="flex items-center gap-2 mt-3">
                         <button
                           type="button"
-                          onClick={() => linkCorrespondent(u.name, u.callsign)}
+                          onClick={() => openUserPressPass(u.name, u.callsign)}
                           className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition cursor-pointer"
                         >
-                          Connect
+                          View Press Pass
                         </button>
                         <button
                           type="button"
-                          onClick={() => messageCorrespondent(u.name, u.callsign)}
+                          onClick={() => authAccount ? sendCohortRequest(u.id) : (setAuthModalMode("signin"), setAuthError(""))}
                           className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition cursor-pointer ${
                             isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-300" : "border-zinc-300 hover:bg-zinc-100 text-zinc-700"
                           }`}
                         >
-                          Message
+                          {authAccount ? "Request Cohort" : "Sign In"}
                         </button>
                       </div>
                     </div>
@@ -6272,6 +6305,114 @@ ${shareUrl}`;
       {/* ========================================================================= */}
       {/* 8B. INSTANT MESSAGING DRAWER / MODAL (FIELD COMMS WIRE: DMs & GROUPS)     */}
       {/* ========================================================================= */}
+      {browseUsersModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
+          <div className={`w-full max-w-2xl max-h-[82vh] rounded-2xl border shadow-2xl p-6 space-y-4 flex flex-col ${
+            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          }`}>
+            <div className="flex items-center justify-between border-b pb-3 border-zinc-700 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-sm">Registered Users</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBrowseUsersModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {!authAccount ? (
+              <div className={`p-4 rounded-xl border text-center ${subCardThemeClass}`}>
+                <p className="text-sm font-semibold mb-1">Sign in required</p>
+                <p className={subTextThemeClass}>Sign in to browse live registered users and send real cohort requests.</p>
+              </div>
+            ) : (
+              <>
+                <p className={`text-[11px] leading-relaxed flex-shrink-0 ${subTextThemeClass}`}>
+                  Browse live registered correspondents. Click a handle to open their press pass, or send a cohort request directly.
+                </p>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <input
+                    type="text"
+                    value={cohortDirectoryQuery}
+                    onChange={(e) => {
+                      setCohortDirectoryQuery(e.target.value);
+                      searchCohortDirectory(e.target.value);
+                    }}
+                    placeholder="Search by name or callsign..."
+                    className={`w-full rounded px-3 py-2 text-xs focus:outline-none ${inputThemeClass}`}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 min-h-[240px]">
+                  {cohortDirectoryLoading ? (
+                    <p className={`text-[11px] text-center py-8 ${subTextThemeClass}`}>Loading users...</p>
+                  ) : cohortDirectoryResults.length === 0 ? (
+                    <p className={`text-[11px] text-center py-8 ${subTextThemeClass}`}>No registered users found.</p>
+                  ) : (
+                    cohortDirectoryResults.map((u) => (
+                      <div
+                        key={u.id}
+                        className={`p-2.5 rounded-xl flex items-center gap-2.5 border ${subCardThemeClass}`}
+                      >
+                        <img
+                          src={u.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.callsign)}`}
+                          alt={u.name}
+                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(u.name, u.callsign)}
+                            className="text-sm font-semibold truncate text-left hover:text-amber-400 transition cursor-pointer"
+                          >
+                            {u.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openUserPressPass(u.name, u.callsign)}
+                            className={`text-xs truncate text-left hover:underline cursor-pointer ${subTextThemeClass}`}
+                          >
+                            @{u.callsign} · {u.bureau}
+                          </button>
+                        </div>
+                        {u.relation === "cohort" ? (
+                          <span className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11px] font-bold flex-shrink-0">
+                            Cohort
+                          </span>
+                        ) : u.relation === "pending_sent" ? (
+                          <span className="px-2.5 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-[11px] font-bold flex-shrink-0">
+                            Requested
+                          </span>
+                        ) : u.relation === "pending_received" ? (
+                          <span className="px-2.5 py-1.5 rounded-lg border border-amber-500/40 text-amber-400 text-[11px] font-bold flex-shrink-0">
+                            Check Requests
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={cohortActionPendingId === u.id}
+                            onClick={() => sendCohortRequest(u.id)}
+                            className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition text-[11px] flex-shrink-0 cursor-pointer disabled:opacity-60"
+                          >
+                            {cohortActionPendingId === u.id ? "Sending..." : "Request"}
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
             {/* 8D. COHORT REQUEST & PROPOSAL MODAL */}
 {showCohortRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm font-mono text-xs">
@@ -6406,11 +6547,18 @@ ${shareUrl}`;
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowCohortRequestModal(true)}
+                    onClick={() => {
+                      if (!authAccount) {
+                        setAuthModalMode("signin");
+                        setAuthError("");
+                        return;
+                      }
+                      openBrowseUsers();
+                    }}
                     className={`p-1.5 rounded-lg border transition cursor-pointer ${
                       isDark ? "border-zinc-700/60 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-500"
                     }`}
-                    title="Find cohorts to connect with"
+                    title="Browse registered users"
                   >
                     <PlusCircle className="h-4 w-4" />
                   </button>
@@ -6901,6 +7049,7 @@ ${shareUrl}`;
         const cs = correspondentPopover.callsign;
         const existing = resolveCorrespondent(cs);
         const isLinked = existing?.isLinked ?? false;
+        const canMessage = !!existing?.isLinked;
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setCorrespondentPopover(null)}>
             <div
@@ -6926,7 +7075,7 @@ ${shareUrl}`;
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => linkCorrespondent(correspondentPopover.name, cs)}
+                  onClick={() => authAccount ? linkCorrespondent(correspondentPopover.name, cs) : (setAuthModalMode("signin"), setAuthError(""))}
                   disabled={isLinked}
                   className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-60 ${
                     isLinked
@@ -6935,17 +7084,18 @@ ${shareUrl}`;
                   }`}
                 >
                   {isLinked ? <Check className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
-                  <span>{isLinked ? "Linked" : "+ Link"}</span>
+                  <span>{isLinked ? "Cohort Linked" : authAccount ? "Request Cohort" : "Sign In"}</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => messageCorrespondent(correspondentPopover.name, cs)}
-                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  onClick={() => canMessage ? messageCorrespondent(correspondentPopover.name, cs) : undefined}
+                  disabled={!canMessage}
+                  className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer disabled:opacity-50 ${
                     isDark ? "border-zinc-700 hover:bg-zinc-800 text-zinc-200" : "border-zinc-300 hover:bg-zinc-100 text-zinc-800"
                   }`}
                 >
                   <Send className="h-3.5 w-3.5" />
-                  <span>Message</span>
+                  <span>{canMessage ? "Message" : "Message After Link"}</span>
                 </button>
               </div>
               <button
