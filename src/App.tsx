@@ -193,6 +193,8 @@ export interface Dispatch {
   editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine";
   sharingOption?: "fork" | "colab" | "none";
   parentDispatchId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export const INITIAL_DISPATCHES: Dispatch[] = [
@@ -289,6 +291,19 @@ export const getEditionClasses = (style?: string, isDark: boolean = true) => {
       };
   }
 };
+
+// ============================================================================
+// HELPER: "(edited)" indicator (#154/#170) — a dispatch counts as edited
+// once its updated_at moves past created_at. A small buffer avoids
+// flagging normal DB round-trip jitter on the initial insert as an edit.
+// ============================================================================
+function wasDispatchEdited(d: { createdAt?: string; updatedAt?: string }): boolean {
+  if (!d.createdAt || !d.updatedAt) return false;
+  const created = new Date(d.createdAt).getTime();
+  const updated = new Date(d.updatedAt).getTime();
+  if (isNaN(created) || isNaN(updated)) return false;
+  return updated - created > 2000; // 2s buffer
+}
 
 // ============================================================================
 // HELPER: Dynamic Social Pressie Graphic Generator (1200x675 HD 16:9)
@@ -3359,6 +3374,12 @@ export const FieldPressMaster: React.FC = () => {
                         </span>
                         <span className="text-zinc-400">•</span>
                         <span className="text-zinc-400">{d.timestamp}</span>
+                        {wasDispatchEdited(d) && (
+                          <>
+                            <span className="text-zinc-400">•</span>
+                            <span className="italic text-zinc-500" title="This dispatch was edited after it was first published">(edited)</span>
+                          </>
+                        )}
                         <span className="text-zinc-400">•</span>
                         <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{d.id}</span>
                       </div>
@@ -3901,6 +3922,9 @@ export const FieldPressMaster: React.FC = () => {
                         <span className="text-zinc-400 font-bold">[{d.location}]</span>
                         <span className={subTextThemeClass}>•</span>
                         <span className={subTextThemeClass}>{d.timestamp}</span>
+                        {wasDispatchEdited(d) && (
+                          <span className={`italic ${subTextThemeClass}`} title="This dispatch was edited after it was first published">(edited)</span>
+                        )}
                         {bookmarks.includes(d.id) && (
                           <span className="text-amber-500 text-[10px] font-bold flex items-center gap-0.5">
                             <Bookmark className="h-3 w-3 fill-amber-500" /> Saved
@@ -5260,7 +5284,12 @@ export const FieldPressMaster: React.FC = () => {
                     <span>•</span>
                     <span>{selectedStory.bureau}</span>
                   </div>
-                  <span>{selectedStory.timestamp}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{selectedStory.timestamp}</span>
+                    {wasDispatchEdited(selectedStory) && (
+                      <span className="italic" title="This dispatch was edited after it was first published">(edited)</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
