@@ -120,6 +120,17 @@ async function handleRequest(req, res, me) {
     RETURNING id, requester_id, recipient_id, message, status, created_at;
   `;
 
+  // Notify the recipient (#168) - failure here shouldn't fail the request
+  // itself, so it's a best-effort side effect, not part of the main flow.
+  try {
+    await sql`
+      INSERT INTO fieldpress_notifications (recipient_id, actor_id, type, cohort_request_id)
+      VALUES (${recipientId}, ${me.id}, 'cohort_request', ${row.id});
+    `;
+  } catch (notifErr) {
+    console.error("Failed to write cohort_request notification:", notifErr);
+  }
+
   res.status(201).json({ request: row });
 }
 
@@ -160,6 +171,20 @@ async function handleRespond(req, res, me) {
     WHERE id = ${requestId}
     RETURNING id, requester_id, recipient_id, status;
   `;
+
+  // Notify the original requester that their request was accepted (#168).
+  // No notification on decline - a decline isn't something the current
+  // notification center is meant to surface.
+  if (newStatus === "accepted") {
+    try {
+      await sql`
+        INSERT INTO fieldpress_notifications (recipient_id, actor_id, type, cohort_request_id)
+        VALUES (${reqRow.requester_id}, ${me.id}, 'cohort_accepted', ${reqRow.id});
+      `;
+    } catch (notifErr) {
+      console.error("Failed to write cohort_accepted notification:", notifErr);
+    }
+  }
 
   res.status(200).json({ request: updated });
 }

@@ -1721,6 +1721,47 @@ export const FieldPressMaster: React.FC = () => {
 
   const unseenNotifications = notificationItems.filter((n) => !seenCommentIds.has(n.id));
 
+  // --- Server-backed notifications (#168): cohort requests/acceptances.
+  // Unlike the comment notifications above, these are real Postgres rows
+  // (fieldpress_notifications) so they're consistent across every device
+  // the user signs into, not just the browser that received them.
+  const [serverNotifications, setServerNotifications] = useState<Array<{
+    id: string; type: "cohort_request" | "cohort_accepted";
+    actor: { id: string; callsign: string; name: string; avatarUrl?: string };
+    cohortRequestId?: string; read: boolean; createdAt: string;
+  }>>([]);
+  const [serverUnreadCount, setServerUnreadCount] = useState(0);
+
+  const refreshServerNotifications = async () => {
+    if (!authAccount) return;
+    try {
+      const res = await fetch("/api/notifications/mine");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.notifications)) {
+        setServerNotifications(data.notifications);
+        setServerUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+      }
+    } catch {
+      // Network hiccup — keep whatever's currently shown.
+    }
+  };
+
+  useEffect(() => {
+    if (!authAccount) {
+      setServerNotifications([]);
+      setServerUnreadCount(0);
+      return;
+    }
+    refreshServerNotifications();
+    // Light polling so a new cohort request/acceptance shows up without a
+    // full page reload - notifications aren't latency-sensitive enough to
+    // warrant a websocket for v1.
+    const interval = setInterval(refreshServerNotifications, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
+
   const markNotificationsSeen = () => {
     const allIds = new Set(seenCommentIds);
     notificationItems.forEach((n) => allIds.add(n.id));
@@ -1728,6 +1769,18 @@ export const FieldPressMaster: React.FC = () => {
     try {
       localStorage.setItem("fieldpress_notif_seen_ids", JSON.stringify(Array.from(allIds)));
     } catch {}
+
+    if (serverUnreadCount > 0) {
+      setServerNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setServerUnreadCount(0);
+      fetch("/api/notifications/mark-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {
+        // Best-effort — worst case the count re-syncs on the next poll.
+      });
+    }
   };
 
   // --- Suggested Correspondents: people who've actually engaged with your
@@ -3027,10 +3080,10 @@ export const FieldPressMaster: React.FC = () => {
                 }`}
                 title="Notifications"
               >
-                <Bell className="h-4 w-4" />
-                {unseenNotifications.length > 0 && (
+<Bell className="h-4 w-4" />
+                {(unseenNotifications.length + serverUnreadCount) > 0 && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold font-mono">
-                    {unseenNotifications.length > 9 ? "9+" : unseenNotifications.length}
+                    {(unseenNotifications.length + serverUnreadCount) > 9 ? "9+" : unseenNotifications.length + serverUnreadCount}
                   </span>
                 )}
               </button>
@@ -3044,36 +3097,58 @@ export const FieldPressMaster: React.FC = () => {
                     <div className={`px-3 py-2 border-b font-mono text-xs font-bold ${isDark ? "border-zinc-800 text-zinc-300" : "border-zinc-200 text-zinc-700"}`}>
                       Notifications
                     </div>
-                    {notificationItems.length === 0 ? (
+{(serverNotifications.length === 0 && notificationItems.length === 0) ? (
                       <div className={`px-3 py-6 text-center font-mono text-xs ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
-                        No activity yet on your dispatches.
+                        No activity yet.
                       </div>
                     ) : (
-                      notificationItems.slice(0, 30).map((n) => {
-                        const disp = dispatches.find((d) => d.id === n.dispatchId);
-                        return (
+                      <>
+                        {serverNotifications.slice(0, 30).map((n) => (
                           <button
                             key={n.id}
                             type="button"
                             onClick={() => {
                               setShowNotifPanel(false);
-                              if (disp) setSelectedStory(disp);
+                              setActiveTab("discover");
                             }}
                             className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
                               isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
-                            }`}
+                            } ${!n.read ? (isDark ? "bg-cyan-500/5" : "bg-cyan-50") : ""}`}
                           >
                             <p className="font-mono text-xs">
-                              <span className="font-bold">@{n.callsign}</span>
-                              <span className={isDark ? "text-zinc-400" : "text-zinc-500"}> commented on </span>
-                              <span className="font-bold">{disp ? disp.title : "your dispatch"}</span>
-                            </p>
-                            <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
-                              {n.text}
+                              <span className="font-bold">@{n.actor.callsign}</span>
+                              <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>
+                                {n.type === "cohort_request" ? " sent you a cohort request" : " accepted your cohort request"}
+                              </span>
                             </p>
                           </button>
-                        );
-                      })
+                        ))}
+                        {notificationItems.slice(0, 30).map((n) => {
+                          const disp = dispatches.find((d) => d.id === n.dispatchId);
+                          return (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={() => {
+                                setShowNotifPanel(false);
+                                if (disp) setSelectedStory(disp);
+                              }}
+                              className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
+                                isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
+                              }`}
+                            >
+                              <p className="font-mono text-xs">
+                                <span className="font-bold">@{n.callsign}</span>
+                                <span className={isDark ? "text-zinc-400" : "text-zinc-500"}> commented on </span>
+                                <span className="font-bold">{disp ? disp.title : "your dispatch"}</span>
+                              </p>
+                              <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
+                                {n.text}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 </>
