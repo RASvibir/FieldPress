@@ -2144,6 +2144,7 @@ export const FieldPressMaster: React.FC = () => {
   // editing must PUT in place so the dispatch keeps its id, createdAt,
   // and anything (forks, shares) already pointing at it.
   const [editingPublishedId, setEditingPublishedId] = useState<string | null>(null);
+  const [forkParentId, setForkParentId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("Field Dispatch");
   const [newLocation, setNewLocation] = useState("Midwest Corridor");
@@ -2509,6 +2510,7 @@ export const FieldPressMaster: React.FC = () => {
     setEditingPublishedId(null);
     if (draftToEdit) {
       setEditingDraftId(draftToEdit.id);
+      setForkParentId(null);
       setNewTitle(draftToEdit.title.replace(/^Draft:\s*/i, ""));
       setNewCategory(draftToEdit.category || "Field Dispatch");
       setNewLocation(draftToEdit.location || "Midwest Corridor");
@@ -2532,6 +2534,7 @@ export const FieldPressMaster: React.FC = () => {
       }
     } else {
       setEditingDraftId(null);
+      setForkParentId(null);
       setNewTitle("");
       setNewCategory("Field Dispatch");
       setNewLocation("Midwest Corridor");
@@ -2675,9 +2678,11 @@ export const FieldPressMaster: React.FC = () => {
       imageCaption: chosenCaption,
       isPressRoll: false,
       editionStyle: newEditionStyle,
-      sharingOption: newSharingOption
+      sharingOption: newSharingOption,
+      parentDispatchId: forkParentId || undefined
     };
 
+    setForkParentId(null);
     try {
       // Owner editing an already-published dispatch PUTs in place;
       // everything else (new dispatch, or promoting a staged draft)
@@ -2776,6 +2781,7 @@ export const FieldPressMaster: React.FC = () => {
 
   const handleForkPressie = (parent: Dispatch) => {
     openCreatePressie();
+    setForkParentId(parent.id);
     setNewTitle(`Fork: ${parent.title}`);
     setNewEditionStyle(parent.editionStyle || "tactical");
     setNewContent(`\n\n---\n[Forked from @${parent.callsign} (${parent.author}) • Original: "${parent.title}"]`);
@@ -3679,6 +3685,15 @@ export const FieldPressMaster: React.FC = () => {
                           <span>Shared by @{d.repostedByCallsign}</span>
                         </div>
                       )}
+                      {d.parentDispatchId && (() => {
+                        const forkParent = dispatches.find((p) => p.id === d.parentDispatchId);
+                        return forkParent ? (
+                          <div className="pt-1 text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                            <span>🔀</span>
+                            <span>Forked from @{forkParent.callsign}</span>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="pt-2 flex items-center justify-between text-xs font-mono text-zinc-400">
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-zinc-300">Byline:</span>
@@ -3912,6 +3927,15 @@ export const FieldPressMaster: React.FC = () => {
                           <span>Shared by @{disp.repostedByCallsign}</span>
                         </div>
                       )}
+                      {disp.parentDispatchId && (() => {
+                        const forkParent = dispatches.find((p) => p.id === disp.parentDispatchId);
+                        return forkParent ? (
+                          <div className="text-[10px] text-emerald-400 mb-1.5 flex items-center gap-1">
+                            <span>🔀</span>
+                            <span>Forked from @{forkParent.callsign}</span>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="flex items-center justify-between text-[11px] font-mono mb-2">
                         <span className="font-bold text-amber-500 uppercase">{disp.category}</span>
                         <span className="text-[10px] uppercase opacity-75 px-1.5 py-0.5 rounded border border-zinc-700/50">
@@ -4180,6 +4204,15 @@ export const FieldPressMaster: React.FC = () => {
                       <p className={`text-sm leading-relaxed ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
                         {d.content}
                       </p>
+                      {d.parentDispatchId && (() => {
+                        const forkParent = dispatches.find((p) => p.id === d.parentDispatchId);
+                        return forkParent ? (
+                          <div className="text-[10px] text-emerald-400 flex items-center gap-1">
+                            <span>🔀</span>
+                            <span>Forked from @{forkParent.callsign}</span>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="sm:text-right font-mono text-xs flex-shrink-0 flex sm:flex-col justify-between items-end gap-2">
                       <div>
