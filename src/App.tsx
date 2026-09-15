@@ -1911,6 +1911,37 @@ export const FieldPressMaster: React.FC = () => {
   // Wire Filter & Search State
   const [wireCategoryFilter, setWireCategoryFilter] = useState<string>("ALL");
   const [wireSearchQuery, setWireSearchQuery] = useState<string>("");
+  // Server-side search results (#153/#169). The base `dispatches` feed is
+  // capped to the most recent 200 rows, so a non-empty search query is
+  // sent to the server to search the full table instead of just filtering
+  // whatever happens to be cached client-side.
+  const [wireSearchResults, setWireSearchResults] = useState<Dispatch[] | null>(null);
+  const [wireSearchLoading, setWireSearchLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const trimmed = wireSearchQuery.trim();
+    if (!trimmed) {
+      setWireSearchResults(null);
+      setWireSearchLoading(false);
+      return;
+    }
+    setWireSearchLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dispatches?q=${encodeURIComponent(trimmed)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.dispatches)) {
+          setWireSearchResults(data.dispatches);
+        }
+      } catch {
+        // Network hiccup — leave the previous results/local filter in place.
+      } finally {
+        setWireSearchLoading(false);
+      }
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [wireSearchQuery]);
 
   // Syncing Indicator State
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -2701,8 +2732,15 @@ export const FieldPressMaster: React.FC = () => {
     };
   }, [activeTab, dispatches]);
 
-  const filteredDispatches = dispatches.filter((d) => {
+  // When a search query is active, the server has already matched
+  // title/content/location/author across the full table (see the
+  // wireSearchResults effect above) — apply only the category filter on
+  // top of that. With no query, fall back to filtering the base feed
+  // client-side exactly as before.
+  const wireSearchActive = wireSearchQuery.trim().length > 0;
+  const filteredDispatches = (wireSearchActive ? (wireSearchResults ?? []) : dispatches).filter((d) => {
     const matchesCategory = wireCategoryFilter === "ALL" || d.category.toLowerCase() === wireCategoryFilter.toLowerCase();
+    if (wireSearchActive) return matchesCategory;
     const matchesSearch = !wireSearchQuery.trim() ||
       d.title.toLowerCase().includes(wireSearchQuery.toLowerCase()) ||
       d.content.toLowerCase().includes(wireSearchQuery.toLowerCase()) ||
@@ -3794,11 +3832,15 @@ export const FieldPressMaster: React.FC = () => {
 
             {/* Wire Controls */}
             <div className={`p-3.5 rounded-lg border flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs ${cardThemeClass}`}>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Search className="h-4 w-4 text-zinc-400" />
+<div className="flex items-center gap-2 w-full sm:w-auto">
+                {wireSearchLoading ? (
+                  <RefreshCw className="h-4 w-4 text-zinc-400 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 text-zinc-400" />
+                )}
                 <input
                   type="text"
-                  placeholder="Filter wire dispatches by keyword, reporter, or location..."
+                  placeholder="Search all dispatches by keyword, reporter, or location..."
                   value={wireSearchQuery}
                   onChange={(e) => setWireSearchQuery(e.target.value)}
                   className={`px-2.5 py-1.5 rounded text-xs w-full sm:w-72 focus:outline-none ${inputThemeClass}`}
@@ -3826,7 +3868,9 @@ export const FieldPressMaster: React.FC = () => {
             <div className="space-y-3">
               {filteredDispatches.length === 0 ? (
                 <div className={`p-8 rounded-lg border text-center font-mono text-xs ${subCardThemeClass} ${subTextThemeClass}`}>
-                  No dispatches match the active search or category filter.
+                  {wireSearchActive && wireSearchLoading
+                    ? "Searching all dispatches..."
+                    : "No dispatches match the active search or category filter."}
                 </div>
               ) : (
                 filteredDispatches.map((d) => (

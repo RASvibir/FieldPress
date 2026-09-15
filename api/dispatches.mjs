@@ -64,6 +64,31 @@ async function listOrFeed(req, res) {
       return;
     }
 
+    // Server-side search (#153/#169) - the client only ever holds the most
+    // recent 200 published dispatches in memory, so filtering that array
+    // silently misses everything older once volume exceeds the cap. A
+    // non-empty ?q= runs the search against the full table instead.
+    const rawQuery = typeof req.query?.q === "string" ? req.query.q.trim() : "";
+    if (rawQuery) {
+      const like = `%${rawQuery}%`;
+      const rows = await sql`
+        SELECT * FROM fieldpress_dispatches
+        WHERE is_press_roll = false
+          AND (
+            title ILIKE ${like}
+            OR content ILIKE ${like}
+            OR location ILIKE ${like}
+            OR author ILIKE ${like}
+          )
+        ORDER BY
+          (title ILIKE ${like}) DESC,
+          created_at DESC
+        LIMIT 200;
+      `;
+      res.status(200).json({ dispatches: rows.map(toClientShape) });
+      return;
+    }
+
     const rows = await sql`
       SELECT * FROM fieldpress_dispatches
       WHERE is_press_roll = false
