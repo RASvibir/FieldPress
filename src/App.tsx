@@ -806,6 +806,13 @@ export const FieldPressMaster: React.FC = () => {
   const [showPostNoticeModal, setShowPostNoticeModal] = useState(false);
   const [newEditionStyle, setNewEditionStyle] = useState<"tactical" | "newspaper" | "comic" | "arcade" | "magazine">("tactical");
   const [newSharingOption, setNewSharingOption] = useState<"fork" | "colab" | "none">("fork");
+  // Guards handleCreatePressie against double-submission (e.g. a fast
+  // double-click on Publish/Save). Without this, two overlapping PUT/POST
+  // requests can fire for the same click; the second one races the first
+  // and can come back with a confusing error (e.g. a 403 ownership
+  // mismatch), leaving a stray draft or error toast behind. Only one
+  // in-flight submission is ever allowed.
+  const [isSubmittingPressie, setIsSubmittingPressie] = useState(false);
   
   // Global comments & reacts state synchronized across feed & full-page reader
   const [allComments, setAllComments] = useState<Record<string, CommentItem[]>>(() => {
@@ -2624,8 +2631,18 @@ export const FieldPressMaster: React.FC = () => {
   // so the save handler PUTs the existing row instead of creating a new
   // one or running the draft-promotion delete flow.
   const openEditPublished = (dispatch: Dispatch) => {
-    setEditingDraftId(null);
+    // openCreatePressie(dispatch) pre-fills the form from `dispatch`, but
+    // it treats its argument as a *draft* being edited and sets
+    // editingDraftId to dispatch.id as a side effect - so a
+    // setEditingDraftId(null) placed *before* this call gets clobbered.
+    // That used to leave editingDraftId === editingPublishedId (same id),
+    // which made handleCreatePressie PUT the update and then immediately
+    // run its "delete the promoted draft" cleanup on that same id -
+    // silently deleting the dispatch right after publishing the edit.
+    // Clearing editingDraftId *after* the pre-fill is what actually takes
+    // effect.
     openCreatePressie(dispatch);
+    setEditingDraftId(null);
     setEditingPublishedId(dispatch.id);
   };
 
@@ -2708,6 +2725,7 @@ export const FieldPressMaster: React.FC = () => {
   // Publish to Live Feed Handler
   const handleCreatePressie = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmittingPressie) return;
     if (!newTitle.trim()) {
       setFormValidationError("Please enter a headline for your dispatch.");
       return;
@@ -2716,6 +2734,7 @@ export const FieldPressMaster: React.FC = () => {
       setFormValidationError("Sign in to publish a dispatch.");
       return;
     }
+    setIsSubmittingPressie(true);
 
     const fallbackContent = newContent.trim() || visualPrompt.trim() || `Field dispatch filed from ${pressPass.bureau || "Midwest Corridor"} by ${pressPass.name}.`;
 
@@ -2806,6 +2825,8 @@ export const FieldPressMaster: React.FC = () => {
       setTimeout(() => setSavedSuccessToast(""), 3500);
     } catch {
       setFormValidationError("Couldn't publish — check your connection and try again.");
+    } finally {
+      setIsSubmittingPressie(false);
     }
   };
 
@@ -4942,11 +4963,12 @@ export const FieldPressMaster: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleCreatePressie()}
-                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  disabled={isSubmittingPressie}
+                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                   title={editingPublishedId ? "Save changes to this dispatch" : "Publish dispatch to Live Feed"}
                 >
                   {editingPublishedId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                  <span>{editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
+                  <span>{isSubmittingPressie ? "Saving..." : editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
                 </button>
               </div>
             </div>
