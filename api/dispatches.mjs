@@ -45,6 +45,35 @@ function toClientShape(row) {
   };
 }
 
+const FEED_PAGE_SIZE = 40;
+const MAX_PAGE_SIZE = 100;
+
+// Keyset (cursor) pagination helpers. A cursor is the opaque, base64-encoded
+// {createdAt, id} of the last row on the previous page. Using created_at+id
+// as the key (rather than OFFSET) keeps pages stable even as new dispatches
+// are published in between page loads, and avoids the full-table cost of a
+// growing OFFSET.
+function encodeCursor(row) {
+  return Buffer.from(JSON.stringify({ createdAt: row.created_at, id: row.id })).toString("base64url");
+}
+
+function decodeCursor(raw) {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (typeof parsed?.createdAt !== "string" || typeof parsed?.id !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function parseLimit(raw) {
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return FEED_PAGE_SIZE;
+  return Math.min(n, MAX_PAGE_SIZE);
+}
+
 async function listOrFeed(req, res) {
   try {
     const wantsMine = req.query?.mine === "1" || req.query?.mine === "true";
@@ -64,38 +93,75 @@ async function listOrFeed(req, res) {
       return;
     }
 
-    // Server-side search (#153/#169) - the client only ever holds the most
-    // recent 200 published dispatches in memory, so filtering that array
-    // silently misses everything older once volume exceeds the cap. A
-    // non-empty ?q= runs the search against the full table instead.
+    const limit = parseLimit(req.query?.limit);
+    const cursor = decodeCursor(req.query?.cursor);
+
+    // Server-side search (#153/#169), now itself cursor-paginated (#201) -
+    // previously capped at a flat LIMIT 200, which silently dropped older
+    // matches once a search term had more than 200 hits.
     const rawQuery = typeof req.query?.q === "string" ? req.query.q.trim() : "";
     if (rawQuery) {
       const like = `%${rawQuery}%`;
-      const rows = await sql`
-        SELECT * FROM fieldpress_dispatches
-        WHERE is_press_roll = false
-          AND (
-            title ILIKE ${like}
-            OR content ILIKE ${like}
-            OR location ILIKE ${like}
-            OR author ILIKE ${like}
-          )
-        ORDER BY
-          (title ILIKE ${like}) DESC,
-          created_at DESC
-        LIMIT 200;
-      `;
-      res.status(200).json({ dispatches: rows.map(toClientShape) });
+      const rows = cursor
+        ? await sql`
+            SELECT * FROM fieldpress_dispatches
+            WHERE is_press_roll = false
+              AND (
+                title ILIKE ${like}
+                OR content ILIKE ${like}
+                OR location ILIKE ${like}
+                OR author ILIKE ${like}
+              )
+              AND (created_at, id) < (${cursor.createdAt}, ${cursor.id})
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit + 1};
+          `
+        : await sql`
+            SELECT * FROM fieldpress_dispatches
+            WHERE is_press_roll = false
+              AND (
+                title ILIKE ${like}
+                OR content ILIKE ${like}
+                OR location ILIKE ${like}
+                OR author ILIKE ${like}
+              )
+            ORDER BY
+              (title ILIKE ${like}) DESC,
+              created_at DESC, id DESC
+            LIMIT ${limit + 1};
+          `;
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      res.status(200).json({
+        dispatches: page.map(toClientShape),
+        nextCursor: hasMore ? encodeCursor(page[page.length - 1]) : null,
+      });
       return;
     }
 
-    const rows = await sql`
-      SELECT * FROM fieldpress_dispatches
-      WHERE is_press_roll = false
-      ORDER BY created_at DESC
-      LIMIT 200;
-    `;
-    res.status(200).json({ dispatches: rows.map(toClientShape) });
+    // Public feed (#201) - cursor-paginated instead of a flat LIMIT 200, so
+    // the feed keeps working (via "Load More") once dispatch volume grows
+    // past a single page instead of silently truncating.
+    const rows = cursor
+      ? await sql`
+          SELECT * FROM fieldpress_dispatches
+          WHERE is_press_roll = false
+            AND (created_at, id) < (${cursor.createdAt}, ${cursor.id})
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${limit + 1};
+        `
+      : await sql`
+          SELECT * FROM fieldpress_dispatches
+          WHERE is_press_roll = false
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${limit + 1};
+        `;
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    res.status(200).json({
+      dispatches: page.map(toClientShape),
+      nextCursor: hasMore ? encodeCursor(page[page.length - 1]) : null,
+    });
   } catch (err) {
     console.error("Dispatches list error:", err);
     res.status(500).json({ error: "Failed to load dispatches." });
