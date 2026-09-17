@@ -5,11 +5,18 @@
 //   GET  /api/messenger/thread?withId= - full message history with one cohort
 //   POST /api/messenger/send           - send a message (cohorts only, not blocked)
 //   POST /api/messenger/read           - mark a thread as read
+//   GET  /api/messenger/group          - group channel history (any authenticated account)
+//   POST /api/messenger/groupSend      - send to the group channel
 //
 // Messaging is cohort-gated: you can only DM someone you have an accepted
 // fieldpress_cohort_requests row with. This replaces the old client-only-
 // fake messenger where messengerMessages lived purely in React state +
 // localStorage with no other real account involved on the other end.
+//
+// The group channel ("Everyone") is not cohort-gated -- any authenticated
+// account can read and post -- and now lives in fieldpress_group_messages
+// instead of the old localStorage-only mock, which had no real account on
+// the other end and no backing table at all.
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../auth.mjs";
@@ -188,11 +195,84 @@ async function handleRead(req, res, me) {
   res.status(200).json({ ok: true });
 }
 
+const GROUP_CHAT_ID = "midwest-bureau";
+const GROUP_BODY_MAX = 2000;
+
+async function handleGroup(req, res, me) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const rows = await sql`
+    SELECT m.id, m.sender_id, m.body, m.image_url, m.link_url, m.created_at,
+      a.name AS sender_name, a.callsign AS sender_callsign, a.avatar_url AS sender_avatar_url
+    FROM fieldpress_group_messages m
+    JOIN fieldpress_accounts a ON a.id = m.sender_id
+    WHERE m.chat_id = ${GROUP_CHAT_ID}
+    ORDER BY m.created_at ASC
+    LIMIT 500;
+  `;
+
+  res.status(200).json({
+    messages: rows.map((m) => ({
+      id: m.id,
+      senderId: m.sender_id,
+      senderName: m.sender_name,
+      senderCallsign: m.sender_callsign,
+      senderAvatarUrl: m.sender_avatar_url,
+      body: m.body,
+      imageUrl: m.image_url,
+      linkUrl: m.link_url,
+      createdAt: m.created_at
+    }))
+  });
+}
+
+async function handleGroupSend(req, res, me) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const { body, imageUrl, linkUrl } = req.body || {};
+  const cleanBody = typeof body === "string" ? body.trim().slice(0, GROUP_BODY_MAX) : "";
+  const cleanImageUrl = typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim().slice(0, 2000) : null;
+  const cleanLinkUrl = typeof linkUrl === "string" && linkUrl.trim() ? linkUrl.trim().slice(0, 2000) : null;
+
+  if (!cleanBody && !cleanImageUrl && !cleanLinkUrl) {
+    res.status(400).json({ error: "Message can't be empty." });
+    return;
+  }
+
+  const [row] = await sql`
+    INSERT INTO fieldpress_group_messages (chat_id, sender_id, body, image_url, link_url)
+    VALUES (${GROUP_CHAT_ID}, ${me.id}, ${cleanBody || null}, ${cleanImageUrl}, ${cleanLinkUrl})
+    RETURNING id, sender_id, body, image_url, link_url, created_at;
+  `;
+
+  res.status(201).json({
+    message: {
+      id: row.id,
+      senderId: row.sender_id,
+      senderName: me.name,
+      senderCallsign: me.callsign,
+      senderAvatarUrl: me.avatar_url,
+      body: row.body,
+      imageUrl: row.image_url,
+      linkUrl: row.link_url,
+      createdAt: row.created_at
+    }
+  });
+}
+
 const ACTIONS = {
   threads: handleThreads,
   thread: handleThread,
   send: handleSend,
-  read: handleRead
+  read: handleRead,
+  group: handleGroup,
+  groupSend: handleGroupSend
 };
 
 export default async function handler(req, res) {
