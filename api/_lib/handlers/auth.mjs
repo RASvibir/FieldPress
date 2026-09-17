@@ -9,6 +9,7 @@
 // me.mjs) purely to stay under Vercel's per-plan serverless function cap.
 // Each handler below is otherwise unchanged from its original file.
 
+import crypto from "crypto";
 import { neon } from "@neondatabase/serverless";
 import bcrypt from "bcryptjs";
 import {
@@ -27,6 +28,25 @@ import { sendMail } from "../mailer.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "vibir@fieldpress.studio").toLowerCase();
+// Gates who can claim the super_admin role at signup. Without this, the
+// role was granted to *whoever* signed up with SUPER_ADMIN_EMAIL, with no
+// proof they're the real owner - a real problem the moment the accounts
+// table is ever wiped (a DB reset, a bad migration, etc.), since the email
+// becomes claimable again by anyone who types it into the signup form.
+// Required (fails closed) any time someone tries to sign up as that email.
+const SUPER_ADMIN_SETUP_KEY = process.env.SUPER_ADMIN_SETUP_KEY || null;
+
+// The super_admin account id used to be a random token minted fresh on
+// every signup (see the general case below), which meant a DB reset
+// followed by re-signup gave the admin a *different* id than before -
+// silently orphaning every dispatch/etc. created under the old id (they'd
+// fail their `account_id = caller.id` ownership checks forever after).
+// Deriving the id deterministically from the fixed admin email means the
+// admin account keeps the same id across any number of resets, as long as
+// this email/const stays the same.
+function superAdminAccountId() {
+  return `acc-admin-${crypto.createHash("sha256").update(SUPER_ADMIN_EMAIL).digest("hex").slice(0, 16)}`;
+}
 
 async function handleSignup(req, res) {
   if (req.method !== "POST") {
@@ -34,11 +54,23 @@ async function handleSignup(req, res) {
     return;
   }
   try {
-    const { email, password, callsign, name, bureau } = req.body || {};
+    const { email, password, callsign, name, bureau, setupKey } = req.body || {};
 
     if (!isValidEmail(email)) {
       res.status(400).json({ error: "Please enter a valid email address." });
       return;
+    }
+
+    const isAdminEmail = email.toLowerCase() === SUPER_ADMIN_EMAIL;
+    if (isAdminEmail) {
+      // Fail closed: if no setup key is configured server-side, nobody can
+      // claim the admin email via signup at all, rather than silently
+      // falling back to the old "first person to type the email wins"
+      // behavior.
+      if (!SUPER_ADMIN_SETUP_KEY || setupKey !== SUPER_ADMIN_SETUP_KEY) {
+        res.status(403).json({ error: "Invalid or missing admin setup key." });
+        return;
+      }
     }
     if (typeof password !== "string" || password.length < 8) {
       res.status(400).json({ error: "Password must be at least 8 characters." });
@@ -66,11 +98,11 @@ async function handleSignup(req, res) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const id = `acc-${generateToken().slice(0, 16)}`;
+    const id = isAdminEmail ? superAdminAccountId() : `acc-${generateToken().slice(0, 16)}`;
     const avatarUrl = "/pressie.svg";
     const cleanBureau = typeof bureau === "string" ? bureau.trim().slice(0, 200) : "Midwest Corridor Wire";
 
-    const role = email.toLowerCase() === SUPER_ADMIN_EMAIL ? 'super_admin' : 'correspondent';
+    const role = isAdminEmail ? 'super_admin' : 'correspondent';
 
     const [account] = await sql`
       INSERT INTO fieldpress_accounts (id, email, password_hash, callsign, name, bureau, avatar_url, role)

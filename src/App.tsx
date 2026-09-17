@@ -806,6 +806,13 @@ export const FieldPressMaster: React.FC = () => {
   const [showPostNoticeModal, setShowPostNoticeModal] = useState(false);
   const [newEditionStyle, setNewEditionStyle] = useState<"tactical" | "newspaper" | "comic" | "arcade" | "magazine">("tactical");
   const [newSharingOption, setNewSharingOption] = useState<"fork" | "colab" | "none">("fork");
+  // Guards handleCreatePressie against double-submission (e.g. a fast
+  // double-click on Publish/Save). Without this, two overlapping PUT/POST
+  // requests can fire for the same click; the second one races the first
+  // and can come back with a confusing error (e.g. a 403 ownership
+  // mismatch), leaving a stray draft or error toast behind. Only one
+  // in-flight submission is ever allowed.
+  const [isSubmittingPressie, setIsSubmittingPressie] = useState(false);
   
   // Global comments & reacts state synchronized across feed & full-page reader
   const [allComments, setAllComments] = useState<Record<string, CommentItem[]>>(() => {
@@ -1787,6 +1794,13 @@ export const FieldPressMaster: React.FC = () => {
   const [dispatches, setDispatches] = useState<Dispatch[]>(INITIAL_DISPATCHES);
   const [dispatchesLoaded, setDispatchesLoaded] = useState<boolean>(false);
 
+  // Feed pagination (#201) - the feed comes back a page (40) at a time via
+  // a cursor rather than one flat capped request, so "Load More" keeps
+  // working as dispatch volume grows instead of silently truncating.
+  const [dispatchesCursor, setDispatchesCursor] = useState<string | null>(null);
+  const [dispatchesHasMore, setDispatchesHasMore] = useState<boolean>(false);
+  const [loadingMoreDispatches, setLoadingMoreDispatches] = useState<boolean>(false);
+
   const refreshPublicFeed = async () => {
     try {
       const res = await fetch("/api/dispatches");
@@ -1795,10 +1809,60 @@ export const FieldPressMaster: React.FC = () => {
       if (Array.isArray(data.dispatches)) {
         setDispatches(data.dispatches.length > 0 ? data.dispatches : INITIAL_DISPATCHES);
       }
+      setDispatchesCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
+      setDispatchesHasMore(Boolean(data.nextCursor));
     } catch {
       // Network hiccup — keep whatever's currently shown.
     } finally {
       setDispatchesLoaded(true);
+    }
+  };
+
+  const loadMoreDispatches = async () => {
+    if (!dispatchesCursor || loadingMoreDispatches) return;
+    setLoadingMoreDispatches(true);
+    try {
+      const res = await fetch(`/api/dispatches?cursor=${encodeURIComponent(dispatchesCursor)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.dispatches) && data.dispatches.length > 0) {
+        setDispatches((prev) => {
+          const seen = new Set(prev.map((d) => d.id));
+          const fresh = data.dispatches.filter((d: Dispatch) => !seen.has(d.id));
+          return [...prev, ...fresh];
+        });
+      }
+      setDispatchesCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
+      setDispatchesHasMore(Boolean(data.nextCursor));
+    } catch {
+      // Leave the cursor as-is so the user can just press "Load More" again.
+    } finally {
+      setLoadingMoreDispatches(false);
+    }
+  };
+
+  const loadMoreSearchResults = async () => {
+    if (!wireSearchCursor || loadingMoreSearch) return;
+    const trimmed = wireSearchQuery.trim();
+    if (!trimmed) return;
+    setLoadingMoreSearch(true);
+    try {
+      const res = await fetch(`/api/dispatches?q=${encodeURIComponent(trimmed)}&cursor=${encodeURIComponent(wireSearchCursor)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.dispatches) && data.dispatches.length > 0) {
+        setWireSearchResults((prev) => {
+          const base = prev ?? [];
+          const seen = new Set(base.map((d) => d.id));
+          const fresh = data.dispatches.filter((d: Dispatch) => !seen.has(d.id));
+          return [...base, ...fresh];
+        });
+      }
+      setWireSearchCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
+    } catch {
+      // Leave the cursor as-is so the user can just press "Load More" again.
+    } finally {
+      setLoadingMoreSearch(false);
     }
   };
 
@@ -2103,12 +2167,18 @@ export const FieldPressMaster: React.FC = () => {
   // whatever happens to be cached client-side.
   const [wireSearchResults, setWireSearchResults] = useState<Dispatch[] | null>(null);
   const [wireSearchLoading, setWireSearchLoading] = useState<boolean>(false);
+  // Search results are themselves cursor-paginated now (#201) - a query
+  // that matches more than one page just shows "Load More" rather than
+  // silently dropping everything past the old flat cap.
+  const [wireSearchCursor, setWireSearchCursor] = useState<string | null>(null);
+  const [loadingMoreSearch, setLoadingMoreSearch] = useState<boolean>(false);
 
   useEffect(() => {
     const trimmed = wireSearchQuery.trim();
     if (!trimmed) {
       setWireSearchResults(null);
       setWireSearchLoading(false);
+      setWireSearchCursor(null);
       return;
     }
     setWireSearchLoading(true);
@@ -2120,6 +2190,7 @@ export const FieldPressMaster: React.FC = () => {
         if (Array.isArray(data.dispatches)) {
           setWireSearchResults(data.dispatches);
         }
+        setWireSearchCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
       } catch {
         // Network hiccup — leave the previous results/local filter in place.
       } finally {
@@ -2560,8 +2631,18 @@ export const FieldPressMaster: React.FC = () => {
   // so the save handler PUTs the existing row instead of creating a new
   // one or running the draft-promotion delete flow.
   const openEditPublished = (dispatch: Dispatch) => {
-    setEditingDraftId(null);
+    // openCreatePressie(dispatch) pre-fills the form from `dispatch`, but
+    // it treats its argument as a *draft* being edited and sets
+    // editingDraftId to dispatch.id as a side effect - so a
+    // setEditingDraftId(null) placed *before* this call gets clobbered.
+    // That used to leave editingDraftId === editingPublishedId (same id),
+    // which made handleCreatePressie PUT the update and then immediately
+    // run its "delete the promoted draft" cleanup on that same id -
+    // silently deleting the dispatch right after publishing the edit.
+    // Clearing editingDraftId *after* the pre-fill is what actually takes
+    // effect.
     openCreatePressie(dispatch);
+    setEditingDraftId(null);
     setEditingPublishedId(dispatch.id);
   };
 
@@ -2644,6 +2725,7 @@ export const FieldPressMaster: React.FC = () => {
   // Publish to Live Feed Handler
   const handleCreatePressie = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmittingPressie) return;
     if (!newTitle.trim()) {
       setFormValidationError("Please enter a headline for your dispatch.");
       return;
@@ -2652,6 +2734,7 @@ export const FieldPressMaster: React.FC = () => {
       setFormValidationError("Sign in to publish a dispatch.");
       return;
     }
+    setIsSubmittingPressie(true);
 
     const fallbackContent = newContent.trim() || visualPrompt.trim() || `Field dispatch filed from ${pressPass.bureau || "Midwest Corridor"} by ${pressPass.name}.`;
 
@@ -2742,6 +2825,8 @@ export const FieldPressMaster: React.FC = () => {
       setTimeout(() => setSavedSuccessToast(""), 3500);
     } catch {
       setFormValidationError("Couldn't publish — check your connection and try again.");
+    } finally {
+      setIsSubmittingPressie(false);
     }
   };
 
@@ -4280,6 +4365,40 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
                 ))
               )}
+              {/* Load More (#201) - feed/search now come a page at a time via
+                  cursor pagination instead of one flat LIMIT-200 request. */}
+              {!wireSearchActive && dispatchesHasMore && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreDispatches}
+                    disabled={loadingMoreDispatches}
+                    className={`px-4 py-2 rounded-lg border font-mono text-xs font-semibold transition ${
+                      loadingMoreDispatches
+                        ? "opacity-60 cursor-wait"
+                        : "hover:border-amber-500/50 hover:text-amber-500 cursor-pointer"
+                    } ${cardThemeClass}`}
+                  >
+                    {loadingMoreDispatches ? "Loading..." : "Load More Dispatches"}
+                  </button>
+                </div>
+              )}
+              {wireSearchActive && wireSearchCursor && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreSearchResults}
+                    disabled={loadingMoreSearch}
+                    className={`px-4 py-2 rounded-lg border font-mono text-xs font-semibold transition ${
+                      loadingMoreSearch
+                        ? "opacity-60 cursor-wait"
+                        : "hover:border-amber-500/50 hover:text-amber-500 cursor-pointer"
+                    } ${cardThemeClass}`}
+                  >
+                    {loadingMoreSearch ? "Loading..." : "Load More Results"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -4844,11 +4963,12 @@ export const FieldPressMaster: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleCreatePressie()}
-                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  disabled={isSubmittingPressie}
+                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                   title={editingPublishedId ? "Save changes to this dispatch" : "Publish dispatch to Live Feed"}
                 >
                   {editingPublishedId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                  <span>{editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
+                  <span>{isSubmittingPressie ? "Saving..." : editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
                 </button>
               </div>
             </div>
