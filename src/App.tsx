@@ -1,28 +1,4 @@
 
-export interface FieldMessage {
-  id: string;
-  chatId: string;
-  sender: string;
-  callsign: string;
-  avatarUrl?: string;
-  text: string;
-  imageUrl?: string;
-  linkUrl?: string;
-  timestamp: string;
-  reactions?: Record<string, number>;
-}
-
-export interface ChatChannel {
-  id: string;
-  name: string;
-  callsign?: string;
-  bureau?: string;
-  isGroup: boolean;
-  membersCount?: number;
-  avatarUrl?: string;
-  description?: string;
-  unreadCount?: number;
-}
 export interface CommentItem {
   id: string;
   author: string;
@@ -1018,172 +994,64 @@ export const FieldPressMaster: React.FC = () => {
   const [showAttachLink, setShowAttachLink] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [messengerMessages, setMessengerMessages] = useState<FieldMessage[]>(() => {
+  type GroupMessage = {
+    id: string;
+    senderId: string;
+    senderName: string;
+    senderCallsign: string;
+    senderAvatarUrl?: string;
+    body: string | null;
+    imageUrl: string | null;
+    linkUrl: string | null;
+    createdAt: string;
+  };
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
+  const [groupMessagesLoading, setGroupMessagesLoading] = useState(false);
+  const [groupMessageSending, setGroupMessageSending] = useState(false);
+
+  const loadGroupMessages = async () => {
+    setGroupMessagesLoading(true);
     try {
-      const saved = localStorage.getItem("fieldpress_messenger_messages");
-      if (saved) {
-        const parsed: FieldMessage[] = JSON.parse(saved);
-        return parsed.filter((m) => m.callsign !== "wire.sec" && m.sender !== "Field Comms Wire Security");
+      const res = await fetch("/api/messenger/group");
+      if (res.ok) {
+        const data = await res.json();
+        setGroupMessages(data.messages || []);
       }
     } catch {}
-    return [
-      {
-        id: "msg-1",
-        chatId: "midwest-bureau",
-        sender: "Elena Rostova",
-        callsign: "elena.wire",
-        text: "Checking in from Tippecanoe spur. Telemetry from the rail substations came through intact. 🛰️",
-        timestamp: "10:14 AM"
-      },
-      {
-        id: "msg-2",
-        chatId: "midwest-bureau",
-        sender: "Marcus Vance",
-        callsign: "vance.lead",
-        text: "Route 63 battery-electric shuttle data is uploaded. Running 20 min ahead of schedule.",
-        timestamp: "10:22 AM"
-      },
-      {
-        id: "msg-3",
-        chatId: "midwest-bureau",
-        sender: "Victor Birkle",
-        callsign: "ViBiR",
-        text: "Autonomous micro-substations deployed across Vermilion. Clean handoffs, zero grid ripple. ⚡",
-        timestamp: "10:28 AM"
-      },
-      {
-        id: "msg-4",
-        chatId: "dm-elena",
-        sender: "Elena Rostova",
-        callsign: "elena.wire",
-        text: "Victor, sharing the updated watershed topographical scan. Ready for the civic wire.",
-        imageUrl: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=800&q=80",
-        linkUrl: "https://fieldpress.studio/#dispatch-d-2",
-        timestamp: "Yesterday"
-      },
-      {
-        id: "msg-5",
-        chatId: "dm-elena",
-        sender: "Victor Birkle",
-        callsign: "ViBiR",
-        text: "Looks pristine Elena. Juxtaposing it on the Daily Broadsheet front-page now! 👍",
-        timestamp: "Just now"
-      },
-      {
-        id: "msg-6",
-        chatId: "investigative-desk",
-        sender: "Sarah Chen",
-        callsign: "chen.data",
-        text: "Turbidity meters along the river weir calibrated. Dispatches will include live sensor readings.",
-        timestamp: "35m ago"
-      }
-    ];
-  });
-
-  const CHAT_GROUPS: ChatChannel[] = [
-    {
-      id: "midwest-bureau",
-      name: "Midwest Corridor Desk",
-      isGroup: true,
-      membersCount: 4,
-      description: "Corridor dispatch coordination & telemetry wire"
-    },
-    {
-      id: "investigative-desk",
-      name: "Investigative & Grid Analysis",
-      isGroup: true,
-      membersCount: 3,
-      description: "Decentralized grid & watershed analysis"
-    },
-    {
-      id: "press-bulletin",
-      name: "Public Co-op Bulletin",
-      isGroup: true,
-      membersCount: 6,
-      description: "Open regional frequency notices & classifieds"
-    }
-  ];
-
-  const CHAT_DMS: ChatChannel[] = [
-    {
-      id: "dm-elena",
-      name: "Elena Rostova",
-      callsign: "elena.wire",
-      bureau: "Tippecanoe Desk",
-      isGroup: false,
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-      description: "Civic open data & hydrology desk"
-    },
-    {
-      id: "dm-marcus",
-      name: "Marcus Vance",
-      callsign: "vance.lead",
-      bureau: "Wabash Rail Logistics",
-      isGroup: false,
-      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      description: "Route 63 transit & freight corridor"
-    },
-    {
-      id: "dm-sarah",
-      name: "Sarah Chen",
-      callsign: "chen.data",
-      bureau: "Civic Hydrology Wire",
-      isGroup: false,
-      avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80",
-      description: "Watershed telemetry & basin mapping"
-    },
-    {
-      id: "dm-pamela",
-      name: "Pamela Black",
-      callsign: "glitterpop",
-      bureau: "ChloReform Studios",
-      isGroup: false,
-      avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-      description: "Multimedia production & broadcast logistics"
-    }
-  ];
-
-  const handleSendMessengerMessage = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()) return;
-    if (blockedUserIds.has(activeChatId)) return;
-
-    const newMsg: FieldMessage = {
-      id: `msg-${Date.now()}`,
-      chatId: activeChatId,
-      sender: pressPass.name || "Victor Birkle",
-      callsign: pressPass.callsign || "ViBiR",
-      avatarUrl: pressPass.avatarUrl,
-      text: messengerInput.trim(),
-      imageUrl: messengerImageUrl.trim() || undefined,
-      linkUrl: messengerLinkUrl.trim() || undefined,
-      timestamp: "Just now"
-    };
-
-    const updated = [...messengerMessages, newMsg];
-    setMessengerMessages(updated);
-    setMessengerInput("");
-    setMessengerImageUrl("");
-    setMessengerLinkUrl("");
-    setShowAttachImage(false);
-    setShowAttachLink(false);
-
-    try {
-      localStorage.setItem("fieldpress_messenger_messages", JSON.stringify(updated));
-    } catch {}
+    setGroupMessagesLoading(false);
   };
 
-  const handleToggleMessageReaction = (msgId: string, emoji: string) => {
-    const updated = messengerMessages.map((m) => {
-      if (m.id !== msgId) return m;
-      const reactions = { ...(m.reactions || {}) };
-      reactions[emoji] = (reactions[emoji] || 0) + 1;
-      return { ...m, reactions };
-    });
-    setMessengerMessages(updated);
+  const handleSendMessengerMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanBody = messengerInput.trim();
+    const cleanImageUrl = messengerImageUrl.trim();
+    const cleanLinkUrl = messengerLinkUrl.trim();
+    if (!cleanBody && !cleanImageUrl && !cleanLinkUrl) return;
+
+    setGroupMessageSending(true);
     try {
-      localStorage.setItem("fieldpress_messenger_messages", JSON.stringify(updated));
-    } catch {}
+      const res = await fetch("/api/messenger/groupSend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: cleanBody, imageUrl: cleanImageUrl || undefined, linkUrl: cleanLinkUrl || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSavedSuccessToast(data.error || "Couldn't send that message.");
+        setTimeout(() => setSavedSuccessToast(""), 2500);
+      } else {
+        setGroupMessages((prev) => [...prev, data.message]);
+        setMessengerInput("");
+        setMessengerImageUrl("");
+        setMessengerLinkUrl("");
+        setShowAttachImage(false);
+        setShowAttachLink(false);
+      }
+    } catch {
+      setSavedSuccessToast("Network error sending message.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+    setGroupMessageSending(false);
   };
 
   // Settings Sub-tab
@@ -1412,8 +1280,8 @@ export const FieldPressMaster: React.FC = () => {
 
   // Real DM threads + history (cohort-gated, text-only for v1 — the
   // messenger schema has no attachment columns). Group chat ("midwest-
-  // bureau") is explicitly out of scope for this rewire and stays on the
-  // old fake/local messengerMessages system below.
+  // bureau") now lives in fieldpress_group_messages, not cohort-gated
+  // (any authenticated account can post/read), loaded below.
   type MessengerThread = {
     user: { id: string; callsign: string; name: string; bureau: string; avatarUrl?: string };
     lastMessage: { body: string; senderId: string; createdAt: string } | null;
@@ -1473,6 +1341,13 @@ export const FieldPressMaster: React.FC = () => {
     if (authAccount && activeChatId && activeChatId !== GROUP_CHAT_ID) {
       loadRealThread(activeChatId);
       markThreadRead(activeChatId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId, authAccount?.id]);
+
+  useEffect(() => {
+    if (authAccount && activeChatId === GROUP_CHAT_ID) {
+      loadGroupMessages();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId, authAccount?.id]);
@@ -6642,12 +6517,13 @@ ${shareUrl}`;
                 );
               })()}
 
-              {/* Message Stream — group chat stays on the old fake/local
-                  system (explicitly out of scope for this rewire); real
-                  DMs load from the server, cohort-gated, text-only for v1. */}
+              {/* Message Stream — group chat now loads from the server
+                  (fieldpress_group_messages), same as real DMs below. */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {activeChatId === GROUP_CHAT_ID ? (
-                  messengerMessages.filter((m) => m.chatId === activeChatId).length === 0 ? (
+                  groupMessagesLoading ? (
+                    <p className={`text-xs text-center py-8 ${subTextThemeClass}`}>Loading conversation...</p>
+                  ) : groupMessages.length === 0 ? (
                     <div className={`p-8 rounded-lg border text-center text-xs ${subCardThemeClass} ${subTextThemeClass} max-w-sm mx-auto my-auto space-y-2.5`}>
                       <MessageCircle className="h-8 w-8 text-amber-500 mx-auto" />
                       <p className="font-semibold text-sm">No messages yet</p>
@@ -6656,75 +6532,76 @@ ${shareUrl}`;
                       </p>
                     </div>
                   ) : (
-                    messengerMessages
-                      .filter((m) => m.chatId === activeChatId)
-                      .map((m) => {
-                        const isMe = m.callsign === (pressPass.callsign || "ViBiR") || m.sender === pressPass.name;
-                        const senderAvatar = isMe ? pressPass.avatarUrl : m.avatarUrl;
+                    groupMessages.map((m) => {
+                      const isMe = m.senderId === authAccount?.id;
+                      const senderAvatar = isMe ? pressPass.avatarUrl : m.senderAvatarUrl;
+                      const senderName = isMe ? (pressPass.name || m.senderName) : m.senderName;
+                      const senderCallsign = isMe ? (pressPass.callsign || m.senderCallsign) : m.senderCallsign;
+                      const timeLabel = new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-                        return (
-                          <div
-                            key={m.id}
-                            className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
-                          >
-                            {senderAvatar ? (
-                              <img
-                                src={senderAvatar}
-                                alt={m.sender}
-                                className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
-                                {m.sender[0]}
-                              </div>
-                            )}
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"} items-start`}
+                        >
+                          {senderAvatar ? (
+                            <img
+                              src={senderAvatar}
+                              alt={senderName}
+                              className="w-8 h-8 rounded-lg object-cover border border-amber-500/40 flex-shrink-0 mt-0.5"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0 mt-0.5">
+                              {senderName[0]}
+                            </div>
+                          )}
 
-                            <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
-                              <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
-                                <span className="font-bold text-zinc-300">{m.sender}</span>
-                                <span className="text-amber-600">@{m.callsign}</span>
-                                <span className="text-zinc-600">•</span>
-                                <span className="text-zinc-600">{m.timestamp}</span>
-                              </div>
+                          <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[75%]`}>
+                            <div className="flex items-center gap-1 text-[10px] font-mono mb-1.5 text-zinc-500 px-1.5">
+                              <span className="font-bold text-zinc-300">{senderName}</span>
+                              <span className="text-amber-600">@{senderCallsign}</span>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-zinc-600">{timeLabel}</span>
+                            </div>
 
-                              <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border space-y-2 ${
-                                isMe
-                                  ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
-                                  : isDark
-                                    ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
-                                    : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
-                              }`}>
-                                {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
+                            <div className={`rounded-xl p-3 text-xs sm:text-sm leading-relaxed border space-y-2 ${
+                              isMe
+                                ? "bg-amber-600 border-amber-600 text-white rounded-tr-none"
+                                : isDark
+                                  ? "bg-zinc-800 border-zinc-700 text-zinc-100 rounded-tl-none"
+                                  : "bg-zinc-100 border-zinc-200 text-zinc-900 rounded-tl-none"
+                            }`}>
+                              {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
 
-                                {m.imageUrl && (
-                                  <div className="rounded-lg overflow-hidden border border-zinc-700/50 aspect-video max-h-40 bg-black">
-                                    <img src={m.imageUrl} alt="Shared still" className="w-full h-full object-cover" />
-                                  </div>
-                                )}
+                              {m.imageUrl && (
+                                <div className="rounded-lg overflow-hidden border border-zinc-700/50 aspect-video max-h-40 bg-black">
+                                  <img src={m.imageUrl} alt="Shared still" className="w-full h-full object-cover" />
+                                </div>
+                              )}
 
-                                {m.linkUrl && (
-                                  <a
-                                    href={m.linkUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
-                                      isMe
-                                        ? "bg-amber-700/80 text-amber-100 hover:bg-amber-700"
-                                        : isDark
-                                          ? "bg-zinc-950/60 text-cyan-400 hover:text-cyan-300"
-                                          : "bg-zinc-200 text-blue-600 hover:text-blue-700"
-                                    }`}
-                                  >
-                                    <Link2 className="h-3 w-3 flex-shrink-0" />
-                                    <span className="truncate">{m.linkUrl}</span>
-                                    <ExternalLink className="h-3 w-3 ml-auto flex-shrink-0 opacity-70" />
-                                  </a>
-                                )}
-                              </div>
+                              {m.linkUrl && (
+                                <a
+                                  href={m.linkUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
+                                    isMe
+                                      ? "bg-amber-700/80 text-amber-100 hover:bg-amber-700"
+                                      : isDark
+                                        ? "bg-zinc-950/60 text-cyan-400 hover:text-cyan-300"
+                                        : "bg-zinc-200 text-blue-600 hover:text-blue-700"
+                                  }`}
+                                >
+                                  <Link2 className="h-3 w-3 flex-shrink-0" />
+                                  <span className="truncate">{m.linkUrl}</span>
+                                  <ExternalLink className="h-3 w-3 ml-auto flex-shrink-0 opacity-70" />
+                                </a>
+                              )}
                             </div>
                           </div>
-                        );
-                      })
+                        </div>
+                      );
+                    })
                   )
                 ) : realThreadLoading ? (
                   <p className={`text-xs text-center py-8 ${subTextThemeClass}`}>Loading conversation...</p>
@@ -6971,7 +6848,7 @@ ${shareUrl}`;
                     type="submit"
                     disabled={
                       (!messengerInput.trim() && !messengerImageUrl.trim() && !messengerLinkUrl.trim()) ||
-                      (activeChatId !== GROUP_CHAT_ID && realMessageSending)
+                      (activeChatId === GROUP_CHAT_ID ? groupMessageSending : realMessageSending)
                     }
                     className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-500 text-zinc-950 hover:bg-amber-400 transition flex items-center justify-center cursor-pointer disabled:opacity-40 shadow-xs"
                     title="Send"
