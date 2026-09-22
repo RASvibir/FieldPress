@@ -58,16 +58,84 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 const EDITION_VOICE = {
-  newspaper: "Write in the voice of a 1920s broadsheet newspaper: formal, authoritative, vintage wire-service diction. Prefer words like 'yesterday', 'according to', 'authorities confirm'.",
-  comic: "Write like a punchy comic book panel: short exclamatory bursts, onomatopoeia (BAM, ZAP, KAPOW), a pulpy superhero-adjacent tone.",
-  arcade: "Write like retro 8-bit arcade game telemetry: ALL CAPS status lines, terse system-log phrasing, references to levels/missions/bosses.",
-  magazine: "Write like a sleek modern lifestyle magazine: clean, confident, conversational, trend-aware.",
-  tactical: "Write like an encrypted tactical field intelligence briefing: terse, clipped, coordinate/callsign-heavy, no flourish."
+  newspaper: "1920s broadsheet newspaper: formal, authoritative, vintage wire-service diction. Prefer words like 'yesterday', 'according to', 'authorities confirm'.",
+  comic: "punchy comic book panel: short exclamatory bursts, onomatopoeia (BAM, ZAP, KAPOW), a pulpy superhero-adjacent tone.",
+  arcade: "retro 8-bit arcade game telemetry: ALL CAPS status lines, terse system-log phrasing, references to levels/missions/bosses.",
+  magazine: "sleek modern lifestyle magazine: clean, confident, conversational, trend-aware.",
+  tactical: "encrypted tactical field intelligence briefing: terse, clipped, coordinate/callsign-heavy, no flourish."
 };
 
+// Previously this always instructed the model to produce "real dispatch
+// copy" no matter what was asked, and the client unconditionally rendered
+// every reply as a draft card -- so Pressy'o tried to write a pressie for
+// every message, including plain questions and chit-chat. This system
+// prompt instead makes the model classify its own reply as either a
+// drafted dispatch or ordinary conversation, and say which one it is via
+// a machine-readable header line the handler parses below. The two
+// response shapes:
+//
+//   TYPE: draft
+//   TITLE: <headline>
+//   <dispatch body in the requested edition voice>
+//
+//   TYPE: chat
+//   <a normal, helpful reply -- answer the question, discuss, brainstorm,
+//   fact-check, ask a clarifying question, whatever fits -- no edition
+//   voice, no dispatch structure>
+//
+// Only an explicit ask to write/draft/compose a dispatch, pressie, or
+// story should produce TYPE: draft. Everything else -- questions, "what
+// do you think", requests for feedback, small talk, "how does X work" --
+// is TYPE: chat.
 function buildSystemPrompt(editionStyle) {
   const voice = EDITION_VOICE[editionStyle] || EDITION_VOICE.tactical;
-  return `You are Pressy'o, the autonomous newsroom copilot for FieldPress, a hyperlocal citizen-journalism platform. ${voice} Keep responses grounded, concise, and usable as real dispatch copy — no meta-commentary about being an AI.`;
+  return `You are Pressy'o, the autonomous newsroom copilot for FieldPress, a hyperlocal citizen-journalism platform. You can draft dispatches, but you're also a normal conversational assistant -- answer questions, brainstorm, give feedback, fact-check, or just chat when that's what's actually being asked for. Do not write dispatch copy unless the user is explicitly asking you to draft, write, or compose a dispatch/pressie/story.
+
+Decide which kind of reply this message needs, then respond in EXACTLY one of these two formats -- the very first line must be either "TYPE: draft" or "TYPE: chat", nothing before it:
+
+If drafting a dispatch (user explicitly asked for one):
+TYPE: draft
+TITLE: <a short headline>
+<the dispatch body, written in this edition's voice: ${voice}>
+
+If just talking (anything else -- a question, feedback request, brainstorm, small talk, clarifying question back to the user, etc.):
+TYPE: chat
+<a normal, direct, helpful reply -- no edition voice, no dispatch structure, no headline>
+
+No meta-commentary about being an AI in either case.`;
+}
+
+// Parses the TYPE: header the model was instructed to emit. Falls back to
+// "chat" (not "draft") when the model doesn't comply with the format --
+// the safe default is a plain reply, not an unwanted dispatch draft.
+function parsePressyoReply(raw) {
+  const firstLineBreak = raw.indexOf("\n");
+  const firstLine = (firstLineBreak === -1 ? raw : raw.slice(0, firstLineBreak)).trim();
+
+  if (/^TYPE:\s*draft/i.test(firstLine)) {
+    let rest = raw.slice(firstLineBreak === -1 ? raw.length : firstLineBreak + 1);
+    const titleMatch = rest.match(/^\s*TITLE:\s*(.+)\r?\n?/i);
+    let title = "Untitled Dispatch";
+    if (titleMatch) {
+      title = titleMatch[1].trim();
+      rest = rest.slice(titleMatch[0].length);
+    }
+    const content = rest.trim();
+    if (content) {
+      return { type: "draft", title, text: content };
+    }
+    // Model said "draft" but gave us no body -- don't hand the client an
+    // empty draft card, fall through to treating it as chat text instead.
+  }
+
+  if (/^TYPE:\s*chat/i.test(firstLine)) {
+    const rest = raw.slice(firstLineBreak === -1 ? raw.length : firstLineBreak + 1).trim();
+    return { type: "chat", text: rest || raw.trim() };
+  }
+
+  // No recognized header at all -- model ignored the format. Return the
+  // raw text as plain chat rather than guessing it's a draft.
+  return { type: "chat", text: raw.trim() };
 }
 
 async function tryOllama(systemPrompt, userPrompt) {
@@ -172,7 +240,8 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ text, source });
+    const parsed = parsePressyoReply(text);
+    res.status(200).json({ ...parsed, style: parsed.type === "draft" ? (editionStyle || "tactical") : undefined, source });
   } catch (err) {
     res.status(500).json({ error: err?.message || "Unknown server error" });
   }
