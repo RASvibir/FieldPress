@@ -611,15 +611,23 @@ export const FieldPressMaster: React.FC = () => {
         throw new Error(data?.error || `Request failed (${resp.status})`);
       }
 
-      const finalized = [...newChat, {
-        sender: "pressyo" as const,
-        text: data.text,
-        actionData: {
-          title: `Pressy'o Dispatch (${editionStyle})`,
-          content: data.text,
-          style: editionStyle
-        }
-      }];
+      // Server now classifies its own reply as "draft" or "chat" (see
+      // TYPE: header handling in api/pressyo.mjs) -- only attach the
+      // draft card when it actually is one, instead of wrapping every
+      // reply as a dispatch draft regardless of what was asked.
+      const pressyoMessage: PressyoMessage = data.type === "draft"
+        ? {
+            sender: "pressyo",
+            text: data.text,
+            actionData: {
+              title: data.title || `Pressy'o Dispatch (${data.style || editionStyle})`,
+              content: data.text,
+              style: (data.style || editionStyle) as "newspaper" | "comic" | "arcade" | "tactical" | "magazine"
+            }
+          }
+        : { sender: "pressyo", text: data.text };
+
+      const finalized = [...newChat, pressyoMessage];
       setPressyoChat(finalized);
       try {
         localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
@@ -2721,6 +2729,30 @@ export const FieldPressMaster: React.FC = () => {
     }
   };
 
+  // Removing a *published* dispatch is a bigger deal than clearing an
+  // unpublished draft (deleteDraft above) — it's already live, possibly
+  // bookmarked/forked/reacted-to by other people. Confirm before doing it,
+  // and use the same DELETE /api/dispatches/:id the owner-only server
+  // handler already supports (it was never exposed in the UI for
+  // published dispatches, only for Press Roll drafts).
+  const deletePublishedDispatch = async (id: string) => {
+    if (!window.confirm("Permanently remove this dispatch from the Live Feed? This can't be undone.")) {
+      return;
+    }
+    const previousDispatches = dispatches;
+    setDispatches((prev) => prev.filter((d) => d.id !== id));
+    setSavedSuccessToast("Dispatch removed.");
+    setTimeout(() => setSavedSuccessToast(""), 2500);
+    try {
+      const res = await fetch(`/api/dispatches/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+    } catch {
+      setDispatches(previousDispatches);
+      setSavedSuccessToast("Couldn't remove the dispatch — try again.");
+      setTimeout(() => setSavedSuccessToast(""), 2500);
+    }
+  };
+
   const toggleBookmark = (id: string) => {
     const isBookmarked = bookmarks.includes(id);
     const updated = isBookmarked ? bookmarks.filter((b) => b !== id) : [...bookmarks, id];
@@ -3701,6 +3733,20 @@ export const FieldPressMaster: React.FC = () => {
                           <span>Edit</span>
                         </button>
                       )}
+                      {authAccount && d.accountId === authAccount.id && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deletePublishedDispatch(d.id);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition font-bold flex items-center gap-1 cursor-pointer shadow-xs"
+                          title="Delete this dispatch"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      )}
 
                       {d.sharingOption === "fork" && (
                         <button
@@ -3944,6 +3990,19 @@ export const FieldPressMaster: React.FC = () => {
                               title="Edit this dispatch"
                             >
                               <Edit3 className="h-3 w-3" />
+                            </button>
+                          )}
+                          {authAccount && disp.accountId === authAccount.id && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePublishedDispatch(disp.id);
+                              }}
+                              className="hover:text-rose-400 p-1 rounded transition cursor-pointer"
+                              title="Delete this dispatch"
+                            >
+                              <Trash2 className="h-3 w-3" />
                             </button>
                           )}
                           {disp.sharingOption === "fork" && (
@@ -4209,6 +4268,19 @@ export const FieldPressMaster: React.FC = () => {
                             title="Edit this dispatch"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {authAccount && d.accountId === authAccount.id && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePublishedDispatch(d.id);
+                            }}
+                            className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 transition"
+                            title="Delete this dispatch"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
 {d.sharingOption === "fork" && (
