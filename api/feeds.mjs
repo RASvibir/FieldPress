@@ -12,9 +12,9 @@
 
 import { neon } from "@neondatabase/serverless";
 import crypto from "node:crypto";
-import parseRss from "../_lib/parseRss.mjs";
-import resolveEmbed from "../_lib/resolveEmbed.mjs";
-import wireSources from "../_lib/wireSources.mjs";
+import parseRss from "./_lib/parseRss.mjs";
+import resolveEmbed from "./_lib/resolveEmbed.mjs";
+import wireSources from "./_lib/wireSources.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const WIRE_ACCOUNT_ID = "wire-system-account";
@@ -74,6 +74,17 @@ export default async function handler(req, res) {
   if (action === "sync") {
     if (req.method !== "GET" && req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+    // Vercel cron requests carry `Authorization: Bearer $CRON_SECRET`
+    // automatically. Without this check the endpoint is publicly
+    // reachable by anyone, who could trigger unlimited real HTTP fetches
+    // against every configured RSS source plus per-item embed resolution
+    // on every hit.
+    const expected = process.env.CRON_SECRET;
+    const authHeader = req.headers?.authorization || "";
+    if (!expected || authHeader !== `Bearer ${expected}`) {
+      res.status(401).json({ error: "Unauthorized." });
       return;
     }
     const results = [];

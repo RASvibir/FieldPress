@@ -1,4 +1,4 @@
--- Migration: 0012_wire_edition
+-- Migration: 0015_wire_edition
 -- Adds inbound "wire" pressie support and generic link-embed metadata.
 --
 -- Wire pressies are normal fieldpress_dispatches rows (edition_style = 'wire')
