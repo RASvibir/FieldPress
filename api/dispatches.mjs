@@ -18,6 +18,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "./_lib/auth.mjs";
+import resolveEmbed from "./_lib/resolveEmbed.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -40,6 +41,9 @@ function toClientShape(row) {
     editionStyle: row.edition_style || undefined,
     sharingOption: row.sharing_option,
     parentDispatchId: row.parent_dispatch_id || undefined,
+    sourceUrl: row.source_url || undefined,
+    embedType: row.embed_type || undefined,
+    embedData: row.embed_data || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -200,7 +204,7 @@ async function create(req, res) {
     const {
       title, category, content, location, coordinates,
       imageUrl, imageCaption, isLead, isPressRoll, editionStyle,
-      sharingOption, parentDispatchId, id: clientId
+      sharingOption, parentDispatchId, id: clientId, sourceUrl
     } = req.body || {};
 
     if (typeof title !== "string" || !title.trim()) {
@@ -215,6 +219,16 @@ async function create(req, res) {
     const validSharing = new Set(["fork", "colab", "none"]);
     const cleanSharing = validSharing.has(sharingOption) ? sharingOption : "fork";
 
+    // Optional link embed (YouTube/Reddit/X rich embed or a generic OG
+    // link card). resolveEmbed() runs its own SSRF guard on this URL
+    // (see _lib/safeUrl.mjs) since it comes straight from the caller --
+    // failure just means no embed, never a request error.
+    const cleanSourceUrl = typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim().slice(0, 2000) : null;
+    let embed = null;
+    if (cleanSourceUrl) {
+      embed = await resolveEmbed(cleanSourceUrl);
+    }
+
     const id = typeof clientId === "string" && clientId.trim() ? clientId.trim().slice(0, 128) : `d-${Date.now()}-${caller.id.slice(-6)}`;
     const lat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
     const lng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
@@ -223,13 +237,15 @@ async function create(req, res) {
       INSERT INTO fieldpress_dispatches (
         id, account_id, title, category, author, callsign, bureau, location,
         latitude, longitude, content, image_url, image_caption, is_lead,
-        is_press_roll, edition_style, sharing_option, parent_dispatch_id
+        is_press_roll, edition_style, sharing_option, parent_dispatch_id,
+        source_url, embed_type, embed_data
       ) VALUES (
         ${id}, ${caller.id}, ${title.trim().slice(0, 500)}, ${cleanCategory},
         ${caller.name}, ${caller.callsign}, ${caller.bureau}, ${location || null},
         ${lat}, ${lng}, ${content.trim()}, ${imageUrl || null}, ${imageCaption || null},
         ${!!isLead}, ${!!isPressRoll}, ${editionStyle || null}, ${cleanSharing},
-        ${parentDispatchId || null}
+        ${parentDispatchId || null}, ${cleanSourceUrl}, ${embed?.embed_type || null},
+        ${embed?.embed_data ? JSON.stringify(embed.embed_data) : null}
       )
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -244,6 +260,9 @@ async function create(req, res) {
         is_press_roll = EXCLUDED.is_press_roll,
         edition_style = EXCLUDED.edition_style,
         sharing_option = EXCLUDED.sharing_option,
+        source_url = EXCLUDED.source_url,
+        embed_type = EXCLUDED.embed_type,
+        embed_data = EXCLUDED.embed_data,
         updated_at = now()
       WHERE fieldpress_dispatches.account_id = ${caller.id}
       RETURNING *;
@@ -270,12 +289,44 @@ async function update(req, res, id) {
     }
     const {
       title, category, content, location, coordinates,
-      imageUrl, imageCaption, isLead, isPressRoll, editionStyle, sharingOption
+      imageUrl, imageCaption, isLead, isPressRoll, editionStyle, sharingOption,
+      sourceUrl
     } = req.body || {};
 
     const validSharing = new Set(["fork", "colab", "none"]);
     const lat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
     const lng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
+
+    // sourceUrl follows image_url/image_caption's semantics, not title/
+    // content's COALESCE-to-keep-existing pattern: the composer always
+    // sends this field on every save (see src/App.tsx newSourceUrl), so an
+    // absent/empty value here means "clear the link", not "field not
+    // supplied". Only re-resolve the embed when the URL actually changed --
+    // an unchanged link keeps its cached embed_type/embed_data rather than
+    // re-fetching the provider on every edit.
+    const cleanSourceUrl = typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim().slice(0, 2000) : null;
+
+    const [existing] = await sql`
+      SELECT source_url, embed_type, embed_data FROM fieldpress_dispatches
+      WHERE id = ${id} AND account_id = ${caller.id}
+    `;
+    if (!existing) {
+      res.status(403).json({ error: "You don't own this dispatch, or it doesn't exist." });
+      return;
+    }
+
+    let embedType = existing.embed_type;
+    let embedData = existing.embed_data;
+    if (cleanSourceUrl !== existing.source_url) {
+      if (!cleanSourceUrl) {
+        embedType = null;
+        embedData = null;
+      } else {
+        const embed = await resolveEmbed(cleanSourceUrl);
+        embedType = embed?.embed_type || null;
+        embedData = embed?.embed_data ? JSON.stringify(embed.embed_data) : null;
+      }
+    }
 
     const [row] = await sql`
       UPDATE fieldpress_dispatches SET
@@ -291,6 +342,9 @@ async function update(req, res, id) {
         is_press_roll = COALESCE(${typeof isPressRoll === "boolean" ? isPressRoll : null}, is_press_roll),
         edition_style = ${editionStyle ?? null},
         sharing_option = COALESCE(${validSharing.has(sharingOption) ? sharingOption : null}, sharing_option),
+        source_url = ${cleanSourceUrl},
+        embed_type = ${embedType},
+        embed_data = ${embedData},
         updated_at = now()
       WHERE id = ${id} AND account_id = ${caller.id}
       RETURNING *;

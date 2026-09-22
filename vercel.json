@@ -2,7 +2,19 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/dispatches/:id", "destination": "/api/dispatches?id=:id" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/dispatches/:id",
+      "destination": "/api/dispatches?id=:id"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/feeds?action=sync",
+      "schedule": "0 8 * * *"
+    }
   ]
 }

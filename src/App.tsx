@@ -155,9 +155,17 @@ export interface Dispatch {
   imageCaption?: string;
   isLead?: boolean;
   isPressRoll?: boolean;
-  editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine";
+  editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine" | "wire";
   sharingOption?: "fork" | "colab" | "none";
   parentDispatchId?: string;
+  sourceUrl?: string;
+  embedType?: "youtube" | "reddit" | "x" | "link_card";
+  embedData?: {
+    html?: string | null;
+    thumbnail_url?: string | null;
+    title?: string;
+    provider_name?: string;
+  };
   createdAt?: string;
   updatedAt?: string;
   repostOf?: string;
@@ -315,6 +323,87 @@ function wrapCanvasText(
   return y + lineHeight;
 }
 
+// Renders a wire/regular pressie's resolved link embed (YouTube/Reddit/X
+// rich embeds, or a generic Open Graph link card fallback). Embed HTML is
+// resolved and cached server-side at ingest time (see api/_lib/resolveEmbed.mjs)
+// — this component only renders the cached result and, for providers whose
+// embed relies on a widget script (Reddit/X), lazily loads that script once.
+function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (dispatch.embedType === "reddit" && !document.getElementById("reddit-embed-widget-script")) {
+      const s = document.createElement("script");
+      s.id = "reddit-embed-widget-script";
+      s.src = "https://embed.reddit.com/widgets.js";
+      s.async = true;
+      document.body.appendChild(s);
+    }
+    if (dispatch.embedType === "x") {
+      const w = window as any;
+      if (w.twttr?.widgets && containerRef.current) {
+        w.twttr.widgets.load(containerRef.current);
+      } else if (!document.getElementById("x-embed-widget-script")) {
+        const s = document.createElement("script");
+        s.id = "x-embed-widget-script";
+        s.src = "https://platform.x.com/widgets.js";
+        s.async = true;
+        document.body.appendChild(s);
+      }
+    }
+  }, [dispatch.id, dispatch.embedType]);
+
+  if (!dispatch.embedType || !dispatch.embedData) return null;
+  const { embedType, embedData, sourceUrl } = dispatch;
+
+  if (embedType === "youtube" && embedData.html) {
+    return (
+      <div
+        className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video [&_iframe]:!w-full [&_iframe]:!h-full"
+        dangerouslySetInnerHTML={{ __html: embedData.html }}
+      />
+    );
+  }
+
+  if ((embedType === "reddit" || embedType === "x") && embedData.html) {
+    return (
+      <div
+        ref={containerRef}
+        className="rounded-xl overflow-hidden border border-zinc-800 bg-white p-2 [&>blockquote]:m-0"
+        dangerouslySetInnerHTML={{ __html: embedData.html }}
+      />
+    );
+  }
+
+  // Generic link-card fallback (Facebook, Instagram, news sites, anything
+  // without a native embed) — always links out rather than embedding an
+  // untrusted third-party iframe.
+  return (
+    <a
+      href={sourceUrl || "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-xl overflow-hidden border border-zinc-800 hover:border-amber-500/60 transition group"
+    >
+      {embedData.thumbnail_url && (
+        <div className="aspect-video bg-black overflow-hidden">
+          <img
+            src={embedData.thumbnail_url}
+            alt=""
+            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+          />
+        </div>
+      )}
+      <div className="p-3">
+        <div className="text-sm font-bold line-clamp-2">{embedData.title}</div>
+        {embedData.provider_name && (
+          <div className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">{embedData.provider_name}</div>
+        )}
+      </div>
+    </a>
+  );
+}
+
 export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | null> {
   if (typeof document === "undefined") return null;
   const canvas = document.createElement("canvas");
@@ -323,7 +412,9 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  const style = disp.editionStyle || "newspaper";
+  // Wire pressies have no dedicated share-card theme (they're auto-generated
+  // system content, never user-styled) — render their share card as newspaper.
+  const style = (disp.editionStyle && disp.editionStyle !== "wire" ? disp.editionStyle : "newspaper");
 
   type EditionTheme = {
     bg: string;
@@ -2111,6 +2202,9 @@ export const FieldPressMaster: React.FC = () => {
   const [newContent, setNewContent] = useState("");
   const [newCoordinates, setNewCoordinates] = useState<string>("-87.6298, 40.1245");
   const [newImageUrl, setNewImageUrl] = useState<string>("");
+  // Optional embed link (YouTube/Reddit/X/any URL) -- resolved server-side
+  // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
+  const [newSourceUrl, setNewSourceUrl] = useState<string>("");
   const [newImageCaption, setNewImageCaption] = useState<string>("");
   const [visualPrompt, setVisualPrompt] = useState<string>("");
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
@@ -2526,6 +2620,7 @@ export const FieldPressMaster: React.FC = () => {
       setNewContent(draftToEdit.content || "");
       setNewImageUrl(draftToEdit.imageUrl || "");
       setNewImageCaption(draftToEdit.imageCaption || "");
+      setNewSourceUrl(draftToEdit.sourceUrl || "");
       setVisualPrompt(draftToEdit.title || "");
       if (draftToEdit.imageUrl) {
         setEvidenceGallery([{
@@ -2550,6 +2645,7 @@ export const FieldPressMaster: React.FC = () => {
       setNewContent("");
       setNewImageUrl("");
       setNewImageCaption("");
+      setNewSourceUrl("");
       setVisualPrompt("");
       setEvidenceGallery([]);
       setShowUrlInput(false);
@@ -2631,6 +2727,7 @@ export const FieldPressMaster: React.FC = () => {
       content: newContent.trim(),
       imageUrl: newImageUrl || undefined,
       imageCaption: newImageCaption || undefined,
+      sourceUrl: newSourceUrl.trim() || undefined,
       isPressRoll: true
     };
 
@@ -2697,6 +2794,7 @@ export const FieldPressMaster: React.FC = () => {
       content: fallbackContent,
       imageUrl: chosenImage,
       imageCaption: chosenCaption,
+      sourceUrl: newSourceUrl.trim() || undefined,
       isPressRoll: false,
       editionStyle: newEditionStyle,
       sharingOption: newSharingOption,
@@ -2830,7 +2928,9 @@ export const FieldPressMaster: React.FC = () => {
     openCreatePressie();
     setForkParentId(parent.id);
     setNewTitle(`Fork: ${parent.title}`);
-    setNewEditionStyle(parent.editionStyle || "tactical");
+    // Forking a wire pressie produces a regular user-authored pressie —
+    // "wire" isn't a selectable edition style in the editor, so fall back.
+    setNewEditionStyle(parent.editionStyle && parent.editionStyle !== "wire" ? parent.editionStyle : "tactical");
     setNewContent(`\n\n---\n[Forked from @${parent.callsign} (${parent.author}) • Original: "${parent.title}"]`);
     if (parent.imageUrl) {
       setNewImageUrl(parent.imageUrl);
@@ -4258,6 +4358,7 @@ export const FieldPressMaster: React.FC = () => {
                           d.editionStyle === "arcade" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" :
                           d.editionStyle === "magazine" ? "bg-purple-500/20 text-purple-400 border border-purple-500/40" :
                           d.editionStyle === "newspaper" ? "bg-amber-800/20 text-amber-400 border border-amber-700/40 font-serif" :
+                          d.editionStyle === "wire" ? "bg-sky-500/20 text-sky-400 border border-sky-500/40" :
                           "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
                         }`}>
                           {d.editionStyle || "tactical"}
@@ -4563,7 +4664,7 @@ export const FieldPressMaster: React.FC = () => {
       {/*    With Image Generation Prompt Box + Hybrid Preview + Media Tray         */}
       {/* ========================================================================= */}
       {showPressieBuilderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`w-full max-w-2xl max-h-[92vh] flex flex-col rounded-xl border shadow-2xl overflow-hidden transition ${
             isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
@@ -4904,6 +5005,21 @@ export const FieldPressMaster: React.FC = () => {
                     </p>
                   </div>
                 )}
+              </div>
+
+              {/* Link (optional) -- resolved server-side into a YouTube/Reddit/X
+                  embed or a generic link card on save. See WireEmbed. */}
+              <div>
+                <label className={`font-bold block mb-1 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
+                  Link <span className="font-normal text-[10px] normal-case tracking-normal text-zinc-500">(optional — YouTube, Reddit, X, or any article URL)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  className={`w-full rounded-lg px-3 py-2 text-xs focus:outline-none transition ${inputThemeClass}`}
+                />
               </div>
 
               {/* 5. Dispatch Body (matching Image 2) */}
@@ -5676,6 +5792,11 @@ export const FieldPressMaster: React.FC = () => {
                 <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[11px] font-bold uppercase">
                   {selectedStory.category}
                 </span>
+                {selectedStory.editionStyle === "wire" && (
+                  <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/40 text-[11px] font-bold uppercase tracking-wider">
+                    Wire
+                  </span>
+                )}
                 <span className="text-zinc-400 text-xs">[{selectedStory.location}]</span>
                 <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{selectedStory.id}</span>
               </div>
@@ -5735,6 +5856,23 @@ export const FieldPressMaster: React.FC = () => {
               <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
                 {selectedStory.content}
               </div>
+
+              {/* Resolved link embed (wire pressies + any regular pressie with a link) */}
+              {selectedStory.embedType && (
+                <div className="space-y-2">
+                  <WireEmbed dispatch={selectedStory} />
+                  {selectedStory.sourceUrl && (
+                    <a
+                      href={selectedStory.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-amber-500 hover:text-amber-400 hover:underline inline-block"
+                    >
+                      Read original at source →
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Telemetry Footer */}
               {selectedStory.coordinates && (
