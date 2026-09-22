@@ -192,7 +192,14 @@ export const INITIAL_CLASSIFIEDS: ClassifiedItem[] = [
 // last updated). The API route ignores `v` entirely -- it's args-only for
 // the crawler's cache key, not used for the dispatch lookup itself.
 export const buildDispatchShareUrl = (id: string): string => {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://fieldpress.studio";
+  // Always the fixed prod origin, never window.location.origin: a share
+  // link generated from a Vercel preview deploy or localhost previously
+  // pointed back at that preview/localhost URL, which 404s (or worse,
+  // is simply unreachable) for anyone who isn't the person who copied it.
+  // Link unfurl crawlers hitting a preview URL also produce broken/blank
+  // Open Graph previews. Every dispatch is only ever meant to be shared
+  // via the real production URL regardless of where it was generated.
+  const origin = "https://fieldpress.studio";
   return `${origin}/api/dispatch/${id}?v=${Date.now()}`;
 };
 
