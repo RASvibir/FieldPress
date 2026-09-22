@@ -5,6 +5,50 @@
 // fall back to Gemini (reliable, always-on) if Ollama is unreachable, times
 // out, or isn't configured. The frontend never needs to know which one
 // answered beyond the `source` field returned for transparency.
+//
+// Auth + daily rate limit (migration 0012_pressyo_usage_schema): this
+// endpoint previously had no authentication and no ceiling at all, and on
+// Ollama-unreachable it falls through to a metered Gemini key, so an
+// anonymous caller in a loop had a real cost impact. It now requires a
+// session (same as every other write-ish endpoint) and enforces a per
+// account daily cap via fieldpress_pressyo_usage, keyed on the
+// America/Chicago calendar date to match the existing client-side
+// "Chicago Midnight Quota" convention used for visual generations.
+
+import { neon } from "@neondatabase/serverless";
+import { getAuthenticatedAccount } from "./_lib/auth.mjs";
+
+const sql = neon(process.env.DATABASE_URL);
+
+const DAILY_LIMIT = parseInt(process.env.PRESSYO_DAILY_LIMIT || "40", 10);
+
+function chicagoDateString() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+// Atomic upsert-and-increment: single round trip, no read-then-write race
+// between concurrent requests from the same account. Returns the count
+// *after* incrementing, so the caller can compare against DAILY_LIMIT.
+async function incrementUsage(accountId) {
+  const today = chicagoDateString();
+  const [row] = await sql`
+    INSERT INTO fieldpress_pressyo_usage (account_id, usage_date, count, updated_at)
+    VALUES (${accountId}, ${today}, 1, now())
+    ON CONFLICT (account_id, usage_date)
+    DO UPDATE SET count = fieldpress_pressyo_usage.count + 1, updated_at = now()
+    RETURNING count;
+  `;
+  return row.count;
+}
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "https://ollama.fieldpress.studio";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
@@ -83,9 +127,27 @@ export default async function handler(req, res) {
   }
 
   try {
+    const me = await getAuthenticatedAccount(req);
+    if (!me) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+
     const { prompt, editionStyle } = req.body || {};
     if (!prompt || typeof prompt !== "string") {
       res.status(400).json({ error: "Missing 'prompt' string in request body" });
+      return;
+    }
+
+    // Charge the request against today's quota before doing any model
+    // work. If this call itself pushes the count over the limit, reject
+    // it -- so the account is capped at exactly DAILY_LIMIT successful
+    // requests/day, not DAILY_LIMIT-1 checked-then-incremented ones.
+    const usedToday = await incrementUsage(me.id);
+    if (usedToday > DAILY_LIMIT) {
+      res.status(429).json({
+        error: `Daily Pressy'o limit reached (${DAILY_LIMIT}/day). Resets at midnight Central time.`
+      });
       return;
     }
 
