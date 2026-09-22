@@ -104,6 +104,7 @@ export interface PressPassData {
   issueDate: string;
   accentColor: string;
   avatarUrl?: string;
+  coverPhotoUrl?: string;
   bio: string;
   pgpKey: string;
   contactSignal: string;
@@ -1085,7 +1086,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // --- Real cross-device accounts (email + password) ---
   const [authAccount, setAuthAccount] = useState<{
-    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; role: string; verifiedLocal?: boolean;
+    id: string; email: string; callsign: string; name: string; bureau: string; avatarUrl: string; coverPhotoUrl?: string; role: string; verifiedLocal?: boolean;
   } | null>(null);
   const [authModalMode, setAuthModalMode] = useState<"signin" | "signup" | "forgot" | "reset" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
@@ -1253,9 +1254,9 @@ export const FieldPressMaster: React.FC = () => {
     setModResolvingId(null);
   };
 
-  const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; email: string; accentColor?: string }) => {
+  const applyAccountToPressPass = (account: { callsign: string; name: string; bureau: string; avatarUrl: string; coverPhotoUrl?: string; email: string; accentColor?: string }) => {
     setPressPass((prev) => {
-      const next = { ...prev, name: account.name, callsign: account.callsign, bureau: account.bureau, avatarUrl: account.avatarUrl, email: account.email, accentColor: account.accentColor || prev.accentColor };
+      const next = { ...prev, name: account.name, callsign: account.callsign, bureau: account.bureau, avatarUrl: account.avatarUrl, coverPhotoUrl: account.coverPhotoUrl, email: account.email, accentColor: account.accentColor || prev.accentColor };
       try {
         localStorage.setItem("fieldpress_press_pass", JSON.stringify(next));
       } catch {}
@@ -2243,6 +2244,50 @@ export const FieldPressMaster: React.FC = () => {
       setTimeout(() => setSavedSuccessToast(""), 3000);
     }
     setAvatarUploading(false);
+  };
+
+  // Cover Photo Handler — same pattern as handlePhotoSelect above: upload
+  // immediately to durable storage and persist server-side rather than
+  // holding a local-only preview.
+  const coverPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [coverPhotoUploading, setCoverPhotoUploading] = useState(false);
+  const handleCoverPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) setEditPassForm((prev) => ({ ...prev, coverPhotoUrl: result }));
+    };
+    reader.readAsDataURL(file);
+
+    if (!authAccount) {
+      // Guest editing a local-only press pass: local preview only, same
+      // as avatar upload's guest path.
+      return;
+    }
+
+    setCoverPhotoUploading(true);
+    try {
+      const uploadRes = await fetch("/api/upload-cover-photo", {
+        method: "POST",
+        body: file,
+        headers: { "Content-Type": file.type }
+      });
+      if (uploadRes.ok) {
+        const uploadData = await uploadRes.json();
+        setEditPassForm((prev) => ({ ...prev, coverPhotoUrl: uploadData.url }));
+        setAuthAccount((prev) => (prev ? { ...prev, coverPhotoUrl: uploadData.url } : prev));
+      } else {
+        setSavedSuccessToast("Cover photo upload failed. Please try again.");
+        setTimeout(() => setSavedSuccessToast(""), 3000);
+      }
+    } catch {
+      setSavedSuccessToast("Cover photo upload failed. Please try again.");
+      setTimeout(() => setSavedSuccessToast(""), 3000);
+    }
+    setCoverPhotoUploading(false);
   };
 
   // Save Press Pass Credentials — persists name/callsign/bureau to the
@@ -4960,6 +5005,15 @@ export const FieldPressMaster: React.FC = () => {
                 onChange={handlePhotoSelect}
               />
 
+              {/* Hidden file input for cover photo upload */}
+              <input
+                ref={coverPhotoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCoverPhotoSelect}
+              />
+
               {/* Live ID Badge Card Preview (EXACTLY AS IN IMAGE 1) */}
               <div className="flex flex-col items-center">
                 <div className={`w-full max-w-md rounded-xl border-2 p-5 relative overflow-hidden shadow-2xl transition-all duration-300 ${
@@ -5023,6 +5077,29 @@ export const FieldPressMaster: React.FC = () => {
                           Remove
                         </button>
                       )}
+
+                      {/* Cover Photo — minimal upload/remove, no live preview frame */}
+                      <div className="mt-2 flex flex-col items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => coverPhotoInputRef.current?.click()}
+                          disabled={coverPhotoUploading}
+                          className="text-[9px] font-mono text-amber-500 hover:text-amber-400 uppercase tracking-tight flex items-center gap-0.5 disabled:opacity-50"
+                          title="Upload a cover photo for your press pass"
+                        >
+                          <Upload className="h-2.5 w-2.5" />
+                          {coverPhotoUploading ? "Uploading..." : editPassForm.coverPhotoUrl ? "Change cover" : "Add cover"}
+                        </button>
+                        {editPassForm.coverPhotoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPassForm({ ...editPassForm, coverPhotoUrl: undefined })}
+                            className="text-[10px] font-mono text-zinc-500 hover:text-rose-400"
+                          >
+                            Remove cover
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex-1 space-y-1">
