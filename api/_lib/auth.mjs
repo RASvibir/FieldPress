@@ -20,12 +20,16 @@ export async function getAuthenticatedAccount(req) {
 
   const sql = getSql();
   const rows = await sql`
-    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local
+    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local, a.status
     FROM fieldpress_sessions s
     JOIN fieldpress_accounts a ON a.id = s.account_id
-    WHERE s.token = ${token} AND s.expires_at > now()
+    WHERE s.token = ${token} AND s.expires_at > now() AND a.status = 'active'
     LIMIT 1;
   `;
+  // A suspended account's sessions stop resolving here immediately (see
+  // migration 0013) -- no separate session-revocation step is required,
+  // though suspendAccount() in admin.mjs also deletes sessions outright
+  // so a re-activation later doesn't silently un-log-out stale tokens.
   return rows.length > 0 ? rows[0] : null;
 }
 

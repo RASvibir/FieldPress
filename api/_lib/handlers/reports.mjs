@@ -8,11 +8,13 @@
 //   POST /api/reports/dispute        - toggle the caller's dispute flag on a dispatch
 //   GET  /api/reports/dispute-count  - dispute counts (+ caller's own flag) for dispatch ids
 //
-// This is intentionally an intake mechanism, not a full moderation system
-// (see Competitive & QA Handout Section 5 "Now" list / issue #171). It
-// does not take any automated action against reported content -- it just
-// makes reports visible and actionable to admins instead of nonexistent.
-// Closes issue #144.
+// This was originally intake-only (see Competitive & QA Handout Section 5
+// "Now" list / issue #171): filing and listing reports, with no action
+// taken against the reported content or account. handleResolve now
+// optionally triggers real enforcement (suspend the account / remove the
+// dispatch) via the shared functions in admin.mjs, so resolving a report
+// can actually act on it in the same request instead of requiring a
+// separate manual step. Closes issue #144.
 //
 // The dispute/dispute-count actions (#146, #175) live here rather than in
 // their own api/reactions function to stay under Vercel's per-deployment
@@ -21,6 +23,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../auth.mjs";
+import { suspendAccount, removeDispatch } from "./admin.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -122,6 +125,8 @@ async function handleDisputed(req, res, me) {
   res.status(200).json({ disputed: rows, threshold: DISPUTE_THRESHOLD });
 }
 
+const VALID_ENFORCEMENTS = new Set(["suspend_account", "remove_dispatch", "none"]);
+
 async function handleResolve(req, res, me) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -135,10 +140,71 @@ async function handleResolve(req, res, me) {
   const body = req.body || {};
   const reportId = typeof body.reportId === "string" ? body.reportId : "";
   const status = typeof body.status === "string" ? body.status : "";
+  const enforcement = typeof body.enforcement === "string" ? body.enforcement : "none";
+  const note = typeof body.note === "string" ? body.note : "";
 
   if (!reportId || !VALID_RESOLUTIONS.has(status)) {
     res.status(400).json({ error: "reportId and a valid status ('reviewed' or 'dismissed') are required." });
     return;
+  }
+  if (!VALID_ENFORCEMENTS.has(enforcement)) {
+    res.status(400).json({ error: "enforcement must be one of: suspend_account, remove_dispatch, none." });
+    return;
+  }
+
+  // Load the report first (rather than updating status blind) so we know
+  // what enforcement, if requested, should actually act on -- and so an
+  // enforcement mismatch (e.g. suspend_account on a report that targets a
+  // dispatch, not a user) is rejected before the report is touched.
+  const reportRows = await sql`
+    SELECT id, target_type, target_id, status FROM fieldpress_reports WHERE id = ${reportId} LIMIT 1;
+  `;
+  if (reportRows.length === 0 || reportRows[0].status !== "open") {
+    res.status(404).json({ error: "Report not found or already resolved." });
+    return;
+  }
+  const report = reportRows[0];
+
+  let enforcementResult = null;
+  if (enforcement === "suspend_account") {
+    if (report.target_type !== "user") {
+      res.status(400).json({ error: "suspend_account enforcement requires a report with targetType 'user'." });
+      return;
+    }
+    try {
+      enforcementResult = await suspendAccount({
+        targetAccountId: report.target_id,
+        callerId: me.id,
+        callerRole: me.role,
+        reportId: report.id,
+        note
+      });
+    } catch (err) {
+      if (err?.status) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+  } else if (enforcement === "remove_dispatch") {
+    if (report.target_type !== "dispatch") {
+      res.status(400).json({ error: "remove_dispatch enforcement requires a report with targetType 'dispatch'." });
+      return;
+    }
+    try {
+      enforcementResult = await removeDispatch({
+        dispatchId: report.target_id,
+        callerId: me.id,
+        reportId: report.id,
+        note
+      });
+    } catch (err) {
+      if (err?.status) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
   }
 
   const [updated] = await sql`
@@ -149,11 +215,14 @@ async function handleResolve(req, res, me) {
   `;
 
   if (!updated) {
-    res.status(404).json({ error: "Report not found or already resolved." });
+    // Enforcement (if any) already committed above -- this would only
+    // happen on a concurrent resolve racing us, which is rare enough to
+    // surface as a 409 rather than silently double-acting.
+    res.status(409).json({ error: "Report was resolved by someone else just now.", enforcement: enforcementResult });
     return;
   }
 
-  res.status(200).json({ report: updated });
+  res.status(200).json({ report: updated, enforcement: enforcementResult });
 }
 
 async function handleDisputeToggle(req, res, me) {
