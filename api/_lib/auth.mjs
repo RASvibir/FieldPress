@@ -68,13 +68,13 @@ export function parseCookies(req) {
 
 export function publicAccount(account) {
   if (!account) return null;
-  const { id, email, callsign, name, bureau, avatar_url, role, verified_local, accent_color } = account;
+  const { id, email, callsign, name, bureau, avatar_url, cover_photo_url, role, verified_local, accent_color } = account;
   // NOTE: client-side account objects use avatarUrl (camelCase) throughout
   // (authAccount state, applyAccountToPressPass, etc.) - this used to leak
   // the raw snake_case avatar_url here instead, which meant every login,
   // signup, and /api/auth/me call silently set pressPass.avatarUrl to
   // undefined, wiping the user's photo on every fresh page load.
-  return { id, email, callsign, name, bureau, avatarUrl: avatar_url, role, verifiedLocal: !!verified_local, accentColor: accent_color || "amber" };
+  return { id, email, callsign, name, bureau, avatarUrl: avatar_url, coverPhotoUrl: cover_photo_url || null, role, verifiedLocal: !!verified_local, accentColor: accent_color || "amber" };
 }
 
 export function isValidEmail(email) {
