@@ -2263,6 +2263,8 @@ export const FieldPressMaster: React.FC = () => {
   const [mapRegionPreset, setMapRegionPreset] = useState<"NATIONAL" | "MIDWEST" | "GLOBAL">("NATIONAL");
   const [activeReaderImageIdx, setActiveReaderImageIdx] = useState<number>(0);
   const [readerLightboxUrl, setReaderLightboxUrl] = useState<string | null>(null);
+  const [isUnfurlingTitleUrl, setIsUnfurlingTitleUrl] = useState<boolean>(false);
+  const [unfurlTitleStatus, setUnfurlTitleStatus] = useState<string>("");
   const [newImageUrl, setNewImageUrl] = useState<string>("");
   // Optional embed link (YouTube/Reddit/X/any URL) -- resolved server-side
   // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
@@ -2862,6 +2864,122 @@ export const FieldPressMaster: React.FC = () => {
     if (!rawUrl || typeof rawUrl !== "string") return null;
     const m = rawUrl.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/|i\.ytimg\.com\/vi\/)([\w-]{11})/i);
     return m ? m[1] : null;
+  };
+
+  // Unfurls a URL dropped/pasted directly into the Pressie Builder Title bar:
+  // extracts the article/video headline into newTitle, attaches the source URL,
+  // drops any preview image into the Visual Evidence & Media Tray (allowing more photos),
+  // and pre-fills the Dispatch Body with the source excerpt if empty.
+  const handleUnfurlUrlFromTitle = async (rawUrl: string, customPrefix = "") => {
+    const cleanUrl = rawUrl.trim();
+    if (!/^https?:\/\//i.test(cleanUrl)) return;
+    setNewSourceUrl(cleanUrl);
+    setIsUnfurlingTitleUrl(true);
+    setUnfurlTitleStatus("🔗 Pulling headline, summary & photos from source URL…");
+
+    // Immediate YouTube frame extraction if it's a YouTube URL
+    const ytId = extractYoutubeVideoId(cleanUrl);
+    if (ytId) {
+      const ytFrame = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+      setNewImageUrl((curr) => curr || ytFrame);
+      setNewImageCaption((curr) => curr || "[🎥 Shared Broadcast Footage] Verified Video Still");
+      setEvidenceGallery((prev) => [
+        {
+          id: `yt-drop-${Date.now()}`,
+          url: ytFrame,
+          source: "upload" as const,
+          caption: "[🎥 Shared Broadcast Footage] Verified Video Still",
+          timestamp: "Source URL"
+        },
+        ...prev.filter((p) => p.url !== ytFrame).slice(0, 10)
+      ]);
+    }
+
+    try {
+      const res = await fetch(`/api/resolve-url?url=${encodeURIComponent(cleanUrl)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const resolvedTitle = (data.title || "").trim();
+        if (resolvedTitle) {
+          setNewTitle(customPrefix ? `${customPrefix} — ${resolvedTitle}` : resolvedTitle);
+        } else if (!customPrefix) {
+          let host = "External Source";
+          try {
+            host = new URL(cleanUrl).hostname.replace(/^www\./, "");
+          } catch {
+            // ignore
+          }
+          setNewTitle(`Shared Dispatch via ${host}`);
+        }
+
+        if (data.image && typeof data.image === "string" && data.image.startsWith("http")) {
+          const imgItem = {
+            id: `unfurl-${Date.now()}`,
+            url: data.image,
+            source: "upload" as const,
+            caption: `[🔗 Source Photo via ${data.siteName || "Web"}] ${resolvedTitle || ""}`.trim(),
+            timestamp: "Source URL"
+          };
+          setEvidenceGallery((prev) => [imgItem, ...prev.filter((p) => p.url !== data.image).slice(0, 10)]);
+          setNewImageUrl((curr) => curr || data.image);
+          setNewImageCaption((curr) => curr || imgItem.caption);
+        }
+
+        const desc = (data.description || "").trim();
+        setNewContent((curr) => {
+          if (curr && curr.trim().length > 0) {
+            return curr.includes(cleanUrl) ? curr : `${curr}\n\n🔗 Shared Source (${data.siteName || "Web"}): ${cleanUrl}`;
+          }
+          if (desc) {
+            return `${desc}\n\n🔗 Shared via ${data.siteName || "External Source"}: ${cleanUrl}\n\n[Add your field notes or commentary here...]`;
+          }
+          return `Shared from ${data.siteName || "External Source"}: ${resolvedTitle || cleanUrl}\n\n🔗 Source Link: ${cleanUrl}\n\n[Add your field notes or commentary here...]`;
+        });
+
+        setUnfurlTitleStatus(`✓ Imported from ${data.siteName || "source"}! You can now edit the title, add notes in the body, or attach more photos below.`);
+      } else {
+        setUnfurlTitleStatus("✓ Source URL attached! Type your headline above and add notes/photos below.");
+      }
+    } catch {
+      setUnfurlTitleStatus("✓ Source URL attached! Type your headline above and add notes/photos below.");
+    } finally {
+      setIsUnfurlingTitleUrl(false);
+    }
+  };
+
+  // Allows 1-click pasting of prepared content (e.g. a URL, or a multi-line article with headline + body)
+  const handlePastePreparedContent = async () => {
+    try {
+      const clip = await navigator.clipboard.readText();
+      if (!clip || !clip.trim()) {
+        setUnfurlTitleStatus("Clipboard is empty — copy a URL or prepared article text first, or drop it directly into the title box.");
+        return;
+      }
+      const trimmed = clip.trim();
+      const urlMatch = trimmed.match(/https?:\/\/[^\s]+/i);
+      const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+      if (lines.length === 1 && urlMatch && urlMatch[0] === lines[0]) {
+        await handleUnfurlUrlFromTitle(urlMatch[0]);
+        return;
+      }
+
+      if (lines.length >= 1) {
+        const firstLine = lines[0].replace(/^#+\s*/, "");
+        const restBody = lines.slice(1).join("\n\n");
+        if (/^https?:\/\/\S+$/i.test(firstLine)) {
+          if (restBody) setNewContent(restBody);
+          await handleUnfurlUrlFromTitle(firstLine);
+        } else {
+          setNewTitle(firstLine.slice(0, 220));
+          if (restBody) setNewContent(restBody);
+          if (urlMatch) setNewSourceUrl(urlMatch[0]);
+          setUnfurlTitleStatus("✓ Prepared headline & body imported! Attach photos or edit below.");
+        }
+      }
+    } catch {
+      setUnfurlTitleStatus("Tip: Press Cmd+V / Ctrl+V inside the Title box to drop a URL or prepared headline.");
+    }
   };
 
   const getFallbackImageForDispatch = (d?: Partial<Dispatch> | null): string => {
@@ -5532,21 +5650,67 @@ export const FieldPressMaster: React.FC = () => {
                 </div>
               )}
 
-              {/* 1. Headline / Dispatch Title (matching Image 2) */}
-              <div>
-                <label className={`block font-bold mb-1 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Headline / Dispatch Title <span className="text-amber-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter headline..."
-                  value={newTitle}
-                  onChange={(e) => {
-                    setNewTitle(e.target.value);
-                    if (formValidationError) setFormValidationError(null);
-                  }}
-                  className={`w-full rounded px-3 py-2 text-sm focus:outline-none transition ${inputThemeClass}`}
-                />
+              {/* 1. Headline / Dispatch Title + Drop-URL-to-Share Studio */}
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className={`font-bold flex items-center gap-1.5 ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+                    <span>Headline / Dispatch Title <span className="text-amber-500">*</span></span>
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      🔗 Drop URL in title to share content
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handlePastePreparedContent}
+                    className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                    title="Paste a URL or prepared multi-line article from your clipboard to auto-fill Headline, Source Link & Body"
+                  >
+                    <span>📋</span>
+                    <span>Paste Prepared Content / URL</span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Drop URL in title to share content (or type your headline here)..."
+                    value={newTitle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewTitle(val);
+                      if (formValidationError) setFormValidationError(null);
+                      const urlMatch = val.match(/^(.*?)(https?:\/\/[^\s]+)\s*$/i);
+                      if (urlMatch && urlMatch[2].length > 10) {
+                        const prefix = (urlMatch[1] || "").trim();
+                        handleUnfurlUrlFromTitle(urlMatch[2], prefix);
+                      }
+                    }}
+                    className={`w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none transition placeholder:text-zinc-500/75 placeholder:italic ${inputThemeClass}`}
+                  />
+                  {isUnfurlingTitleUrl && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-amber-400 font-bold bg-zinc-900/90 px-2 py-0.5 rounded">
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      <span>Importing URL…</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className={`text-[10px] leading-snug ${subTextThemeClass}`}>
+                  💡 <strong>Sharing a source or prepared article?</strong> Paste any link (news site, YouTube, Substack, Reddit, X) right into the title bar above—we'll automatically pull its headline, summary &amp; lead image, while letting you add your own commentary in the body and extra photos in the Media Tray below.
+                </p>
+
+                {unfurlTitleStatus && (
+                  <div className="px-2.5 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] flex items-center justify-between gap-2">
+                    <span>{unfurlTitleStatus}</span>
+                    <button
+                      type="button"
+                      onClick={() => setUnfurlTitleStatus("")}
+                      className="text-zinc-400 hover:text-white text-[10px] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 🛡️ PRIVACY, METADATA SCRUBBER & VICINITY PINNING STUDIO */}
