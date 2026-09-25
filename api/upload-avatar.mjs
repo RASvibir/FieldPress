@@ -4,7 +4,7 @@
 
 import { put } from "@vercel/blob";
 import { neon } from "@neondatabase/serverless";
-import { parseCookies, SESSION_COOKIE_NAME } from "./_lib/auth.mjs";
+import { getAuthenticatedAccount, readRawBody } from "./_lib/auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -14,15 +14,6 @@ export const config = {
   },
 };
 
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -30,24 +21,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Authenticate: check session cookie
-    const cookies = parseCookies(req);
-    const token = cookies[SESSION_COOKIE_NAME];
-    if (!token) {
+    const account = await getAuthenticatedAccount(req);
+    if (!account) {
       res.status(401).json({ error: "Not authenticated." });
       return;
     }
-
-    const authRows = await sql`
-      SELECT account_id FROM fieldpress_sessions
-      WHERE token = ${token} AND expires_at > now()
-      LIMIT 1;
-    `;
-    if (authRows.length === 0) {
-      res.status(401).json({ error: "Session expired." });
-      return;
-    }
-    const accountId = authRows[0].account_id;
+    const accountId = account.id;
 
     // Validate image content-type
     const contentType = req.headers["content-type"] || "";

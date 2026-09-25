@@ -19,15 +19,55 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const API_ROOT = path.resolve(__dirname, "../../api/_lib/handlers");
+const API_DIR = path.resolve(__dirname, "../../api");
+const API_ROOT = path.resolve(API_DIR, "_lib/handlers");
 
 const RESOURCES = ["auth", "cohorts", "messenger", "admin", "notifications", "reports"];
+const STANDALONE_ENDPOINTS = [
+  "pressyo",
+  "dispatches",
+  "feeds",
+  "sync-dispatch",
+  "upload-avatar",
+  "upload-cover-photo",
+  "upload-share-card"
+];
 
 const app = express();
 app.use(cookieParser());
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "8mb" }));
+app.use(express.raw({ type: "image/*", limit: "8mb" }));
 
-// Load each handler module once at startup.
+// Load standalone endpoints (/api/pressyo, /api/dispatches, etc.)
+const standaloneHandlers = {};
+for (const name of STANDALONE_ENDPOINTS) {
+  const mod = await import(path.join(API_DIR, `${name}.mjs`));
+  standaloneHandlers[name] = mod.default;
+}
+
+// Rewrite /api/dispatches/:id -> /api/dispatches?id=:id (matches vercel.json)
+app.all("/api/dispatches/:id", async (req, res) => {
+  req.query = { ...req.query, id: req.params.id };
+  try {
+    await standaloneHandlers["dispatches"](req, res);
+  } catch (err) {
+    console.error("[local-api] dispatches/:id threw:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error (local dev)." });
+  }
+});
+
+for (const name of STANDALONE_ENDPOINTS) {
+  app.all(`/api/${name}`, async (req, res) => {
+    try {
+      await standaloneHandlers[name](req, res);
+    } catch (err) {
+      console.error(`[local-api] ${name} threw:`, err);
+      if (!res.headersSent) res.status(500).json({ error: "Internal server error (local dev)." });
+    }
+  });
+}
+
+// Load each consolidated resource handler module once at startup.
 const handlers = {};
 for (const resource of RESOURCES) {
   const mod = await import(path.join(API_ROOT, `${resource}.mjs`));
@@ -57,4 +97,5 @@ const PORT = process.env.LOCAL_API_PORT || 4000;
 app.listen(PORT, () => {
   console.log(`[local-api] listening on http://localhost:${PORT}`);
   console.log(`[local-api] resources: ${RESOURCES.join(", ")}`);
+  console.log(`[local-api] standalone: ${STANDALONE_ENDPOINTS.join(", ")}`);
 });

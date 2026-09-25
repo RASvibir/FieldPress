@@ -20,7 +20,7 @@ export async function getAuthenticatedAccount(req) {
 
   const sql = getSql();
   const rows = await sql`
-    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.role, a.verified_local, a.status
+    SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.cover_photo_url, a.role, a.verified_local, a.accent_color, a.status
     FROM fieldpress_sessions s
     JOIN fieldpress_accounts a ON a.id = s.account_id
     WHERE s.token = ${token} AND s.expires_at > now() AND a.status = 'active'
@@ -31,6 +31,16 @@ export async function getAuthenticatedAccount(req) {
   // though suspendAccount() in admin.mjs also deletes sessions outright
   // so a re-activation later doesn't silently un-log-out stale tokens.
   return rows.length > 0 ? rows[0] : null;
+}
+
+export function readRawBody(req) {
+  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
 }
 
 export function generateToken() {

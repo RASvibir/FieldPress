@@ -13,6 +13,7 @@ import crypto from "crypto";
 import { neon } from "@neondatabase/serverless";
 import bcrypt from "bcryptjs";
 import {
+  getAuthenticatedAccount,
   generateToken,
   hashResetToken,
   sessionCookieHeader,
@@ -327,27 +328,8 @@ async function handleMe(req, res) {
     return;
   }
   try {
-    const cookies = parseCookies(req);
-    const token = cookies[SESSION_COOKIE_NAME];
-    if (!token) {
-      res.status(200).json({ account: null });
-      return;
-    }
-
-    const rows = await sql`
-      SELECT a.id, a.email, a.callsign, a.name, a.bureau, a.avatar_url, a.cover_photo_url, a.role, a.verified_local, a.accent_color
-      FROM fieldpress_sessions s
-      JOIN fieldpress_accounts a ON a.id = s.account_id
-      WHERE s.token = ${token} AND s.expires_at > now()
-      LIMIT 1;
-    `;
-
-    if (rows.length === 0) {
-      res.status(200).json({ account: null });
-      return;
-    }
-
-    res.status(200).json({ account: publicAccount(rows[0]) });
+    const account = await getAuthenticatedAccount(req);
+    res.status(200).json({ account: publicAccount(account) });
   } catch (err) {
     res.status(200).json({ account: null });
   }
@@ -359,23 +341,12 @@ async function handleUpdateProfile(req, res) {
     return;
   }
   try {
-    const cookies = parseCookies(req);
-    const token = cookies[SESSION_COOKIE_NAME];
-    if (!token) {
+    const caller = await getAuthenticatedAccount(req);
+    if (!caller) {
       res.status(401).json({ error: "Not authenticated." });
       return;
     }
-
-    const authRows = await sql`
-      SELECT account_id FROM fieldpress_sessions
-      WHERE token = ${token} AND expires_at > now()
-      LIMIT 1;
-    `;
-    if (authRows.length === 0) {
-      res.status(401).json({ error: "Session expired." });
-      return;
-    }
-    const accountId = authRows[0].account_id;
+    const accountId = caller.id;
 
     const { name, callsign, bureau, accentColor } = req.body || {};
 

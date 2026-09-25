@@ -7,7 +7,7 @@
 
 import { put } from "@vercel/blob";
 import { neon } from "@neondatabase/serverless";
-import { getAuthenticatedAccount } from "./_lib/auth.mjs";
+import { getAuthenticatedAccount, readRawBody } from "./_lib/auth.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -16,15 +16,6 @@ export const config = {
     bodyParser: false,
   },
 };
-
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {

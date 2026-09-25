@@ -654,12 +654,41 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
 }
 
 export const FieldPressMaster: React.FC = () => {
-  // Pressy'o AI Newsroom Copilot State
-  const PRESSYO_GREETING = "Greetings Bureau Chief! I am Pressy'o, your autonomous field newsroom assistant. I can draft dispatches across all 5 edition styles (Broadsheet, Comic, Arcade, Tactical, Sleek), generate Pollinations visual prompts, or fact-check your corridor telemetry. How can I assist your reporting today?";
-  type PressyoMessage = { sender: "user" | "pressyo"; text: string; actionData?: { title: string; content: string; style: "newspaper" | "comic" | "arcade" | "tactical" | "magazine"; prompt?: string } };
+  // Pressy'o AI Newsroom Copilot State (3-Tier LLM Cascade: Ollama -> Groq -> Gemini)
+  const PRESSYO_GREETING = "Greetings Bureau Chief! I am Pressy'o, your autonomous field newsroom copilot powered by a 3-tier LLM engine (Ollama → Groq LPU → Gemini). I can draft dispatches across all 5 edition voices, rewrite or expand your active Pressie Builder draft in-place, craft Pollinations visual prompts, or fact-check corridor telemetry.";
+  type PressyoEdition = "newspaper" | "comic" | "arcade" | "tactical" | "magazine";
+  type PressyoMessage = {
+    sender: "user" | "pressyo";
+    text: string;
+    source?: "ollama" | "groq" | "gemini";
+    model?: string;
+    visualOnlyPrompt?: string;
+    actionData?: {
+      title: string;
+      content: string;
+      style: PressyoEdition;
+      prompt?: string;
+    };
+  };
   const [showPressyoModal, setShowPressyoModal] = useState(false);
   const [pressyoInput, setPressyoInput] = useState("");
   const [isPressyoLoading, setIsPressyoLoading] = useState(false);
+  const [pressyoLastSource, setPressyoLastSource] = useState<"ollama" | "groq" | "gemini" | null>(null);
+  const [pressyoLastModel, setPressyoLastModel] = useState<string | null>(null);
+  const [pressyoRemainingQuota, setPressyoRemainingQuota] = useState<number | null>(null);
+
+  // In-Editor Pressy'o Copilot State (inside Pressie Builder Modal)
+  const [isPressyoEditorBusy, setIsPressyoEditorBusy] = useState(false);
+  const [pressyoEditorActionLabel, setPressyoEditorActionLabel] = useState<string>("");
+  const [pressyoCustomInstruction, setPressyoCustomInstruction] = useState("");
+  const [pressyoEditorStatus, setPressyoEditorStatus] = useState<string | null>(null);
+  const [pressyoEditorUndo, setPressyoEditorUndo] = useState<{
+    title: string;
+    content: string;
+    editionStyle: PressyoEdition;
+    visualPrompt: string;
+  } | null>(null);
+
   const [pressyoChat, setPressyoChat] = useState<PressyoMessage[]>(() => {
     try {
       const saved = localStorage.getItem("fieldpress_pressyo_chat");
@@ -677,73 +706,14 @@ export const FieldPressMaster: React.FC = () => {
     } catch {}
   };
 
-  const inferEditionStyle = (text: string): "newspaper" | "comic" | "arcade" | "tactical" | "magazine" => {
+  const inferEditionStyle = (text: string, fallback: PressyoEdition = "tactical"): PressyoEdition => {
     const lower = text.toLowerCase();
     if (lower.includes("comic") || lower.includes("kapow") || lower.includes("hero")) return "comic";
     if (lower.includes("broadsheet") || lower.includes("1920") || lower.includes("paper") || lower.includes("old")) return "newspaper";
     if (lower.includes("arcade") || lower.includes("pixel") || lower.includes("8-bit")) return "arcade";
     if (lower.includes("tactical") || lower.includes("intel") || lower.includes("recon")) return "tactical";
-    return "magazine";
-  };
-
-  const handlePressyoSend = async (customPrompt?: string) => {
-    const userText = customPrompt || pressyoInput.trim();
-    if (!userText || isPressyoLoading) return;
-
-    const newChat = [...pressyoChat, { sender: "user" as const, text: userText }];
-    setPressyoChat(newChat);
-    setPressyoInput("");
-    setIsPressyoLoading(true);
-
-    const editionStyle = inferEditionStyle(userText);
-
-    try {
-      const resp = await fetch("/api/pressyo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userText, editionStyle })
-      });
-
-      const data = await resp.json();
-
-      if (!resp.ok) {
-        throw new Error(data?.error || `Request failed (${resp.status})`);
-      }
-
-      // Server now classifies its own reply as "draft" or "chat" (see
-      // TYPE: header handling in api/pressyo.mjs) -- only attach the
-      // draft card when it actually is one, instead of wrapping every
-      // reply as a dispatch draft regardless of what was asked.
-      const pressyoMessage: PressyoMessage = data.type === "draft"
-        ? {
-            sender: "pressyo",
-            text: data.text,
-            actionData: {
-              title: data.title || `Pressy'o Dispatch (${data.style || editionStyle})`,
-              content: data.text,
-              style: (data.style || editionStyle) as "newspaper" | "comic" | "arcade" | "tactical" | "magazine"
-            }
-          }
-        : { sender: "pressyo", text: data.text };
-
-      const finalized = [...newChat, pressyoMessage];
-      setPressyoChat(finalized);
-      try {
-        localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
-      } catch {}
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Pressy'o is unreachable right now.";
-      const finalized = [...newChat, {
-        sender: "pressyo" as const,
-        text: `⚠️ Couldn't reach Pressy'o: ${errorMessage}. Try again in a moment.`
-      }];
-      setPressyoChat(finalized);
-      try {
-        localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
-      } catch {}
-    } finally {
-      setIsPressyoLoading(false);
-    }
+    if (lower.includes("sleek") || lower.includes("magazine") || lower.includes("modern")) return "magazine";
+    return fallback;
   };
 
   // Theme & UI Preferences
@@ -2215,6 +2185,218 @@ export const FieldPressMaster: React.FC = () => {
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
   const [manualImageUrl, setManualImageUrl] = useState<string>("");
+
+  // =========================================================================
+  // PRESSY'O COPILOT HANDLERS (3-Tier Ollama -> Groq -> Gemini + In-Editor)
+  // =========================================================================
+  const formatSourceLabel = (src?: string | null, model?: string | null) => {
+    if (src === "ollama") return `🟢 Ollama (${model || "local"})`;
+    if (src === "groq") return `⚡ Groq LPU (${model || "llama-3.3-70b"})`;
+    if (src === "gemini") return `✨ Gemini (${model || "flash"})`;
+    return "Pressy'o AI";
+  };
+
+  const handleUndoPressyoEdit = () => {
+    if (!pressyoEditorUndo) return;
+    setNewTitle(pressyoEditorUndo.title);
+    setNewContent(pressyoEditorUndo.content);
+    setNewEditionStyle(pressyoEditorUndo.editionStyle);
+    setVisualPrompt(pressyoEditorUndo.visualPrompt);
+    setPressyoEditorUndo(null);
+    setPressyoEditorStatus("↩ Restored previous draft state.");
+  };
+
+  const handlePressyoEditorAction = async (
+    action: "rewrite_voice" | "expand" | "shorten" | "headlines" | "factcheck_polish" | "visual_prompt" | "draft_from_topic" | "custom_edit",
+    targetStyle?: PressyoEdition,
+    customInstructionText?: string
+  ) => {
+    if (isPressyoEditorBusy) return;
+
+    const effectiveStyle: PressyoEdition = targetStyle || newEditionStyle || "tactical";
+    const hasDraftText = Boolean(newTitle.trim() || newContent.trim());
+
+    if (!hasDraftText && action !== "draft_from_topic" && action !== "custom_edit") {
+      setPressyoEditorStatus("⚠️ Enter a headline, topic, or rough notes first so Pressy'o has material to work with.");
+      return;
+    }
+
+    const actionPrompts: Record<string, string> = {
+      rewrite_voice: `Rewrite the active dispatch into the ${effectiveStyle.toUpperCase()} edition voice while preserving all core facts and corridor telemetry.`,
+      expand: `Expand the active dispatch in the ${effectiveStyle.toUpperCase()} edition voice with richer reporting, sensory detail, and infrastructure context.`,
+      shorten: `Condense and tighten the active dispatch into crisp, high-signal wire copy in the ${effectiveStyle.toUpperCase()} edition voice.`,
+      headlines: `Craft a sharper, high-impact headline in the ${effectiveStyle.toUpperCase()} edition voice and polish the opening lede.`,
+      factcheck_polish: `Polish the active dispatch for flow, grammar, and authentic telemetry phrasing in the ${effectiveStyle.toUpperCase()} edition voice.`,
+      visual_prompt: `Generate a vivid, photojournalistic Pollinations visual framing prompt for this dispatch (${newTitle || newContent.slice(0, 120) || "Midwest Corridor infrastructure"}).`,
+      draft_from_topic: `Draft a full dispatch in the ${effectiveStyle.toUpperCase()} edition voice about: ${customInstructionText || newTitle || newContent || "Midwest Corridor field telemetry"}.`,
+      custom_edit: customInstructionText || pressyoCustomInstruction.trim() || "Refine and improve this dispatch."
+    };
+
+    const actionLabels: Record<string, string> = {
+      rewrite_voice: `Switching voice to ${effectiveStyle}…`,
+      expand: "Expanding field dispatch…",
+      shorten: "Condensing wire copy…",
+      headlines: "Sharpening headline & lede…",
+      factcheck_polish: "Polishing prose & telemetry…",
+      visual_prompt: "Crafting visual prompt…",
+      draft_from_topic: "Drafting full dispatch…",
+      custom_edit: "Applying custom edit…"
+    };
+
+    setIsPressyoEditorBusy(true);
+    setPressyoEditorActionLabel(actionLabels[action] || "Pressy'o working…");
+    setPressyoEditorStatus(null);
+
+    // Save undo snapshot before mutating builder state
+    setPressyoEditorUndo({
+      title: newTitle,
+      content: newContent,
+      editionStyle: newEditionStyle,
+      visualPrompt
+    });
+
+    try {
+      const resp = await fetch("/api/pressyo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: actionPrompts[action] || actionPrompts.custom_edit,
+          editionStyle: effectiveStyle,
+          editorAction: action === "draft_from_topic" && hasDraftText && newContent.trim().length > 80 ? "expand" : action,
+          draftContext: {
+            title: newTitle,
+            content: newContent,
+            editionStyle: effectiveStyle,
+            visualPrompt,
+            location: newLocation,
+            category: newCategory
+          },
+          history: pressyoChat.slice(-6)
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.error || `Request failed (${resp.status})`);
+      }
+
+      if (data.source) setPressyoLastSource(data.source);
+      if (data.model) setPressyoLastModel(data.model);
+      if (typeof data.remainingQuota === "number") setPressyoRemainingQuota(data.remainingQuota);
+
+      if (action === "visual_prompt" || data.type === "visual") {
+        const nextVisual = data.visualPrompt || data.text || "";
+        if (nextVisual) setVisualPrompt(nextVisual);
+        setPressyoEditorStatus(`✓ Visual prompt crafted via ${formatSourceLabel(data.source, data.model)}`);
+      } else {
+        if (targetStyle) setNewEditionStyle(targetStyle);
+        if (data.title && data.title !== "Untitled Dispatch") setNewTitle(data.title);
+        if (data.text) setNewContent(data.text);
+        if (data.visualPrompt && (!visualPrompt.trim() || action === "draft_from_topic")) {
+          setVisualPrompt(data.visualPrompt);
+        }
+        if (action === "custom_edit") setPressyoCustomInstruction("");
+        if (formValidationError) setFormValidationError(null);
+        setPressyoEditorStatus(`✓ Updated (${effectiveStyle.toUpperCase()}) via ${formatSourceLabel(data.source, data.model)}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Pressy'o couldn't complete the edit.";
+      setPressyoEditorStatus(`⚠️ ${errorMessage}`);
+    } finally {
+      setIsPressyoEditorBusy(false);
+      setPressyoEditorActionLabel("");
+    }
+  };
+
+  const handlePressyoSend = async (customPrompt?: string) => {
+    const userText = customPrompt || pressyoInput.trim();
+    if (!userText || isPressyoLoading) return;
+
+    const newChat = [...pressyoChat, { sender: "user" as const, text: userText }];
+    setPressyoChat(newChat);
+    setPressyoInput("");
+    setIsPressyoLoading(true);
+
+    const editionStyle = inferEditionStyle(userText, newEditionStyle || "tactical");
+
+    try {
+      const resp = await fetch("/api/pressyo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: userText,
+          editionStyle,
+          draftContext: (newTitle.trim() || newContent.trim())
+            ? {
+                title: newTitle,
+                content: newContent,
+                editionStyle: newEditionStyle,
+                visualPrompt,
+                location: newLocation,
+                category: newCategory
+              }
+            : undefined,
+          history: pressyoChat.slice(-8)
+        })
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data?.error || `Request failed (${resp.status})`);
+      }
+
+      if (data.source) setPressyoLastSource(data.source);
+      if (data.model) setPressyoLastModel(data.model);
+      if (typeof data.remainingQuota === "number") setPressyoRemainingQuota(data.remainingQuota);
+
+      const pressyoMessage: PressyoMessage = data.type === "draft"
+        ? {
+            sender: "pressyo",
+            text: data.text,
+            source: data.source,
+            model: data.model,
+            actionData: {
+              title: data.title || `Pressy'o Dispatch (${data.style || editionStyle})`,
+              content: data.text,
+              style: (data.style || editionStyle) as PressyoEdition,
+              prompt: data.visualPrompt
+            }
+          }
+        : data.type === "visual"
+        ? {
+            sender: "pressyo",
+            text: data.text || `Visual Prompt: ${data.visualPrompt}`,
+            source: data.source,
+            model: data.model,
+            visualOnlyPrompt: data.visualPrompt
+          }
+        : {
+            sender: "pressyo",
+            text: data.text,
+            source: data.source,
+            model: data.model
+          };
+
+      const finalized = [...newChat, pressyoMessage];
+      setPressyoChat(finalized);
+      try {
+        localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
+      } catch {}
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Pressy'o is unreachable right now.";
+      const finalized = [...newChat, {
+        sender: "pressyo" as const,
+        text: `⚠️ Couldn't reach Pressy'o: ${errorMessage}. Try again in a moment.`
+      }];
+      setPressyoChat(finalized);
+      try {
+        localStorage.setItem("fieldpress_pressyo_chat", JSON.stringify(finalized));
+      } catch {}
+    } finally {
+      setIsPressyoLoading(false);
+    }
+  };
 
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState("");
@@ -4809,7 +4991,7 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2">
                   <input
                     type="text"
                     placeholder="Visual framing brief (e.g. Autonomous micro-substations along rail line)..."
@@ -4821,8 +5003,18 @@ export const FieldPressMaster: React.FC = () => {
                         if (dailyGenCount < 13) generateVisual();
                       }
                     }}
-                    className={`flex-1 rounded px-3 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
+                    className={`flex-1 min-w-[180px] rounded px-3 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => handlePressyoEditorAction("visual_prompt")}
+                    disabled={isPressyoEditorBusy}
+                    title="Have Pressy'o craft a tailored Pollinations visual prompt from your headline & draft"
+                    className="px-2.5 py-1.5 rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-bold text-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50 flex-shrink-0"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Pressy'o Prompt</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => generateVisual()}
@@ -5020,6 +5212,155 @@ export const FieldPressMaster: React.FC = () => {
                   onChange={(e) => setNewSourceUrl(e.target.value)}
                   className={`w-full rounded-lg px-3 py-2 text-xs focus:outline-none transition ${inputThemeClass}`}
                 />
+              </div>
+
+              {/* ================================================================= */}
+              {/* 4B. PRESSY'O IN-EDITOR COPILOT STUDIO (OLLAMA -> GROQ -> GEMINI)  */}
+              {/* ================================================================= */}
+              <div className={`p-3.5 rounded-xl border space-y-3 ${
+                isDark
+                  ? "bg-zinc-950/80 border-amber-500/40 shadow-inner"
+                  : "bg-amber-50/50 border-amber-500/40"
+              }`}>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/pressyo-icon.jpg"
+                      alt="Pressy'o"
+                      className="w-6 h-6 rounded-lg object-cover border border-amber-500 bg-white"
+                    />
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-amber-500 text-xs">Pressy'o In-Editor Copilot</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                          {pressyoLastSource ? formatSourceLabel(pressyoLastSource, pressyoLastModel) : "Ollama → Groq → Gemini"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {pressyoEditorUndo && (
+                      <button
+                        type="button"
+                        onClick={handleUndoPressyoEdit}
+                        className="px-2 py-1 rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[10px] font-bold transition cursor-pointer"
+                        title="Restore draft before last Pressy'o edit"
+                      >
+                        ↩ Undo Edit
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowPressyoModal(true)}
+                      className={`px-2 py-1 rounded border text-[10px] font-bold transition cursor-pointer ${
+                        isDark
+                          ? "border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
+                          : "border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-700"
+                      }`}
+                    >
+                      💬 Open Copilot Chat
+                    </button>
+                  </div>
+                </div>
+
+                {/* Row 1: 1-Click Draft & Transform Actions */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: "draft_from_topic", label: "✨ Draft from Headline", tip: "Write a full dispatch + visual prompt from your headline or topic" },
+                    { id: "expand", label: "📐 Expand Copy", tip: "Enrich with deeper field reporting & corridor context" },
+                    { id: "shorten", label: "✂️ Tighten / Shorten", tip: "Condense into crisp, high-signal wire copy" },
+                    { id: "headlines", label: "📰 Sharpen Headline", tip: "Generate a punchy headline and tighten the opening lede" },
+                    { id: "factcheck_polish", label: "🛡️ Polish & Check", tip: "Polish grammar, flow, and telemetry consistency" },
+                    { id: "visual_prompt", label: "🎨 Craft Visual Prompt", tip: "Generate a tailored Pollinations photojournalism prompt" }
+                  ].map((act) => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      disabled={isPressyoEditorBusy}
+                      onClick={() => handlePressyoEditorAction(act.id as any)}
+                      title={act.tip}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition cursor-pointer disabled:opacity-40 ${
+                        isDark
+                          ? "bg-zinc-900 border-zinc-800 hover:border-amber-500/50 hover:bg-amber-500/10 text-zinc-200"
+                          : "bg-white border-zinc-200 hover:border-amber-500/50 hover:bg-amber-50 text-zinc-800"
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Row 2: 1-Click Live Voice Switcher (Rewrites Active Draft on the Fly) */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className={`text-[10px] font-bold ${subTextThemeClass}`}>Rewrite Voice:</span>
+                  {[
+                    { id: "tactical", label: "🛰️ Tactical" },
+                    { id: "newspaper", label: "📰 Broadsheet" },
+                    { id: "comic", label: "💥 Comic" },
+                    { id: "arcade", label: "🕹️ Arcade" },
+                    { id: "magazine", label: "✨ Sleek" }
+                  ].map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      disabled={isPressyoEditorBusy}
+                      onClick={() => handlePressyoEditorAction("rewrite_voice", v.id as PressyoEdition)}
+                      title={`Rewrite headline & body in ${v.label} voice`}
+                      className={`px-2 py-1 rounded border text-[10px] font-bold transition cursor-pointer disabled:opacity-40 ${
+                        newEditionStyle === v.id
+                          ? "border-amber-500/60 bg-amber-500/20 text-amber-400"
+                          : isDark
+                          ? "border-zinc-800 bg-zinc-900/70 hover:border-amber-500/40 text-zinc-400 hover:text-zinc-200"
+                          : "border-zinc-200 bg-white hover:border-amber-400 text-zinc-600"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Row 3: Custom In-Editor Instruction */}
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={pressyoCustomInstruction}
+                    onChange={(e) => setPressyoCustomInstruction(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && pressyoCustomInstruction.trim()) {
+                        e.preventDefault();
+                        handlePressyoEditorAction("custom_edit", undefined, pressyoCustomInstruction.trim());
+                      }
+                    }}
+                    placeholder="Custom edit instruction (e.g. 'add a quote from the substation lead', 'emphasize winter grid load')..."
+                    disabled={isPressyoEditorBusy}
+                    className={`flex-1 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none ${inputThemeClass}`}
+                  />
+                  <button
+                    type="button"
+                    disabled={isPressyoEditorBusy || !pressyoCustomInstruction.trim()}
+                    onClick={() => handlePressyoEditorAction("custom_edit", undefined, pressyoCustomInstruction.trim())}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold text-[11px] hover:bg-amber-400 transition cursor-pointer disabled:opacity-40 flex-shrink-0"
+                  >
+                    Apply Edit
+                  </button>
+                </div>
+
+                {(isPressyoEditorBusy || pressyoEditorStatus) && (
+                  <div className="flex items-center justify-between text-[11px] pt-0.5">
+                    {isPressyoEditorBusy ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        <span>{pressyoEditorActionLabel || "Pressy'o editing draft…"}</span>
+                      </span>
+                    ) : (
+                      <span className="text-emerald-400 font-medium">{pressyoEditorStatus}</span>
+                    )}
+                    {typeof pressyoRemainingQuota === "number" && (
+                      <span className="text-[10px] text-zinc-500">{pressyoRemainingQuota} copilot credits left today</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 5. Dispatch Body (matching Image 2) */}
@@ -7251,17 +7592,20 @@ ${shareUrl}`;
                   <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-zinc-950" title="Online" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="font-mono text-base font-bold text-amber-500 truncate">
                       Pressy'o
                     </h2>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold flex-shrink-0">
                       COPILOT
                     </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold flex-shrink-0">
+                      {pressyoLastSource ? formatSourceLabel(pressyoLastSource, pressyoLastModel) : "Ollama → Groq → Gemini"}
+                    </span>
                   </div>
-                  <p className={`text-xs font-mono ${subTextThemeClass}`}>Autonomous Field Editor</p>
+                  <p className={`text-xs font-mono ${subTextThemeClass}`}>Autonomous Field Editor • 3-Tier LLM Cascade</p>
                   <p className={`text-[11px] mt-0.5 truncate ${subTextThemeClass}`}>
-                    Story drafting, Pollinations prompts &amp; telemetry checks
+                    In-editor rewrites, voice switching, Pollinations prompts &amp; telemetry checks
                   </p>
                 </div>
               </div>
@@ -7287,6 +7631,38 @@ ${shareUrl}`;
                 </button>
               </div>
             </div>
+
+            {/* Active Builder Draft Context Bar (shown whenever the reporter has a draft in Pressie Builder) */}
+            {(newTitle.trim() || newContent.trim()) && (
+              <div className={`px-3.5 py-2 border-b flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono ${borderThemeClass} ${
+                isDark ? "bg-amber-500/10" : "bg-amber-50"
+              }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+                  <span className="text-amber-400 font-bold truncate">
+                    Builder Draft Connected: "{newTitle || newContent.slice(0, 40)}"
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { label: "✨ Rewrite", q: `Rewrite my active draft in ${newEditionStyle} voice and sharpen the headline` },
+                    { label: "📐 Expand", q: "Expand my active draft with richer field reporting and corridor context" },
+                    { label: "📰 3 Headlines", q: "Suggest 3 punchy alternative headlines for my active draft" },
+                    { label: "🎨 Visual Prompt", q: "Generate a Pollinations photojournalism visual prompt for my active draft" }
+                  ].map((act) => (
+                    <button
+                      key={act.label}
+                      type="button"
+                      disabled={isPressyoLoading}
+                      onClick={() => handlePressyoSend(act.q)}
+                      className="px-2 py-0.5 rounded border border-amber-500/40 bg-zinc-900/80 hover:bg-amber-500/20 text-amber-300 text-[10px] font-bold transition cursor-pointer disabled:opacity-40"
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick Draft — only shown for a fresh chat, so it doesn't
                 clutter an in-progress conversation */}
@@ -7339,7 +7715,33 @@ ${shareUrl}`;
                         ? "bg-zinc-800/90 border-zinc-700 text-zinc-200 rounded-tl-xs"
                         : "bg-zinc-100 border-zinc-300 text-zinc-900 rounded-tl-xs"
                   }`}>
+                    {msg.sender === "pressyo" && msg.source && (
+                      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pb-0.5">
+                        <span>{formatSourceLabel(msg.source, msg.model)}</span>
+                      </div>
+                    )}
                     <p className="whitespace-pre-wrap">{msg.text}</p>
+
+                    {/* Visual Prompt-Only Card */}
+                    {msg.visualOnlyPrompt && (
+                      <div className={`p-2.5 rounded-xl border space-y-2 font-mono text-xs ${subCardThemeClass}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-amber-400">🎨 AI Visual Framing Prompt</span>
+                        </div>
+                        <p className={`text-[11px] italic ${subTextThemeClass}`}>"{msg.visualOnlyPrompt}"</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!showPressieBuilderModal) openCreatePressie();
+                            if (msg.visualOnlyPrompt) setVisualPrompt(msg.visualOnlyPrompt);
+                            setShowPressyoModal(false);
+                          }}
+                          className="w-full py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition cursor-pointer"
+                        >
+                          ✨ Apply Visual Prompt in Pressie Builder
+                        </button>
+                      </div>
+                    )}
 
                     {/* 1-Click Send to Pressie Builder Card */}
                     {msg.actionData && (
@@ -7350,12 +7752,18 @@ ${shareUrl}`;
                         </div>
                         <h4 className="font-bold text-zinc-200">{msg.actionData.title}</h4>
                         <p className={`text-[11px] line-clamp-3 ${subTextThemeClass}`}>{msg.actionData.content}</p>
+                        {msg.actionData.prompt && (
+                          <div className="p-2 rounded bg-zinc-950/60 border border-zinc-800 text-[10px] text-amber-300/90">
+                            <span className="font-bold text-amber-500">Visual Prompt: </span>
+                            {msg.actionData.prompt}
+                          </div>
+                        )}
 
                         <button
                           type="button"
                           onClick={() => {
                             if (msg.actionData) {
-                              openCreatePressie();
+                              if (!showPressieBuilderModal) openCreatePressie();
                               setNewTitle(msg.actionData.title);
                               setNewContent(msg.actionData.content);
                               setNewEditionStyle(msg.actionData.style);
@@ -7365,7 +7773,7 @@ ${shareUrl}`;
                           }}
                           className="w-full py-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold text-xs hover:bg-emerald-400 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         >
-                          <span>🚀 Send to Pressie Builder</span>
+                          <span>{showPressieBuilderModal ? "✨ Apply to Active Builder Draft" : "🚀 Send Full Package to Pressie Builder"}</span>
                         </button>
                       </div>
                     )}

@@ -8,21 +8,13 @@
 // created it. This endpoint closes that gap.
 
 import { put } from "@vercel/blob";
+import { readRawBody } from "./_lib/auth.mjs";
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
-
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
