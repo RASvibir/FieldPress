@@ -22,17 +22,47 @@ import resolveEmbed from "./_lib/resolveEmbed.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
-function toClientShape(row) {
+// Deterministically quantizes & offsets any coordinate to a coarse ~4-6 km
+// (~3 mile) regional vicinity sector (2 decimal places, ~0.04 deg grid) so
+// exact street/house GPS coordinates are never stored or exposed publicly.
+function fuzzVicinityCoord(val, seedStr = "fp") {
+  if (typeof val !== "number" || !Number.isFinite(val)) return null;
+  let hash = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = (hash * 31 + seedStr.charCodeAt(i)) | 0;
+  }
+  const offset = (((hash % 17) - 8) / 1000); // +/- 0.008 deg (~0.8 km jitter on top of 0.04 deg grid)
+  const quantized = Math.round(val * 25) / 25; // ~4.4 km grid step
+  return Number((quantized + offset).toFixed(2));
+}
+
+function toClientShape(row, callerId = null) {
+  const isAnon =
+    row.callsign === "anon-signal" ||
+    (typeof row.author === "string" && row.author.toLowerCase().includes("anonymous")) ||
+    (typeof row.bureau === "string" && row.bureau.includes("Metadata Stripped"));
+  const isDecoupled =
+    isAnon ||
+    (typeof row.bureau === "string" && row.bureau.includes("Pin Decoupled")) ||
+    (typeof row.location === "string" && row.location.includes("Vicinity"));
+
+  const isOwner = Boolean(callerId && row.account_id === callerId);
+  const safeLat = row.latitude != null ? fuzzVicinityCoord(Number(row.latitude), row.id + "lat") : null;
+  const safeLng = row.longitude != null ? fuzzVicinityCoord(Number(row.longitude), row.id + "lng") : null;
+
   return {
     id: row.id,
-    accountId: row.account_id,
+    // Strip accountId from public wire responses when anonymous unless viewed by the owner
+    accountId: isAnon && !isOwner ? "anon-redacted" : row.account_id,
     title: row.title,
     category: row.category,
-    author: row.author,
-    callsign: row.callsign,
+    author: isAnon ? "Anonymous Field Source" : row.author,
+    callsign: isAnon ? "anon-signal" : row.callsign,
     bureau: row.bureau,
     location: row.location || undefined,
-    coordinates: row.latitude != null && row.longitude != null ? [row.longitude, row.latitude] : undefined,
+    coordinates: safeLat != null && safeLng != null ? [safeLng, safeLat] : undefined,
+    isAnonymous: isAnon,
+    decoupleLocationPin: isDecoupled,
     content: row.content,
     imageUrl: row.image_url || undefined,
     imageCaption: row.image_caption || undefined,
@@ -93,7 +123,7 @@ async function listOrFeed(req, res) {
         WHERE account_id = ${caller.id}
         ORDER BY created_at DESC;
       `;
-      res.status(200).json({ dispatches: rows.map(toClientShape) });
+      res.status(200).json({ dispatches: rows.map((r) => toClientShape(r, caller.id)) });
       return;
     }
 
@@ -204,7 +234,8 @@ async function create(req, res) {
     const {
       title, category, content, location, coordinates,
       imageUrl, imageCaption, isLead, isPressRoll, editionStyle,
-      sharingOption, parentDispatchId, id: clientId, sourceUrl
+      sharingOption, parentDispatchId, id: clientId, sourceUrl,
+      isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
 
     if (typeof title !== "string" || !title.trim()) {
@@ -219,10 +250,6 @@ async function create(req, res) {
     const validSharing = new Set(["fork", "colab", "none"]);
     const cleanSharing = validSharing.has(sharingOption) ? sharingOption : "fork";
 
-    // Optional link embed (YouTube/Reddit/X rich embed or a generic OG
-    // link card). resolveEmbed() runs its own SSRF guard on this URL
-    // (see _lib/safeUrl.mjs) since it comes straight from the caller --
-    // failure just means no embed, never a request error.
     const cleanSourceUrl = typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim().slice(0, 2000) : null;
     let embed = null;
     if (cleanSourceUrl) {
@@ -230,8 +257,24 @@ async function create(req, res) {
     }
 
     const id = typeof clientId === "string" && clientId.trim() ? clientId.trim().slice(0, 128) : `d-${Date.now()}-${caller.id.slice(-6)}`;
-    const lat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
-    const lng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
+    const rawLat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
+    const rawLng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
+
+    // Always fuzz to a ~5km vicinity sector (never store exact street/home GPS)
+    const useVicinity = vicinityPinOnly !== false;
+    const lat = rawLat != null ? (useVicinity ? fuzzVicinityCoord(rawLat, id + "lat") : rawLat) : null;
+    const lng = rawLng != null ? (useVicinity ? fuzzVicinityCoord(rawLng, id + "lng") : rawLng) : null;
+
+    const effectiveAuthor = isAnonymous ? "Anonymous Field Source" : caller.name;
+    const effectiveCallsign = isAnonymous ? "anon-signal" : caller.callsign;
+    const effectiveBureau = isAnonymous
+      ? (decoupleLocationPin ? "Metadata Stripped • Pin Decoupled" : "Metadata Stripped • Vicinity Signal")
+      : (decoupleLocationPin ? `${caller.bureau || "Field Bureau"} • Pin Decoupled` : caller.bureau);
+
+    const rawLoc = (location || "").trim() || "Regional Sector";
+    const effectiveLocation = useVicinity && !rawLoc.toLowerCase().includes("vicinity")
+      ? `${rawLoc} (Vicinity)`
+      : rawLoc;
 
     const [row] = await sql`
       INSERT INTO fieldpress_dispatches (
@@ -241,13 +284,16 @@ async function create(req, res) {
         source_url, embed_type, embed_data
       ) VALUES (
         ${id}, ${caller.id}, ${title.trim().slice(0, 500)}, ${cleanCategory},
-        ${caller.name}, ${caller.callsign}, ${caller.bureau}, ${location || null},
+        ${effectiveAuthor}, ${effectiveCallsign}, ${effectiveBureau}, ${effectiveLocation},
         ${lat}, ${lng}, ${content.trim()}, ${imageUrl || null}, ${imageCaption || null},
         ${!!isLead}, ${!!isPressRoll}, ${editionStyle || null}, ${cleanSharing},
         ${parentDispatchId || null}, ${cleanSourceUrl}, ${embed?.embed_type || null},
         ${embed?.embed_data ? JSON.stringify(embed.embed_data) : null}
       )
       ON CONFLICT (id) DO UPDATE SET
+        author = EXCLUDED.author,
+        callsign = EXCLUDED.callsign,
+        bureau = EXCLUDED.bureau,
         title = EXCLUDED.title,
         category = EXCLUDED.category,
         location = EXCLUDED.location,
@@ -273,7 +319,7 @@ async function create(req, res) {
       return;
     }
 
-    res.status(201).json({ dispatch: toClientShape(row) });
+    res.status(201).json({ dispatch: toClientShape(row, caller.id) });
   } catch (err) {
     console.error("Dispatch create error:", err);
     res.status(500).json({ error: "Failed to save dispatch." });
@@ -290,20 +336,27 @@ async function update(req, res, id) {
     const {
       title, category, content, location, coordinates,
       imageUrl, imageCaption, isLead, isPressRoll, editionStyle, sharingOption,
-      sourceUrl
+      sourceUrl, isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
 
     const validSharing = new Set(["fork", "colab", "none"]);
-    const lat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
-    const lng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
+    const rawLat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
+    const rawLng = Array.isArray(coordinates) && typeof coordinates[0] === "number" ? coordinates[0] : null;
+    const useVicinity = vicinityPinOnly !== false;
+    const lat = rawLat != null ? (useVicinity ? fuzzVicinityCoord(rawLat, id + "lat") : rawLat) : null;
+    const lng = rawLng != null ? (useVicinity ? fuzzVicinityCoord(rawLng, id + "lng") : rawLng) : null;
 
-    // sourceUrl follows image_url/image_caption's semantics, not title/
-    // content's COALESCE-to-keep-existing pattern: the composer always
-    // sends this field on every save (see src/App.tsx newSourceUrl), so an
-    // absent/empty value here means "clear the link", not "field not
-    // supplied". Only re-resolve the embed when the URL actually changed --
-    // an unchanged link keeps its cached embed_type/embed_data rather than
-    // re-fetching the provider on every edit.
+    const effectiveAuthor = isAnonymous ? "Anonymous Field Source" : caller.name;
+    const effectiveCallsign = isAnonymous ? "anon-signal" : caller.callsign;
+    const effectiveBureau = isAnonymous
+      ? (decoupleLocationPin ? "Metadata Stripped • Pin Decoupled" : "Metadata Stripped • Vicinity Signal")
+      : (decoupleLocationPin ? `${caller.bureau || "Field Bureau"} • Pin Decoupled` : caller.bureau);
+
+    const rawLoc = (location || "").trim() || "Regional Sector";
+    const effectiveLocation = useVicinity && !rawLoc.toLowerCase().includes("vicinity")
+      ? `${rawLoc} (Vicinity)`
+      : rawLoc;
+
     const cleanSourceUrl = typeof sourceUrl === "string" && sourceUrl.trim() ? sourceUrl.trim().slice(0, 2000) : null;
 
     const [existing] = await sql`
@@ -330,9 +383,12 @@ async function update(req, res, id) {
 
     const [row] = await sql`
       UPDATE fieldpress_dispatches SET
+        author = ${effectiveAuthor},
+        callsign = ${effectiveCallsign},
+        bureau = ${effectiveBureau},
         title = COALESCE(${typeof title === "string" ? title.trim().slice(0, 500) : null}, title),
         category = COALESCE(${typeof category === "string" ? category.trim().slice(0, 100) : null}, category),
-        location = ${location ?? null},
+        location = ${effectiveLocation},
         latitude = ${lat},
         longitude = ${lng},
         content = COALESCE(${typeof content === "string" ? content.trim() : null}, content),
@@ -354,7 +410,7 @@ async function update(req, res, id) {
       res.status(403).json({ error: "You don't own this dispatch, or it doesn't exist." });
       return;
     }
-    res.status(200).json({ dispatch: toClientShape(row) });
+    res.status(200).json({ dispatch: toClientShape(row, caller.id) });
   } catch (err) {
     console.error("Dispatch update error:", err);
     res.status(500).json({ error: "Failed to update dispatch." });

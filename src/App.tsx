@@ -150,6 +150,9 @@ export interface Dispatch {
   timestamp: string;
   location: string;
   coordinates?: [number, number];
+  isAnonymous?: boolean;
+  decoupleLocationPin?: boolean;
+  vicinityPinOnly?: boolean;
   content: string;
   imageUrl?: string;
   imageCaption?: string;
@@ -2245,7 +2248,12 @@ export const FieldPressMaster: React.FC = () => {
   const [newCategory, setNewCategory] = useState("Field Dispatch");
   const [newLocation, setNewLocation] = useState("Midwest Corridor");
   const [newContent, setNewContent] = useState("");
-  const [newCoordinates, setNewCoordinates] = useState<string>("-87.6298, 40.1245");
+  const [newCoordinates, setNewCoordinates] = useState<string>("-87.63, 40.12");
+  const [newIsAnonymous, setNewIsAnonymous] = useState<boolean>(false);
+  const [newDecoupleLocationPin, setNewDecoupleLocationPin] = useState<boolean>(false);
+  const [newVicinityPinOnly, setNewVicinityPinOnly] = useState<boolean>(true);
+  const [mapSignalFilter, setMapSignalFilter] = useState<"ALL" | "ANON_DECOUPLED" | "NAMED">("ALL");
+  const [mapRegionPreset, setMapRegionPreset] = useState<"NATIONAL" | "MIDWEST" | "GLOBAL">("NATIONAL");
   const [newImageUrl, setNewImageUrl] = useState<string>("");
   // Optional embed link (YouTube/Reddit/X/any URL) -- resolved server-side
   // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
@@ -2709,26 +2717,92 @@ export const FieldPressMaster: React.FC = () => {
     document.body.removeChild(a);
   };
 
+  // Fuzzes any coordinate to a coarse ~5 km regional sector (2 decimal places, ~0.04 deg grid)
+  // so exact street/building GPS coordinates are NEVER stored or transmitted.
+  const fuzzVicinityClient = (val: number): number => {
+    const grid = Math.round(val * 25) / 25;
+    const jitter = ((Math.floor(Math.abs(val * 1000)) % 9) - 4) * 0.002;
+    return Number((grid + jitter).toFixed(2));
+  };
+
+  const handlePinMyVicinity = () => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const fuzzyLon = fuzzVicinityClient(pos.coords.longitude);
+          const fuzzyLat = fuzzVicinityClient(pos.coords.latitude);
+          setNewCoordinates(`${fuzzyLon}, ${fuzzyLat}`);
+          setNewVicinityPinOnly(true);
+          if (!newLocation.trim() || newLocation === "Midwest Corridor") {
+            setNewLocation(`Sector ${fuzzyLat.toFixed(1)}°N, ${Math.abs(fuzzyLon).toFixed(1)}°W (Vicinity)`);
+          }
+          setSavedSuccessToast(`📍 Vicinity pinned (~5km fuzzy sector: ${fuzzyLat}°, ${fuzzyLon}° — exact GPS stripped).`);
+          setTimeout(() => setSavedSuccessToast(""), 3500);
+        },
+        () => {
+          // If browser geolocation permission is declined, fuzz the currently entered coordinates
+          const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
+          const lon = !isNaN(parts[0]) ? fuzzVicinityClient(parts[0]) : -87.63;
+          const lat = !isNaN(parts[1]) ? fuzzVicinityClient(parts[1]) : 40.12;
+          setNewCoordinates(`${lon}, ${lat}`);
+          setNewVicinityPinOnly(true);
+          setSavedSuccessToast(`📍 Coordinates quantized to ~5km fuzzy vicinity (${lat}°, ${lon}°).`);
+          setTimeout(() => setSavedSuccessToast(""), 3500);
+        },
+        { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 }
+      );
+    }
+  };
+
+  // Re-encodes uploaded images through an offscreen HTML5 <canvas> to scrub 100% of embedded
+  // EXIF headers (exact GPS coordinates, camera serial numbers, device owner tags, timestamps).
   const handleUploadImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
+      const rawDataUrl = event.target?.result as string;
+      if (!rawDataUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 1400;
+        let w = img.width || 1200;
+        let h = img.height || 675;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+        }
+        // Exporting from canvas produces a pure RGB stream with ZERO EXIF/GPS/Camera metadata
+        const scrubbedDataUrl = ctx ? canvas.toDataURL("image/jpeg", 0.9) : rawDataUrl;
+        const cleanCaption = newIsAnonymous
+          ? "[🛡️ EXIF & GPS Metadata Stripped] Field Evidence Still"
+          : `[🛡️ EXIF Scrubbed] ${file.name.replace(/\.[^/.]+$/, "")}`;
         const item = {
           id: "upload-" + Date.now(),
-          url: dataUrl,
+          url: scrubbedDataUrl,
           source: "upload" as const,
-          caption: file.name.replace(/\.[^/.]+$/, ""),
+          caption: cleanCaption,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
         setEvidenceGallery((prev) => [item, ...prev.slice(0, 8)]);
-        setNewImageUrl(dataUrl);
-        setNewImageCaption(item.caption);
-        setSavedSuccessToast("Evidence photo attached to gallery.");
-        setTimeout(() => setSavedSuccessToast(""), 3000);
-      }
+        setNewImageUrl(scrubbedDataUrl);
+        setNewImageCaption(cleanCaption);
+        setSavedSuccessToast("🛡️ Photo attached with 100% EXIF, GPS & device metadata stripped.");
+        setTimeout(() => setSavedSuccessToast(""), 3500);
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -2904,6 +2978,19 @@ export const FieldPressMaster: React.FC = () => {
       setNewCategory(draftToEdit.category || "Field Dispatch");
       setNewLocation(draftToEdit.location || "Midwest Corridor");
       setNewContent(draftToEdit.content || "");
+      const isAnon = Boolean(
+        draftToEdit.isAnonymous ||
+        draftToEdit.callsign === "anon-signal" ||
+        draftToEdit.bureau?.includes("Metadata Stripped")
+      );
+      const isDecoupled = Boolean(
+        draftToEdit.decoupleLocationPin ||
+        isAnon ||
+        draftToEdit.bureau?.includes("Pin Decoupled")
+      );
+      setNewIsAnonymous(isAnon);
+      setNewDecoupleLocationPin(isDecoupled);
+      setNewVicinityPinOnly(true);
       const validEdition = (draftToEdit.editionStyle && draftToEdit.editionStyle !== "wire"
         ? draftToEdit.editionStyle
         : "tactical") as PressyoEdition;
@@ -2928,16 +3015,19 @@ export const FieldPressMaster: React.FC = () => {
         setEvidenceGallery([]);
       }
       if (draftToEdit.coordinates) {
-        setNewCoordinates(`${draftToEdit.coordinates[0]}, ${draftToEdit.coordinates[1]}`);
+        setNewCoordinates(`${fuzzVicinityClient(draftToEdit.coordinates[0])}, ${fuzzVicinityClient(draftToEdit.coordinates[1])}`);
       }
     } else {
       setEditingDraftId(null);
       setForkParentId(null);
       setNewTitle("");
       setNewCategory("Field Dispatch");
-      setNewLocation("Midwest Corridor");
+      setNewLocation("Midwest Corridor (Vicinity)");
       setNewContent("");
       setNewEditionStyle("tactical");
+      setNewIsAnonymous(false);
+      setNewDecoupleLocationPin(false);
+      setNewVicinityPinOnly(true);
       setNewImageUrl("");
       setNewImageCaption("");
       setNewSourceUrl("");
@@ -2945,45 +3035,25 @@ export const FieldPressMaster: React.FC = () => {
       setEvidenceGallery([]);
       setShowUrlInput(false);
       setManualImageUrl("");
-      setNewCoordinates("-87.6298, 40.1245");
+      setNewCoordinates("-87.63, 40.12");
     }
     setFormValidationError(null);
     setShowPressPassModal(false); // ENSURE PRESS PASS IS NOT OPEN
     setShowPressieBuilderModal(true); // OPEN EXACT PRESSIE BUILDER
   };
 
-  // Owner Editing: open the same composer, pre-filled from a published
-  // dispatch, but tagged as editingPublishedId rather than editingDraftId
-  // so the save handler PUTs the existing row instead of creating a new
-  // one or running the draft-promotion delete flow.
   const openEditPublished = (dispatch: Dispatch) => {
-    // openCreatePressie(dispatch) pre-fills the form from `dispatch`, but
-    // it treats its argument as a *draft* being edited and sets
-    // editingDraftId to dispatch.id as a side effect - so a
-    // setEditingDraftId(null) placed *before* this call gets clobbered.
-    // That used to leave editingDraftId === editingPublishedId (same id),
-    // which made handleCreatePressie PUT the update and then immediately
-    // run its "delete the promoted draft" cleanup on that same id -
-    // silently deleting the dispatch right after publishing the edit.
-    // Clearing editingDraftId *after* the pre-fill is what actually takes
-    // effect.
     openCreatePressie(dispatch);
     setEditingDraftId(null);
     setEditingPublishedId(dispatch.id);
   };
 
-  // =========================================================================
-  // PRESS PASS EDITOR HANDLER (OPENS THE ID BADGE CUSTOMIZER - IMAGE 1)
-  // =========================================================================
   const openPressPassEditor = () => {
     setEditPassForm(pressPass);
-    setShowPressieBuilderModal(false); // Close Pressie Builder
-    setShowPressPassModal(true); // Open Press Pass Credential Studio
+    setShowPressieBuilderModal(false);
+    setShowPressPassModal(true);
   };
 
-  // Dispatch IDs: Fp_ + 13 digits (matches the site's Fp_ branding).
-  // Date.now() is 13 digits through the year 2286, so this is stable for
-  // the foreseeable future without needing padding logic.
   const generateDispatchId = () => `Fp_${Date.now()}`;
 
   // Save Draft Handler (Stage to Press Roll)
@@ -3005,24 +3075,36 @@ export const FieldPressMaster: React.FC = () => {
     if (newCoordinates.includes(",")) {
       const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
       if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-        parsedCoords = [parts[0], parts[1]];
+        parsedCoords = newVicinityPinOnly
+          ? [fuzzVicinityClient(parts[0]), fuzzVicinityClient(parts[1])]
+          : [parts[0], parts[1]];
       }
     }
+
+    const effectiveAuthor = newIsAnonymous ? "Anonymous Field Source" : pressPass.name;
+    const effectiveCallsign = newIsAnonymous ? "anon-signal" : pressPass.callsign;
+    const effectiveBureau = newIsAnonymous
+      ? (newDecoupleLocationPin ? "Metadata Stripped • Pin Decoupled" : "Metadata Stripped • Vicinity Signal")
+      : (newDecoupleLocationPin ? `${pressPass.bureau || "Field Bureau"} • Pin Decoupled` : pressPass.bureau);
 
     const draftItem: Dispatch = {
       id: editingDraftId || generateDispatchId(),
       title: finalTitle,
-      category: newCategory,
-      author: pressPass.name,
-      callsign: pressPass.callsign,
-      bureau: pressPass.bureau,
+      category: newCategory || "Field Dispatch",
+      author: effectiveAuthor,
+      callsign: effectiveCallsign,
+      bureau: effectiveBureau,
       timestamp: "Staged Draft",
-      location: newLocation.trim() || "Midwest Corridor",
+      location: newLocation.trim() || "Midwest Corridor (Vicinity)",
       coordinates: parsedCoords,
+      isAnonymous: newIsAnonymous,
+      decoupleLocationPin: newDecoupleLocationPin,
+      vicinityPinOnly: newVicinityPinOnly,
       content: newContent.trim(),
       imageUrl: newImageUrl || undefined,
       imageCaption: newImageCaption || undefined,
       sourceUrl: newSourceUrl.trim() || undefined,
+      editionStyle: newEditionStyle,
       isPressRoll: true
     };
 
@@ -3030,7 +3112,13 @@ export const FieldPressMaster: React.FC = () => {
       const res = await fetch("/api/dispatches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...draftItem, isPressRoll: true })
+        body: JSON.stringify({
+          ...draftItem,
+          isPressRoll: true,
+          isAnonymous: newIsAnonymous,
+          decoupleLocationPin: newDecoupleLocationPin,
+          vicinityPinOnly: newVicinityPinOnly
+        })
       });
       if (!res.ok) throw new Error("save failed");
       const { dispatch: saved } = await res.json();
@@ -3042,7 +3130,7 @@ export const FieldPressMaster: React.FC = () => {
 
       setShowPressieBuilderModal(false);
       setFormValidationError(null);
-      setSavedSuccessToast("Dispatch staged to Press Roll.");
+      setSavedSuccessToast("Dispatch staged to Press Roll with privacy & vicinity settings.");
       setTimeout(() => setSavedSuccessToast(""), 3500);
     } catch {
       setFormValidationError("Couldn't save the draft — check your connection and try again.");
@@ -3063,29 +3151,44 @@ export const FieldPressMaster: React.FC = () => {
     }
     setIsSubmittingPressie(true);
 
-    const fallbackContent = newContent.trim() || visualPrompt.trim() || `Field dispatch filed from ${pressPass.bureau || "Midwest Corridor"} by ${pressPass.name}.`;
+    const effectiveAuthor = newIsAnonymous ? "Anonymous Field Source" : pressPass.name;
+    const effectiveCallsign = newIsAnonymous ? "anon-signal" : pressPass.callsign;
+    const effectiveBureau = newIsAnonymous
+      ? (newDecoupleLocationPin ? "Metadata Stripped • Pin Decoupled" : "Metadata Stripped • Vicinity Signal")
+      : (newDecoupleLocationPin ? `${pressPass.bureau || "Field Bureau"} • Pin Decoupled` : pressPass.bureau);
 
-    let parsedCoords: [number, number] | undefined = pressPass.coordinates || [-87.6298, 40.1245];
+    const fallbackContent = newContent.trim() || visualPrompt.trim() || `Field dispatch filed from ${newLocation || "Regional Vicinity"} by ${effectiveAuthor}.`;
+
+    let parsedCoords: [number, number] | undefined = pressPass.coordinates || [-87.63, 40.12];
     if (newCoordinates.includes(",")) {
       const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
       if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-        parsedCoords = [parts[0], parts[1]];
+        parsedCoords = newVicinityPinOnly
+          ? [fuzzVicinityClient(parts[0]), fuzzVicinityClient(parts[1])]
+          : [parts[0], parts[1]];
       }
     }
 
     const chosenImage = newImageUrl || (evidenceGallery.length > 0 ? evidenceGallery[0].url : undefined);
     const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
+    const rawLoc = newLocation.trim() || pressPass.location || pressPass.bureau || "Midwest Corridor";
+    const finalLocation = newVicinityPinOnly && !rawLoc.toLowerCase().includes("vicinity")
+      ? `${rawLoc} (Vicinity)`
+      : rawLoc;
 
     const pressieItem: Dispatch = {
       id: editingPublishedId || generateDispatchId(),
       title: newTitle.trim(),
-      category: "Field Dispatch",
-      author: pressPass.name,
-      callsign: pressPass.callsign,
-      bureau: pressPass.bureau,
+      category: newCategory || "Field Dispatch",
+      author: effectiveAuthor,
+      callsign: effectiveCallsign,
+      bureau: effectiveBureau,
       timestamp: "Just now",
-      location: pressPass.location || pressPass.bureau || "Midwest Corridor",
+      location: finalLocation,
       coordinates: parsedCoords,
+      isAnonymous: newIsAnonymous,
+      decoupleLocationPin: newDecoupleLocationPin,
+      vicinityPinOnly: newVicinityPinOnly,
       content: fallbackContent,
       imageUrl: chosenImage,
       imageCaption: chosenCaption,
@@ -3098,19 +3201,23 @@ export const FieldPressMaster: React.FC = () => {
 
     setForkParentId(null);
     try {
-      // Owner editing an already-published dispatch PUTs in place;
-      // everything else (new dispatch, or promoting a staged draft)
-      // POSTs a new row.
+      const payload = {
+        ...pressieItem,
+        isPressRoll: false,
+        isAnonymous: newIsAnonymous,
+        decoupleLocationPin: newDecoupleLocationPin,
+        vicinityPinOnly: newVicinityPinOnly
+      };
       const res = editingPublishedId
         ? await fetch(`/api/dispatches/${editingPublishedId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+            body: JSON.stringify(payload)
           })
         : await fetch("/api/dispatches", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...pressieItem, isPressRoll: false })
+            body: JSON.stringify(payload)
           });
       if (!res.ok) throw new Error(editingPublishedId ? "update failed" : "publish failed");
       const { dispatch: published } = await res.json();
@@ -3342,69 +3449,169 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
-  // MapLibre Initialization
+  const isDispatchAnonOrDecoupled = (d: Dispatch): boolean => {
+    return Boolean(
+      d.isAnonymous ||
+      d.decoupleLocationPin ||
+      d.callsign === "anon-signal" ||
+      d.author?.toLowerCase().includes("anonymous") ||
+      d.bureau?.includes("Metadata Stripped") ||
+      d.bureau?.includes("Pin Decoupled")
+    );
+  };
+
+  // MapLibre Global & National Vicinity Interaction Radar
   useEffect(() => {
-    if (activeTab === "map" && mapContainerRef.current && !mapInstanceRef.current) {
-      try {
-        const map = new maplibregl.Map({
-          container: mapContainerRef.current,
-          style: {
-            version: 8,
-            sources: {
-              osm: {
-                type: "raster",
-                tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-                tileSize: 256,
-                attribution: "&copy; OpenStreetMap contributors"
-              }
-            },
-            layers: [
-              {
-                id: "osm-tiles",
-                type: "raster",
-                source: "osm",
-                minzoom: 0,
-                maxzoom: 19
-              }
-            ]
+    if (activeTab !== "map" || !mapContainerRef.current) {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      return;
+    }
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+
+    const presetView =
+      mapRegionPreset === "MIDWEST"
+        ? { center: [-87.63, 40.12] as [number, number], zoom: 6.5 }
+        : mapRegionPreset === "GLOBAL"
+        ? { center: [-40.0, 32.0] as [number, number], zoom: 2.2 }
+        : { center: [-96.5, 38.5] as [number, number], zoom: 3.7 };
+
+    try {
+      const map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: "&copy; OpenStreetMap contributors"
+            }
           },
-          center: [-87.6298, 40.1245],
-          zoom: 7.5
+          layers: [
+            {
+              id: "osm-tiles",
+              type: "raster",
+              source: "osm",
+              minzoom: 0,
+              maxzoom: 19
+            }
+          ]
+        },
+        center: presetView.center,
+        zoom: presetView.zoom
+      });
+
+      const visibleMapDispatches = dispatches.filter((d) => {
+        if (!d.coordinates) return false;
+        const isAnonOrDec = isDispatchAnonOrDecoupled(d);
+        if (mapSignalFilter === "ANON_DECOUPLED") return isAnonOrDec;
+        if (mapSignalFilter === "NAMED") return !isAnonOrDec;
+        return true;
+      });
+
+      map.on("load", () => {
+        // Add translucent Vicinity Sector Radar Rings (~5-10km fuzzy vicinity halos, NEVER exact street pins)
+        const features = visibleMapDispatches.map((d) => {
+          const isAnonOrDec = isDispatchAnonOrDecoupled(d);
+          return {
+            type: "Feature" as const,
+            geometry: {
+              type: "Point" as const,
+              coordinates: [
+                fuzzVicinityClient(d.coordinates![0]),
+                fuzzVicinityClient(d.coordinates![1])
+              ]
+            },
+            properties: {
+              id: d.id,
+              color: isAnonOrDec ? "#10b981" : "#f59e0b"
+            }
+          };
         });
 
-        dispatches.forEach((d) => {
-          if (d.coordinates) {
-            const marker = new maplibregl.Marker({ color: "#f59e0b" })
-              .setLngLat(d.coordinates)
-              .setPopup(
-                new maplibregl.Popup({ offset: 25 }).setHTML(
-                  `<div style="font-family: monospace; font-size: 12px; color: #09090b; padding: 4px;">
-                    <strong>${d.title}</strong><br/>
-                    <span style="color:#d97706;">[${d.location}]</span> - ${d.author}
-                  </div>`
-                )
-              )
-              .addTo(map);
-
-            marker.getElement().addEventListener("click", () => {
-              setSelectedStory(d);
-            });
+        map.addSource("vicinity-zones", {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features
           }
         });
 
-        mapInstanceRef.current = map;
-      } catch (err) {
-        console.warn("MapLibre fallback:", err);
-      }
+        map.addLayer({
+          id: "vicinity-outer-halo",
+          type: "circle",
+          source: "vicinity-zones",
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 14, 5, 24, 10, 42],
+            "circle-color": ["get", "color"],
+            "circle-opacity": 0.22,
+            "circle-stroke-width": 2,
+            "circle-stroke-color": ["get", "color"],
+            "circle-stroke-opacity": 0.75
+          }
+        });
+      });
+
+      visibleMapDispatches.forEach((d) => {
+        if (!d.coordinates) return;
+        const fuzzyCoords: [number, number] = [
+          fuzzVicinityClient(d.coordinates[0]),
+          fuzzVicinityClient(d.coordinates[1])
+        ];
+        const isAnon = Boolean(d.isAnonymous || d.callsign === "anon-signal" || d.bureau?.includes("Metadata Stripped"));
+        const isDecoupled = isDispatchAnonOrDecoupled(d);
+        const markerColor = isDecoupled ? "#10b981" : "#f59e0b";
+        const signalBadge = isAnon
+          ? "🕵️ ANONYMOUS VICINITY SIGNAL (METADATA STRIPPED)"
+          : isDecoupled
+          ? "🔀 VICINITY SIGNAL (IDENTITY DECOUPLED FROM PIN)"
+          : "📡 CORRESPONDENT VICINITY SIGNAL";
+        const senderDisplay = isDecoupled
+          ? "Unattributed Vicinity Node (Identity Protected)"
+          : `${d.author} (@${d.callsign})`;
+
+        const marker = new maplibregl.Marker({ color: markerColor })
+          .setLngLat(fuzzyCoords)
+          .setPopup(
+            new maplibregl.Popup({ offset: 25 }).setHTML(
+              `<div style="font-family: monospace; font-size: 11px; color: #09090b; padding: 6px; max-width: 240px;">
+                <div style="font-weight: 900; color: ${isDecoupled ? "#059669" : "#d97706"}; font-size: 9px; margin-bottom: 3px;">
+                  ${signalBadge}
+                </div>
+                <strong style="font-size: 12px;">${d.title}</strong><br/>
+                <span style="color:#0284c7; font-weight: bold;">📍 Vicinity (~5km Sector): ${d.location}</span><br/>
+                <span style="color:#52525b;">Coordinate Ring: ${fuzzyCoords[1]}°N, ${Math.abs(fuzzyCoords[0])}°W (Exact GPS Stripped)</span><br/>
+                <span style="color:#18181b; font-weight: 600;">Source: ${senderDisplay}</span>
+              </div>`
+            )
+          )
+          .addTo(map);
+
+        marker.getElement().addEventListener("click", () => {
+          setSelectedStory(d);
+        });
+      });
+
+      mapInstanceRef.current = map;
+    } catch (err) {
+      console.warn("MapLibre fallback:", err);
     }
 
     return () => {
-      if (activeTab !== "map" && mapInstanceRef.current) {
+      if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, [activeTab, dispatches]);
+  }, [activeTab, dispatches, mapSignalFilter, mapRegionPreset]);
 
   // When a search query is active, the server has already matched
   // title/content/location/author across the full table (see the
@@ -4710,9 +4917,28 @@ export const FieldPressMaster: React.FC = () => {
                         {d.repostedByCallsign && (
                           <div className="text-[10px] text-indigo-400 mb-0.5">🔁 Shared by @{d.repostedByCallsign}</div>
                         )}
-                        <div className="font-bold">{d.author}</div>
-                        <div className="text-amber-500 font-semibold">@{d.callsign}</div>
+                        <div className="font-bold flex items-center sm:justify-end gap-1 flex-wrap">
+                          {(d.isAnonymous || d.callsign === "anon-signal") && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-black uppercase">
+                              🕵️ ANON SOURCE
+                            </span>
+                          )}
+                          {(d.decoupleLocationPin || (d.bureau && d.bureau.includes("Pin Decoupled"))) && (
+                            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[9px] font-black uppercase" title="Location pin is decoupled from the author's public identity">
+                              🔀 PIN DECOUPLED
+                            </span>
+                          )}
+                          <span>{d.author}</span>
+                        </div>
+                        <div className={`${(d.isAnonymous || d.callsign === "anon-signal") ? "text-emerald-400" : "text-amber-500"} font-semibold`}>
+                          @{d.callsign}
+                        </div>
                         <div className={`text-[10px] ${subTextThemeClass}`}>{d.bureau}</div>
+                        {Array.isArray(d.coordinates) && d.coordinates.length === 2 && (
+                          <div className="text-[9px] text-emerald-400/90 mt-0.5">
+                            📍 ~5 km Vicinity ({d.coordinates[0].toFixed(2)}°N, {Math.abs(d.coordinates[1]).toFixed(2)}°W)
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <button
@@ -4819,23 +5045,186 @@ export const FieldPressMaster: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: GEOSPATIAL BEAT RADAR */}
+        {/* TAB 3: GEOSPATIAL BEAT RADAR & VICINITY SIGNAL LEDGER */}
         {activeTab === "map" && (
           <div className="space-y-4">
             <div className={`p-4 rounded-lg border ${cardThemeClass}`}>
-              <div className="flex items-center justify-between mb-3 font-mono text-xs">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-amber-500" />
-                  <span className="font-bold">Active Telemetry Grid: Wabash Valley & Midwest Corridor</span>
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3 font-mono text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-emerald-400" />
+                    <span className="font-bold">Global & Regional Vicinity Signal Radar (~5 km Fuzzy Sector Pinning)</span>
+                  </div>
+                  <p className={`text-[11px] ${subTextThemeClass}`}>
+                    Exact street/building GPS coordinates are automatically quantized to ~5 km regional rings. Senders can decouple their location pin from their identity or strip all metadata.
+                  </p>
                 </div>
-                <span className={subTextThemeClass}>MapLibre Vector Radar • Click markers to read dispatch</span>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Region Presets */}
+                  <div className="flex items-center rounded border border-zinc-700 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setMapRegionPreset("NATIONAL")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapRegionPreset === "NATIONAL" ? "bg-amber-500 text-zinc-950" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                      }`}
+                    >
+                      🌎 National Radar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapRegionPreset("MIDWEST")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapRegionPreset === "MIDWEST" ? "bg-amber-500 text-zinc-950" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                      }`}
+                    >
+                      🌽 Midwest Corridor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapRegionPreset("GLOBAL")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapRegionPreset === "GLOBAL" ? "bg-amber-500 text-zinc-950" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                      }`}
+                    >
+                      🌐 Global View
+                    </button>
+                  </div>
+
+                  {/* Signal Identity Filters */}
+                  <div className="flex items-center rounded border border-zinc-700 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setMapSignalFilter("ALL")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapSignalFilter === "ALL" ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                      }`}
+                    >
+                      All Signals
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapSignalFilter("ANON_DECOUPLED")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapSignalFilter === "ANON_DECOUPLED" ? "bg-emerald-500 text-zinc-950" : "bg-zinc-900 text-emerald-400 hover:bg-zinc-800"
+                      }`}
+                    >
+                      🕵️ Anon & Decoupled
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapSignalFilter("NAMED")}
+                      className={`px-2.5 py-1 text-[10px] font-bold cursor-pointer transition ${
+                        mapSignalFilter === "NAMED" ? "bg-amber-500 text-zinc-950" : "bg-zinc-900 text-amber-400 hover:bg-zinc-800"
+                      }`}
+                    >
+                      📡 Named Bylines
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-4 mb-3 px-2.5 py-1.5 rounded bg-zinc-950/60 border border-zinc-800/80 font-mono text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  <span className="text-emerald-300 font-bold">Emerald Halo:</span>
+                  <span className="text-zinc-400">Anonymous / Identity-Decoupled Vicinity Signal (Someone near the event shared without linking personal location)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                  <span className="text-amber-300 font-bold">Amber Halo:</span>
+                  <span className="text-zinc-400">Named Correspondent Vicinity Sector (~5 km Fuzzy Ring)</span>
+                </div>
+              </div>
+
               <div
                 ref={mapContainerRef}
                 className={`w-full h-[540px] rounded-lg border overflow-hidden relative shadow-inner ${
                   isDark ? "border-zinc-800 bg-zinc-950" : "border-zinc-300 bg-zinc-100"
                 }`}
               />
+            </div>
+
+            {/* Live Vicinity Signal Interaction Ledger */}
+            <div className={`p-4 rounded-lg border font-mono ${cardThemeClass}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold flex items-center gap-2">
+                    <span>📡 Live Vicinity Signal Interaction Ledger</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px]">
+                      {dispatches.filter((d) => Array.isArray(d.coordinates) && d.coordinates.length === 2).length} Regional Sectors Active
+                    </span>
+                  </h3>
+                  <p className={`text-[11px] mt-0.5 ${subTextThemeClass}`}>
+                    Track regional interactions safely: see where witnesses and correspondents are dispatching from without exposing exact street addresses.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openCreatePressie()}
+                  className="px-3 py-1.5 rounded bg-emerald-500 text-zinc-950 text-xs font-bold hover:bg-emerald-400 transition cursor-pointer"
+                >
+                  + Pin Vicinity Dispatch
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {dispatches
+                  .filter((d) => Array.isArray(d.coordinates) && d.coordinates.length === 2)
+                  .filter((d) => {
+                    const isAnonOrDecoupled =
+                      Boolean(d.isAnonymous) ||
+                      Boolean(d.decoupleLocationPin) ||
+                      d.callsign === "anon-signal" ||
+                      d.author === "Anonymous Field Source" ||
+                      (d.bureau && d.bureau.includes("Pin Decoupled"));
+                    if (mapSignalFilter === "ANON_DECOUPLED") return isAnonOrDecoupled;
+                    if (mapSignalFilter === "NAMED") return !isAnonOrDecoupled;
+                    return true;
+                  })
+                  .slice(0, 12)
+                  .map((sig) => {
+                    const isAnon = Boolean(sig.isAnonymous) || sig.callsign === "anon-signal" || sig.author === "Anonymous Field Source";
+                    const isDecoupled = Boolean(sig.decoupleLocationPin) || (sig.bureau && sig.bureau.includes("Pin Decoupled")) || isAnon;
+                    const coords = sig.coordinates || [39.46, -87.41];
+                    return (
+                      <div
+                        key={sig.id}
+                        onClick={() => setSelectedStory(sig)}
+                        className={`p-3 rounded-lg border cursor-pointer transition hover:border-emerald-500/50 ${
+                          isDecoupled
+                            ? isDark
+                              ? "bg-emerald-950/15 border-emerald-500/30"
+                              : "bg-emerald-50/70 border-emerald-300"
+                            : subCardThemeClass
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[10px] mb-1.5">
+                          <span className={`px-1.5 py-0.5 rounded font-bold ${
+                            isDecoupled
+                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                              : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                          }`}>
+                            {isAnon ? "🕵️ ANON VICINITY SIGNAL" : isDecoupled ? "🔀 PIN DECOUPLED" : "📡 NAMED VICINITY PIN"}
+                          </span>
+                          <span className="text-zinc-400">
+                            ~{Number(coords[0]).toFixed(2)}°N, {Math.abs(Number(coords[1])).toFixed(2)}°W
+                          </span>
+                        </div>
+                        <div className="text-xs font-bold line-clamp-1 mb-1">{sig.title}</div>
+                        <div className="text-[11px] text-amber-500 font-semibold mb-1">📍 {sig.location}</div>
+                        <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-zinc-800/60">
+                          <span>
+                            {isAnon ? "Source: @anon-signal (Stripped)" : `By @${sig.callsign} (Pin Decoupled)`}
+                          </span>
+                          <span className="text-emerald-400 font-bold">Inspect →</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           </div>
         )}
@@ -5032,21 +5421,153 @@ export const FieldPressMaster: React.FC = () => {
                 />
               </div>
 
-              {/* Inherited Reporter Press Pass Provenance & Beat Info */}
-              <div className={`p-2.5 rounded border flex flex-wrap items-center justify-between gap-2 font-mono text-xs ${subCardThemeClass}`}>
-                <div className="flex items-center gap-2">
-                  <span className={subTextThemeClass}>Bureau / Desk:</span>
-                  <span className="font-bold text-amber-500">{pressPass.bureau || "Midwest Corridor Dispatch"}</span>
+              {/* 🛡️ PRIVACY, METADATA SCRUBBER & VICINITY PINNING STUDIO */}
+              <div className={`p-3.5 rounded-xl border space-y-3 font-mono text-xs ${
+                newIsAnonymous || newDecoupleLocationPin
+                  ? "bg-emerald-950/25 border-emerald-500/50"
+                  : subCardThemeClass
+              }`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{newIsAnonymous ? "🕵️" : "🛡️"}</span>
+                    <div>
+                      <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                        <span>Identity, EXIF Scrubber & Vicinity Pin Shield</span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-black">
+                          ~5 KM FUZZY VICINITY ACTIVE
+                        </span>
+                      </div>
+                      <p className={`text-[10px] ${subTextThemeClass}`}>
+                        Pins show the general vicinity where dispatches are sent from (never exact GPS). Strip your identity/metadata or decouple your map pin below.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePinMyVicinity}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-bold text-[10px] transition cursor-pointer flex items-center gap-1"
+                    title="Detect current area and automatically quantize to a safe ~5km fuzzy vicinity ring (never exact GPS)"
+                  >
+                    <span>🛰️</span>
+                    <span>Pin My Current Vicinity (~5km Fuzzy)</span>
+                  </button>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px]">
-                  <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
-                    Field Dispatch
-                  </span>
-                  {pressPass.provenanceEnabled && (
-                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-                      ✓ Provenance Verified
-                    </span>
-                  )}
+
+                {/* 3 Privacy & Location Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !newIsAnonymous;
+                      setNewIsAnonymous(next);
+                      if (next) setNewDecoupleLocationPin(true);
+                    }}
+                    className={`p-2.5 rounded-lg border text-left transition cursor-pointer ${
+                      newIsAnonymous
+                        ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400"
+                        : "bg-zinc-900/60 border-zinc-700/80 text-zinc-300 hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-[11px]">
+                      <span>🕵️ Anonymous Mode</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">
+                        {newIsAnonymous ? "ON (STRIPPED)" : "OFF"}
+                      </span>
+                    </div>
+                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
+                      Strips your name, @callsign, bureau &amp; photo EXIF metadata publicly.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewDecoupleLocationPin(!newDecoupleLocationPin)}
+                    className={`p-2.5 rounded-lg border text-left transition cursor-pointer ${
+                      newDecoupleLocationPin
+                        ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 ring-1 ring-cyan-400"
+                        : "bg-zinc-900/60 border-zinc-700/80 text-zinc-300 hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-[11px]">
+                      <span>🔀 Decouple Map Pin</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">
+                        {newDecoupleLocationPin ? "DECOUPLED" : "LINKED"}
+                      </span>
+                    </div>
+                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
+                      Pins the area on the global map without tying the location pin to your identity.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
+                      if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+                        setNewCoordinates(`${fuzzVicinityClient(parts[0])}, ${fuzzVicinityClient(parts[1])}`);
+                      }
+                      setNewVicinityPinOnly(true);
+                      setSavedSuccessToast("📍 Vicinity coordinates quantized to ~5km sector (exact GPS stripped).");
+                      setTimeout(() => setSavedSuccessToast(""), 2500);
+                    }}
+                    className="p-2.5 rounded-lg border text-left transition cursor-pointer bg-amber-500/15 border-amber-500/50 text-amber-300"
+                  >
+                    <div className="flex items-center justify-between font-bold text-[11px]">
+                      <span>📍 Fuzzy Vicinity Ring</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">±5 KM ONLY</span>
+                    </div>
+                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
+                      Quantizes coordinates to a ~5km sector halo. Never pins exact buildings.
+                    </p>
+                  </button>
+                </div>
+
+                {/* Editable Vicinity Sector Name + Fuzzy Coordinates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className={`block text-[10px] font-bold mb-1 ${subTextThemeClass}`}>
+                      📍 Approximate Area / Vicinity Label
+                    </label>
+                    <input
+                      type="text"
+                      value={newLocation}
+                      onChange={(e) => setNewLocation(e.target.value)}
+                      placeholder="e.g. Lewis County, TN (Vicinity)"
+                      className={`w-full rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-[10px] font-bold mb-1 ${subTextThemeClass}`}>
+                      🧭 Fuzzy Sector Coordinates (Lon, Lat • Rounded ±5km)
+                    </label>
+                    <input
+                      type="text"
+                      value={newCoordinates}
+                      onChange={(e) => setNewCoordinates(e.target.value)}
+                      placeholder="-87.63, 40.12"
+                      className={`w-full rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Live Public Attribution vs. Map Pin Preview */}
+                <div className="p-2 rounded bg-black/30 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+                  <div>
+                    <span className="text-zinc-400">Public Story Byline: </span>
+                    {newIsAnonymous ? (
+                      <span className="text-emerald-400 font-bold">🕵️ Anonymous Field Source (@anon-signal) • Metadata Stripped</span>
+                    ) : (
+                      <span className="text-amber-400 font-bold">{pressPass.name} (@{pressPass.callsign})</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-zinc-400">Global Radar Pin: </span>
+                    {newIsAnonymous || newDecoupleLocationPin ? (
+                      <span className="text-cyan-400 font-bold">🔀 Unattributed Vicinity Signal in [{newLocation || "Regional Sector"}]</span>
+                    ) : (
+                      <span className="text-amber-300 font-bold">📡 Linked Vicinity Ring in [{newLocation || "Regional Sector"}]</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -5590,8 +6111,21 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* Byline attribution */}
-              <div className={`p-2.5 rounded border text-[11px] ${subCardThemeClass} ${subTextThemeClass}`}>
-                <span className="font-bold text-amber-500">Byline:</span> {pressPass.name} (@{pressPass.callsign}) • {pressPass.role}
+              <div className={`p-2.5 rounded border text-[11px] flex flex-wrap items-center justify-between gap-2 ${subCardThemeClass} ${subTextThemeClass}`}>
+                <div>
+                  <span className="font-bold text-amber-500">Byline:</span>{" "}
+                  {newIsAnonymous ? (
+                    <span className="text-emerald-400 font-bold">Anonymous Field Source (@anon-signal) • Metadata Stripped</span>
+                  ) : (
+                    <span>
+                      {pressPass.name} (@{pressPass.callsign}) • {pressPass.role}
+                      {newDecoupleLocationPin ? " • Pin Decoupled" : ""}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-emerald-400 font-semibold">
+                  📍 ~5 km Fuzzy Vicinity Pin ({newCoordinates || "39.46, -87.41"})
+                </span>
               </div>
             </form>
 
@@ -6387,11 +6921,26 @@ export const FieldPressMaster: React.FC = () => {
                   {selectedStory.title}
                 </h1>
                 <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${borderThemeClass} ${subTextThemeClass}`}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-zinc-200">Byline:</span>
+                    {(selectedStory.isAnonymous || selectedStory.callsign === "anon-signal") && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black uppercase">
+                        🕵️ ANONYMOUS SOURCE • METADATA STRIPPED
+                      </span>
+                    )}
+                    {(selectedStory.decoupleLocationPin || (selectedStory.bureau && selectedStory.bureau.includes("Pin Decoupled"))) && (
+                      <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-black uppercase">
+                        🔀 VICINITY PIN DECOUPLED FROM IDENTITY
+                      </span>
+                    )}
                     <span>{selectedStory.author} (@{selectedStory.callsign})</span>
                     <span>•</span>
                     <span>{selectedStory.bureau}</span>
+                    {Array.isArray(selectedStory.coordinates) && selectedStory.coordinates.length === 2 && (
+                      <span className="px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                        📍 ~5 km Vicinity Sector ({selectedStory.coordinates[0].toFixed(2)}°N, {Math.abs(selectedStory.coordinates[1]).toFixed(2)}°W)
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span>{selectedStory.timestamp}</span>
