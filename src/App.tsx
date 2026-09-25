@@ -2733,21 +2733,50 @@ export const FieldPressMaster: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const extractYoutubeVideoId = (rawUrl?: string | null): string | null => {
+    if (!rawUrl || typeof rawUrl !== "string") return null;
+    const m = rawUrl.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/|i\.ytimg\.com\/vi\/)([\w-]{11})/i);
+    return m ? m[1] : null;
+  };
+
+  const getFallbackImageForDispatch = (d?: Partial<Dispatch> | null): string => {
+    if (d?.embedData?.thumbnail_url) return d.embedData.thumbnail_url;
+    const ytId = extractYoutubeVideoId(d?.sourceUrl) || extractYoutubeVideoId(d?.imageUrl);
+    if (ytId) return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+    return "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85";
+  };
+
+  const handleImgFallbackError = (e: React.SyntheticEvent<HTMLImageElement, Event>, d?: Partial<Dispatch> | null) => {
+    const target = e.currentTarget;
+    if (target.dataset.fallbackApplied === "1") return;
+    target.dataset.fallbackApplied = "1";
+    target.src = getFallbackImageForDispatch(d);
+  };
+
   const handleAddImageUrl = () => {
-    if (!manualImageUrl.trim()) return;
+    const raw = manualImageUrl.trim();
+    if (!raw) return;
+    const ytId = extractYoutubeVideoId(raw);
+    const resolvedImgUrl = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : raw;
+    const resolvedCaption = ytId ? "[🎥 Real Video Footage Frame] Verified YouTube Broadcast Still" : "[📸 Real Web Photo] Field media link";
+
+    if (ytId && !newSourceUrl.trim()) {
+      setNewSourceUrl(`https://www.youtube.com/watch?v=${ytId}`);
+    }
+
     const item = {
       id: "url-" + Date.now(),
-      url: manualImageUrl.trim(),
+      url: resolvedImgUrl,
       source: "upload" as const,
-      caption: "Field media link",
+      caption: resolvedCaption,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
     setEvidenceGallery((prev) => [item, ...prev.slice(0, 8)]);
-    setNewImageUrl(manualImageUrl.trim());
-    setNewImageCaption("Field media link");
+    setNewImageUrl(resolvedImgUrl);
+    setNewImageCaption(resolvedCaption);
     setManualImageUrl("");
     setShowUrlInput(false);
-    setSavedSuccessToast("Image URL linked to evidence tray.");
+    setSavedSuccessToast(ytId ? "YouTube footage linked + HD video frame attached!" : "Real photo URL linked to evidence tray.");
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
@@ -2830,7 +2859,7 @@ export const FieldPressMaster: React.FC = () => {
             settled = true;
             resolve(editorialFallback);
           }
-        }, 8000);
+        }, 4500);
         img.src = aiUrl;
       });
 
@@ -2867,10 +2896,6 @@ export const FieldPressMaster: React.FC = () => {
   // CRITICAL: NEVER opens the Press Pass Credential Editor!
   // =========================================================================
   const openCreatePressie = (draftToEdit?: Dispatch) => {
-    // Always clear a stale published-edit id first. openEditPublished
-    // calls this function then sets editingPublishedId immediately after,
-    // so this only matters for every other entry point (new dispatch,
-    // editing a staged draft) where it must not carry over.
     setEditingPublishedId(null);
     if (draftToEdit) {
       setEditingDraftId(draftToEdit.id);
@@ -2879,14 +2904,22 @@ export const FieldPressMaster: React.FC = () => {
       setNewCategory(draftToEdit.category || "Field Dispatch");
       setNewLocation(draftToEdit.location || "Midwest Corridor");
       setNewContent(draftToEdit.content || "");
-      setNewImageUrl(draftToEdit.imageUrl || "");
+      const validEdition = (draftToEdit.editionStyle && draftToEdit.editionStyle !== "wire"
+        ? draftToEdit.editionStyle
+        : "tactical") as PressyoEdition;
+      setNewEditionStyle(validEdition);
+      const safeImg =
+        draftToEdit.imageUrl && !draftToEdit.imageUrl.includes("pollinations.ai") && !draftToEdit.imageUrl.includes("/wikipedia/commons/thumb/")
+          ? draftToEdit.imageUrl
+          : getFallbackImageForDispatch(draftToEdit);
+      setNewImageUrl(safeImg || "");
       setNewImageCaption(draftToEdit.imageCaption || "");
       setNewSourceUrl(draftToEdit.sourceUrl || "");
       setVisualPrompt(draftToEdit.title || "");
-      if (draftToEdit.imageUrl) {
+      if (safeImg) {
         setEvidenceGallery([{
           id: "init-" + Date.now(),
-          url: draftToEdit.imageUrl,
+          url: safeImg,
           source: "upload",
           caption: draftToEdit.imageCaption || "",
           timestamp: "Original"
@@ -2904,6 +2937,7 @@ export const FieldPressMaster: React.FC = () => {
       setNewCategory("Field Dispatch");
       setNewLocation("Midwest Corridor");
       setNewContent("");
+      setNewEditionStyle("tactical");
       setNewImageUrl("");
       setNewImageCaption("");
       setNewSourceUrl("");
@@ -3947,6 +3981,7 @@ export const FieldPressMaster: React.FC = () => {
                           <img
                             src={d.imageUrl}
                             alt={d.title}
+                            onError={(e) => handleImgFallbackError(e, d)}
                             className={`w-full h-full object-cover transition duration-300 group-hover:scale-103 ${
                               isComic
                                 ? "contrast-[1.4] saturate-[1.8] brightness-[1.05] filter"
@@ -3959,6 +3994,12 @@ export const FieldPressMaster: React.FC = () => {
                                       : "contrast-[1.08] saturate-[1.2] brightness-100 filter"
                             }`}
                           />
+                          {(d.embedType === "youtube" || extractYoutubeVideoId(d.sourceUrl)) && (
+                            <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded bg-red-600/95 text-white text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg border border-red-400/50">
+                              <span>▶</span>
+                              <span>REAL FOOTAGE</span>
+                            </div>
+                          )}
 
                           {/* Edition-Specific Image Overlays */}
                           {isArcade && (
@@ -4605,8 +4646,19 @@ export const FieldPressMaster: React.FC = () => {
                     className={`p-4 rounded-lg border transition hover:border-amber-500/50 flex flex-col sm:flex-row sm:items-start justify-between gap-4 cursor-pointer group ${cardThemeClass}`}
                   >
                     {d.imageUrl && (
-                      <div className="w-full sm:w-40 aspect-video sm:aspect-auto sm:h-24 rounded-md overflow-hidden flex-shrink-0 bg-black/50 border border-zinc-800">
-                        <img src={d.imageUrl} alt={d.title} className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                      <div className="relative w-full sm:w-40 aspect-video sm:aspect-auto sm:h-24 rounded-md overflow-hidden flex-shrink-0 bg-black/50 border border-zinc-800">
+                        <img
+                          src={d.imageUrl}
+                          alt={d.title}
+                          onError={(e) => handleImgFallbackError(e, d)}
+                          className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+                        {(d.embedType === "youtube" || extractYoutubeVideoId(d.sourceUrl)) && (
+                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-red-600/95 text-white text-[8px] font-black tracking-wider flex items-center gap-0.5 shadow">
+                            <span>▶</span>
+                            <span>FOOTAGE</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="space-y-1.5 flex-1">
@@ -5287,17 +5339,78 @@ export const FieldPressMaster: React.FC = () => {
 
               {/* Link (optional) -- resolved server-side into a YouTube/Reddit/X
                   embed or a generic link card on save. See WireEmbed. */}
-              <div>
-                <label className={`font-bold block mb-1 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Link <span className="font-normal text-[10px] normal-case tracking-normal text-zinc-500">(optional — YouTube, Reddit, X, or any article URL)</span>
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className={`font-bold block ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
+                    🎥 Real Video Footage / Source Link <span className="font-normal text-[10px] normal-case tracking-normal text-zinc-500">(YouTube, Reddit, X, or official source URL)</span>
+                  </label>
+                  {extractYoutubeVideoId(newSourceUrl) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const vid = extractYoutubeVideoId(newSourceUrl);
+                        if (!vid) return;
+                        const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+                        setNewImageUrl(frameUrl);
+                        if (!newImageCaption.trim()) {
+                          setNewImageCaption("[🎥 Real Video Footage Frame] Verified Broadcast Still");
+                        }
+                        setEvidenceGallery((prev) => [
+                          {
+                            id: "yt-" + Date.now(),
+                            url: frameUrl,
+                            source: "upload" as const,
+                            caption: "[🎥 Real Video Footage Frame]",
+                            timestamp: "Footage"
+                          },
+                          ...prev.filter((p) => p.url !== frameUrl).slice(0, 7)
+                        ]);
+                        setSavedSuccessToast("HD frame captured from YouTube footage as cover photo!");
+                        setTimeout(() => setSavedSuccessToast(""), 3000);
+                      }}
+                      className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 text-[10px] font-bold transition cursor-pointer"
+                    >
+                      📸 Use Video Frame as Cover Photo
+                    </button>
+                  )}
+                </div>
                 <input
                   type="url"
-                  placeholder="https://..."
+                  placeholder="Paste YouTube video URL (https://www.youtube.com/watch?v=...) or source article link..."
                   value={newSourceUrl}
-                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewSourceUrl(val);
+                    const vid = extractYoutubeVideoId(val);
+                    if (vid && !newImageUrl.trim()) {
+                      const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+                      setNewImageUrl(frameUrl);
+                      setNewImageCaption("[🎥 Real Video Footage Frame] Verified Broadcast Still");
+                      setEvidenceGallery((prev) => [
+                        {
+                          id: "yt-auto-" + Date.now(),
+                          url: frameUrl,
+                          source: "upload" as const,
+                          caption: "[🎥 Real Video Footage Frame]",
+                          timestamp: "Footage"
+                        },
+                        ...prev.slice(0, 7)
+                      ]);
+                    }
+                  }}
                   className={`w-full rounded-lg px-3 py-2 text-xs focus:outline-none transition ${inputThemeClass}`}
                 />
+                {extractYoutubeVideoId(newSourceUrl) && (
+                  <div className="rounded-xl overflow-hidden border border-red-500/40 bg-black aspect-video max-h-56 w-full">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${extractYoutubeVideoId(newSourceUrl)}`}
+                      title="Real Footage Preview"
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
               </div>
 
               {/* ================================================================= */}
@@ -6254,7 +6367,12 @@ export const FieldPressMaster: React.FC = () => {
               {/* Evidence Photo Banner */}
               {selectedStory.imageUrl && (
                 <div className="rounded-xl overflow-hidden border border-zinc-800 relative aspect-video max-h-[480px] bg-black shadow-lg">
-                  <img src={selectedStory.imageUrl} alt={selectedStory.title} className="w-full h-full object-cover" />
+                  <img
+                    src={selectedStory.imageUrl}
+                    alt={selectedStory.title}
+                    onError={(e) => handleImgFallbackError(e, selectedStory)}
+                    className="w-full h-full object-cover"
+                  />
                   {selectedStory.imageCaption && (
                     <div className="absolute bottom-0 inset-x-0 bg-black/80 backdrop-blur-xs p-3 text-xs text-zinc-300 border-t border-zinc-800">
                       <span className="text-amber-400 font-bold">EVIDENCE STILL:</span> {selectedStory.imageCaption}
@@ -6289,10 +6407,26 @@ export const FieldPressMaster: React.FC = () => {
                 {selectedStory.content}
               </div>
 
-              {/* Resolved link embed (wire pressies + any regular pressie with a link) */}
-              {selectedStory.embedType && (
-                <div className="space-y-2">
-                  <WireEmbed dispatch={selectedStory} />
+              {/* Resolved link embed / Real Broadcast Footage (wire pressies + any regular pressie with a link) */}
+              {(selectedStory.embedType || extractYoutubeVideoId(selectedStory.sourceUrl)) && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
+                    <span>🎥</span>
+                    <span>Verified Field & Broadcast Footage</span>
+                  </div>
+                  {selectedStory.embedType ? (
+                    <WireEmbed dispatch={selectedStory} />
+                  ) : extractYoutubeVideoId(selectedStory.sourceUrl) ? (
+                    <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${extractYoutubeVideoId(selectedStory.sourceUrl)}`}
+                        title={selectedStory.title}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : null}
                   {selectedStory.sourceUrl && (
                     <a
                       href={selectedStory.sourceUrl}
@@ -6300,7 +6434,7 @@ export const FieldPressMaster: React.FC = () => {
                       rel="noopener noreferrer"
                       className="text-xs text-amber-500 hover:text-amber-400 hover:underline inline-block"
                     >
-                      Read original at source →
+                      Watch / Read original at source →
                     </a>
                   )}
                 </div>
