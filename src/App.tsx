@@ -155,7 +155,7 @@ export interface Dispatch {
   imageCaption?: string;
   isLead?: boolean;
   isPressRoll?: boolean;
-  editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine" | "wire";
+  editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine" | "fieldnote" | "almanac" | "curio" | "wire";
   sharingOption?: "fork" | "colab" | "none";
   parentDispatchId?: string;
   sourceUrl?: string;
@@ -190,23 +190,8 @@ export const INITIAL_CLASSIFIEDS: ClassifiedItem[] = [
 ];
 
 
-// Every dispatch share link gets a fresh cache-busting query param. Link
-// unfurl crawlers (Facebook, Slack, Discord, etc.) cache Open Graph data
-// per *exact* URL, sometimes stubbornly -- a manual "Scrape Again" doesn't
-// always actually clear it. Appending a unique, harmless `v` param means
-// each share is a URL those crawlers have never seen before, so they're
-// forced to fetch fresh instead of serving back a stale cached object
-// (e.g. an old generic image from before this dispatch existed or was
-// last updated). The API route ignores `v` entirely -- it's args-only for
-// the crawler's cache key, not used for the dispatch lookup itself.
+// Every dispatch share link gets a fresh cache-busting query param.
 export const buildDispatchShareUrl = (id: string): string => {
-  // Always the fixed prod origin, never window.location.origin: a share
-  // link generated from a Vercel preview deploy or localhost previously
-  // pointed back at that preview/localhost URL, which 404s (or worse,
-  // is simply unreachable) for anyone who isn't the person who copied it.
-  // Link unfurl crawlers hitting a preview URL also produce broken/blank
-  // Open Graph previews. Every dispatch is only ever meant to be shared
-  // via the real production URL regardless of where it was generated.
   const origin = "https://fieldpress.studio";
   return `${origin}/api/dispatch/${id}?v=${Date.now()}`;
 };
@@ -224,6 +209,42 @@ export const getEditionClasses = (style?: string, isDark: boolean = true) => {
         tag: "📰 Broadsheet Edition",
         accentBorder: "border-amber-800/30",
         subtleBadge: "bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+      };
+    case "fieldnote":
+      return {
+        card: isDark
+          ? "bg-emerald-950/40 border-l-4 border border-emerald-500/50 shadow-md rounded-xl text-emerald-50"
+          : "bg-emerald-50/60 border-l-4 border border-emerald-700/40 shadow-sm rounded-xl text-zinc-900",
+        badge: "bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 font-mono uppercase tracking-widest text-[10px] font-bold px-2 py-0.5 rounded",
+        headline: "font-serif text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight hover:text-emerald-500 transition",
+        body: "font-serif text-sm sm:text-base leading-relaxed text-zinc-700 dark:text-emerald-100/90",
+        tag: "🌿 Field Note Edition",
+        accentBorder: "border-emerald-500/40",
+        subtleBadge: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded"
+      };
+    case "almanac":
+      return {
+        card: isDark
+          ? "bg-stone-900/95 border-y-4 border border-amber-600/50 shadow-md text-amber-50"
+          : "bg-orange-50/80 border-y-4 border border-amber-800/40 shadow-sm text-stone-900",
+        badge: "bg-amber-700/20 text-amber-800 dark:text-amber-300 border border-amber-600/40 font-serif uppercase tracking-widest text-[10px] font-bold px-2 py-0.5",
+        headline: "font-serif text-2xl sm:text-3xl font-black tracking-tight leading-snug hover:text-amber-500 transition",
+        body: "font-serif text-sm sm:text-base leading-relaxed text-stone-700 dark:text-amber-100/85",
+        tag: "🧭 Heritage Almanac Edition",
+        accentBorder: "border-amber-600/40",
+        subtleBadge: "bg-amber-700/15 text-amber-300 border border-amber-600/30"
+      };
+    case "curio":
+      return {
+        card: isDark
+          ? "bg-fuchsia-950/30 border-2 border-dashed border-fuchsia-400/60 shadow-[4px_4px_0px_0px_rgba(217,70,239,0.45)] rounded-xl text-zinc-100"
+          : "bg-fuchsia-50/50 border-2 border-dashed border-fuchsia-700/50 shadow-[4px_4px_0px_0px_rgba(162,28,175,0.3)] rounded-xl text-zinc-900",
+        badge: "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-500/40 font-mono uppercase font-black tracking-wider text-[10px] px-2.5 py-0.5 rounded",
+        headline: "font-sans text-2xl sm:text-3xl font-black tracking-tight leading-snug hover:text-fuchsia-400 transition",
+        body: "font-sans text-sm leading-relaxed text-zinc-700 dark:text-zinc-200",
+        tag: "🎪 Americana Curio Edition",
+        accentBorder: "border-fuchsia-500/40",
+        subtleBadge: "bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30 rounded"
       };
     case "comic":
       return {
@@ -434,7 +455,7 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
     scanlines: boolean;
   };
 
-  const themes: Record<"newspaper" | "comic" | "arcade" | "tactical" | "magazine", EditionTheme> = {
+  const themes: Record<"newspaper" | "comic" | "arcade" | "tactical" | "magazine" | "fieldnote" | "almanac" | "curio", EditionTheme> = {
     newspaper: {
       bg: "#faf5eb",
       border: "#5c3e21",
@@ -518,6 +539,57 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
       fontBody: "19px Georgia, serif",
       fontHeader: "bold 14px system-ui, sans-serif",
       frameWidth: 2,
+      scanlines: false
+    },
+    fieldnote: {
+      bg: "#041612",
+      border: "#14b8a6",
+      innerBorder: "rgba(20, 184, 166, 0.3)",
+      accentBar: "#14b8a6",
+      headerTitle: "FIELD EXPEDITION LOG • ECOLOGICAL & WATERSHED DISPATCH",
+      headerColor: "#5eead4",
+      badgeText: "FIELD SPECIMEN VERIFIED",
+      badgeColor: "#14b8a6",
+      titleColor: "#f0fdfa",
+      bodyColor: "#ccfbf1",
+      fontTitle: "bold 32px Georgia, serif",
+      fontBody: "18px ui-monospace, 'Courier New', monospace",
+      fontHeader: "bold 13px ui-monospace, 'Courier New', monospace",
+      frameWidth: 2,
+      scanlines: false
+    },
+    almanac: {
+      bg: "#17140d",
+      border: "#84cc16",
+      innerBorder: "rgba(132, 204, 22, 0.3)",
+      accentBar: "#84cc16",
+      headerTitle: "THE PRAIRIE & CORRIDOR ALMANAC • HERITAGE LEDGER",
+      headerColor: "#bef264",
+      badgeText: "ALMANAC ARCHIVE",
+      badgeColor: "#84cc16",
+      titleColor: "#fefce8",
+      bodyColor: "#ecfccb",
+      fontTitle: "bold 33px Georgia, 'Times New Roman', serif",
+      fontBody: "19px Georgia, 'Times New Roman', serif",
+      fontHeader: "bold 14px Georgia, serif",
+      frameWidth: 2,
+      scanlines: false
+    },
+    curio: {
+      bg: "#13071e",
+      border: "#e879f9",
+      innerBorder: "rgba(232, 121, 249, 0.3)",
+      accentBar: "#d946ef",
+      headerTitle: "CABINET OF WONDERS • FIELDPRESS CURIO ARCHIVE",
+      headerColor: "#f0abfc",
+      badgeText: "VERIFIED ANOMALY",
+      badgeColor: "#e879f9",
+      titleColor: "#fdf4ff",
+      bodyColor: "#f5d0fe",
+      fontTitle: "bold 33px Georgia, serif",
+      fontBody: "18px system-ui, sans-serif",
+      fontHeader: "bold 14px ui-monospace, monospace",
+      frameWidth: 3,
       scanlines: false
     }
   };
@@ -655,8 +727,8 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
 
 export const FieldPressMaster: React.FC = () => {
   // Pressy'o AI Newsroom Copilot State (3-Tier LLM Cascade: Ollama -> Groq -> Gemini)
-  const PRESSYO_GREETING = "Greetings Bureau Chief! I am Pressy'o, your autonomous field newsroom copilot powered by a 3-tier LLM engine (Ollama → Groq LPU → Gemini). I can draft dispatches across all 5 edition voices, rewrite or expand your active Pressie Builder draft in-place, craft Pollinations visual prompts, or fact-check corridor telemetry.";
-  type PressyoEdition = "newspaper" | "comic" | "arcade" | "tactical" | "magazine";
+  const PRESSYO_GREETING = "Greetings Bureau Chief! I am Pressy'o v3.0, your autonomous field newsroom copilot powered by a 3-tier LLM engine (Ollama → Groq LPU → Gemini). I now draft and live-rewrite dispatches across all 8 Pressie Edition Archetypes (Tactical, Broadsheet, Field Note, Almanac, Curio, Comic, Arcade, and Sleek Magazine), support Hybrid Visual Workflows (real archival/web photo verification + Pollinations AI photojournalism prompts), and include 1-click Uplift Angle & 15s Broadcast Read tools.";
+  type PressyoEdition = "newspaper" | "comic" | "arcade" | "tactical" | "magazine" | "fieldnote" | "almanac" | "curio";
   type PressyoMessage = {
     sender: "user" | "pressyo";
     text: string;
@@ -711,6 +783,9 @@ export const FieldPressMaster: React.FC = () => {
     if (lower.includes("comic") || lower.includes("kapow") || lower.includes("hero")) return "comic";
     if (lower.includes("broadsheet") || lower.includes("1920") || lower.includes("paper") || lower.includes("old")) return "newspaper";
     if (lower.includes("arcade") || lower.includes("pixel") || lower.includes("8-bit")) return "arcade";
+    if (lower.includes("field") || lower.includes("nature") || lower.includes("park") || lower.includes("wildlife")) return "fieldnote";
+    if (lower.includes("almanac") || lower.includes("heritage") || lower.includes("vintage")) return "almanac";
+    if (lower.includes("curio") || lower.includes("oddity") || lower.includes("weird")) return "curio";
     if (lower.includes("tactical") || lower.includes("intel") || lower.includes("recon")) return "tactical";
     if (lower.includes("sleek") || lower.includes("magazine") || lower.includes("modern")) return "magazine";
     return fallback;
@@ -857,7 +932,7 @@ export const FieldPressMaster: React.FC = () => {
     };
   }, [shareModalStory]);
   const [showPostNoticeModal, setShowPostNoticeModal] = useState(false);
-  const [newEditionStyle, setNewEditionStyle] = useState<"tactical" | "newspaper" | "comic" | "arcade" | "magazine">("tactical");
+  const [newEditionStyle, setNewEditionStyle] = useState<PressyoEdition>("tactical");
   const [newSharingOption, setNewSharingOption] = useState<"fork" | "colab" | "none">("fork");
   // Guards handleCreatePressie against double-submission (e.g. a fast
   // double-click on Publish/Save). Without this, two overlapping PUT/POST
@@ -2207,7 +2282,7 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   const handlePressyoEditorAction = async (
-    action: "rewrite_voice" | "expand" | "shorten" | "headlines" | "factcheck_polish" | "visual_prompt" | "draft_from_topic" | "custom_edit",
+    action: "rewrite_voice" | "expand" | "shorten" | "headlines" | "factcheck_polish" | "visual_prompt" | "draft_from_topic" | "uplift_angle" | "social_thread" | "custom_edit",
     targetStyle?: PressyoEdition,
     customInstructionText?: string
   ) => {
@@ -2227,6 +2302,8 @@ export const FieldPressMaster: React.FC = () => {
       shorten: `Condense and tighten the active dispatch into crisp, high-signal wire copy in the ${effectiveStyle.toUpperCase()} edition voice.`,
       headlines: `Craft a sharper, high-impact headline in the ${effectiveStyle.toUpperCase()} edition voice and polish the opening lede.`,
       factcheck_polish: `Polish the active dispatch for flow, grammar, and authentic telemetry phrasing in the ${effectiveStyle.toUpperCase()} edition voice.`,
+      uplift_angle: `Reframe and enrich the active dispatch in the ${effectiveStyle.toUpperCase()} edition voice to foreground constructive human ingenuity, community resilience, and verified real-world impact without losing journalistic rigor.`,
+      social_thread: `Keep the core dispatch intact and append a punchy [SYNDICATION & 15s BROADCAST READ] footer block with a 15-second radio script and a 3-bullet social distribution thread.`,
       visual_prompt: `Generate a vivid, photojournalistic Pollinations visual framing prompt for this dispatch (${newTitle || newContent.slice(0, 120) || "Midwest Corridor infrastructure"}).`,
       draft_from_topic: `Draft a full dispatch in the ${effectiveStyle.toUpperCase()} edition voice about: ${customInstructionText || newTitle || newContent || "Midwest Corridor field telemetry"}.`,
       custom_edit: customInstructionText || pressyoCustomInstruction.trim() || "Refine and improve this dispatch."
@@ -2238,6 +2315,8 @@ export const FieldPressMaster: React.FC = () => {
       shorten: "Condensing wire copy…",
       headlines: "Sharpening headline & lede…",
       factcheck_polish: "Polishing prose & telemetry…",
+      uplift_angle: "Amplifying constructive human angle…",
+      social_thread: "Generating 15s read & syndication thread…",
       visual_prompt: "Crafting visual prompt…",
       draft_from_topic: "Drafting full dispatch…",
       custom_edit: "Applying custom edit…"
@@ -4540,6 +4619,9 @@ export const FieldPressMaster: React.FC = () => {
                           d.editionStyle === "arcade" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" :
                           d.editionStyle === "magazine" ? "bg-purple-500/20 text-purple-400 border border-purple-500/40" :
                           d.editionStyle === "newspaper" ? "bg-amber-800/20 text-amber-400 border border-amber-700/40 font-serif" :
+                          d.editionStyle === "fieldnote" ? "bg-teal-500/20 text-teal-400 border border-teal-500/40" :
+                          d.editionStyle === "almanac" ? "bg-lime-500/20 text-lime-400 border border-lime-500/40 font-serif" :
+                          d.editionStyle === "curio" ? "bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40" :
                           d.editionStyle === "wire" ? "bg-sky-500/20 text-sky-400 border border-sky-500/40" :
                           "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
                         }`}>
@@ -4919,12 +5001,15 @@ export const FieldPressMaster: React.FC = () => {
               {/* Edition Style Model Selector */}
               <div>
                 <label className={`block font-bold mb-1.5 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Edition Style Model
+                  Edition Style Model (8 Pressie Archetypes)
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono">
                   {[
                     { id: "tactical", label: "Tactical", icon: "🛰️", desc: "Monospace Wire" },
-                    { id: "newspaper", label: "Old Timey", icon: "📰", desc: "Antique Serif" },
+                    { id: "newspaper", label: "Broadsheet", icon: "📰", desc: "Antique Serif" },
+                    { id: "fieldnote", label: "Field Note", icon: "🌿", desc: "Ecology Log" },
+                    { id: "almanac", label: "Almanac", icon: "🧭", desc: "Heritage Guide" },
+                    { id: "curio", label: "Curio Zine", icon: "🎪", desc: "Americana Oddity" },
                     { id: "comic", label: "Comic Strip", icon: "💥", desc: "Graphic Novel" },
                     { id: "arcade", label: "8-Bit Arcade", icon: "🕹️", desc: "Pixel CRT" },
                     { id: "magazine", label: "Modern Sleek", icon: "✨", desc: "Editorial Gloss" },
@@ -5068,11 +5153,12 @@ export const FieldPressMaster: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowUrlInput(!showUrlInput)}
-                      className={`px-2 py-1 rounded text-xs border transition cursor-pointer ${
-                        showUrlInput ? "bg-zinc-700 text-white border-zinc-600" : "bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border-zinc-700"
+                      className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                        showUrlInput ? "bg-amber-500/20 text-amber-300 border-amber-500/60" : "bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border-zinc-700"
                       }`}
+                      title="Paste a direct image URL from Wikimedia, NASA, NPS, Unsplash, or news archives"
                     >
-                      URL
+                      🔗 Paste Real Photo URL
                     </button>
                   </div>
                 </div>
@@ -5081,7 +5167,7 @@ export const FieldPressMaster: React.FC = () => {
                   <div className="flex gap-2 pt-1">
                     <input
                       type="url"
-                      placeholder="Paste image URL (https://...)..."
+                      placeholder="Paste real web photo URL (Wikimedia, NASA, Unsplash, https://...)..."
                       value={manualImageUrl}
                       onChange={(e) => setManualImageUrl(e.target.value)}
                       className={`flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
@@ -5091,7 +5177,7 @@ export const FieldPressMaster: React.FC = () => {
                       onClick={handleAddImageUrl}
                       className="px-3 py-1.5 rounded bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition cursor-pointer"
                     >
-                      Attach
+                      Attach Real Photo
                     </button>
                   </div>
                 )}
@@ -5271,6 +5357,8 @@ export const FieldPressMaster: React.FC = () => {
                     { id: "expand", label: "📐 Expand Copy", tip: "Enrich with deeper field reporting & corridor context" },
                     { id: "shorten", label: "✂️ Tighten / Shorten", tip: "Condense into crisp, high-signal wire copy" },
                     { id: "headlines", label: "📰 Sharpen Headline", tip: "Generate a punchy headline and tighten the opening lede" },
+                    { id: "uplift_angle", label: "🌟 Uplift Angle", tip: "Foreground constructive human ingenuity, solutions, and real-world impact" },
+                    { id: "social_thread", label: "📣 Social + 15s Read", tip: "Append a 15-second radio read and 3-bullet social distribution thread" },
                     { id: "factcheck_polish", label: "🛡️ Polish & Check", tip: "Polish grammar, flow, and telemetry consistency" },
                     { id: "visual_prompt", label: "🎨 Craft Visual Prompt", tip: "Generate a tailored Pollinations photojournalism prompt" }
                   ].map((act) => (
@@ -5291,12 +5379,15 @@ export const FieldPressMaster: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Row 2: 1-Click Live Voice Switcher (Rewrites Active Draft on the Fly) */}
+                {/* Row 2: 1-Click Live Voice Switcher (Rewrites Active Draft on the Fly across all 8 Pressie Archetypes) */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className={`text-[10px] font-bold ${subTextThemeClass}`}>Rewrite Voice:</span>
+                  <span className={`text-[10px] font-bold ${subTextThemeClass}`}>Rewrite Voice (8 Models):</span>
                   {[
                     { id: "tactical", label: "🛰️ Tactical" },
                     { id: "newspaper", label: "📰 Broadsheet" },
+                    { id: "fieldnote", label: "🌿 Field Note" },
+                    { id: "almanac", label: "🌾 Almanac" },
+                    { id: "curio", label: "🔮 Curio" },
                     { id: "comic", label: "💥 Comic" },
                     { id: "arcade", label: "🕹️ Arcade" },
                     { id: "magazine", label: "✨ Sleek" }
