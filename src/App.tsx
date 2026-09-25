@@ -2143,25 +2143,46 @@ export const FieldPressMaster: React.FC = () => {
   // same tab). Falls back to a toast if the dispatch can't be found
   // (e.g. an old share link for a dispatch that has since been deleted).
   useEffect(() => {
-    const openFromHash = () => {
+    let cancelled = false;
+    const openFromHash = async () => {
       const hash = window.location.hash;
       const match = hash.match(/^#dispatch-(.+)$/);
       if (!match) return;
-      const targetId = decodeURIComponent(match[1]);
+      const targetId = decodeURIComponent(match[1]).split("?")[0];
       const found = dispatches.find((d) => d.id === targetId) || pressRoll.find((d) => d.id === targetId);
       if (found) {
         setActiveTab("edition");
         setSelectedStory(found);
-      } else {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/dispatches?id=${encodeURIComponent(targetId)}`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.dispatch) {
+            setDispatches((prev) => (prev.some((d) => d.id === data.dispatch.id) ? prev : [data.dispatch, ...prev]));
+            setActiveTab("edition");
+            setSelectedStory(data.dispatch);
+            return;
+          }
+        }
+      } catch {
+        // fall through if offline
+      }
+      if (dispatchesLoaded && !cancelled) {
         setSavedSuccessToast("That dispatch link couldn't be found — it may have expired.");
         setTimeout(() => setSavedSuccessToast(""), 3000);
       }
     };
     openFromHash();
     window.addEventListener("hashchange", openFromHash);
-    return () => window.removeEventListener("hashchange", openFromHash);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", openFromHash);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatches]);
+  }, [dispatches, dispatchesLoaded]);
 
   // --- Notifications: comments on the current user's own dispatches ---
   // Comment timestamps are free-text ("Just now"), not real dates, so we
