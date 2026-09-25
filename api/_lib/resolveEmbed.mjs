@@ -353,16 +353,57 @@ async function resolveLinkCard(url) {
 
     if (!title && !image && !ogVideo) return null;
 
+    const providerName = siteName || new URL(finalUrl).hostname.replace(/^www\./, "");
+    const isStreamingPlatform =
+      /(?:^|\.)(?:tubitv\.com|netflix\.com|hulu\.com|max\.com|primevideo\.com|peacocktv\.com|pluto\.tv|plex\.tv|therokuchannel\.roku\.com|imdb\.com|letterboxd\.com)$/i.test(
+        new URL(finalUrl).hostname
+      ) || /^video\.(?:movie|tv_show|episode)/i.test(ogType);
+
+    let trailerVideoId = null;
+    if (!ogVideo && isStreamingPlatform && title) {
+      try {
+        const cleanTitle = decodeHtmlEntities(title)
+          .replace(/\s*\|\s*Watch Free.*$/i, "")
+          .replace(/\s*-\s*Tubi.*$/i, "")
+          .trim();
+        const searchQuery = encodeURIComponent(`${cleanTitle} ${siteName || ""} official movie trailer`.trim());
+        const ytRes = await fetchWithTimeout(`https://www.youtube.com/results?search_query=${searchQuery}`, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+          }
+        });
+        if (ytRes.ok) {
+          const ytHtml = await ytRes.text();
+          const vidMatch = ytHtml.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+          if (vidMatch) {
+            trailerVideoId = vidMatch[1];
+          }
+        }
+      } catch {
+        // Best-effort trailer lookup
+      }
+    }
+
+    const iframeUrl = trailerVideoId ? `https://www.youtube.com/embed/${trailerVideoId}` : null;
+
     return {
-      embed_type: ogVideo ? "video" : "link_card",
+      embed_type: ogVideo ? "video" : trailerVideoId ? "streaming_video" : "link_card",
       embed_data: {
-        html: null,
+        html: iframeUrl
+          ? `<iframe src="${iframeUrl}" width="100%" height="380" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>`
+          : null,
+        iframe_url: iframeUrl,
+        trailer_video_id: trailerVideoId,
         video_url: ogVideo || null,
         thumbnail_url: image || null,
+        image: image || null,
         title: decodeHtmlEntities(title || url),
         description: decodeHtmlEntities(description || ""),
         url: ogUrl,
-        provider_name: siteName || new URL(finalUrl).hostname.replace(/^www\./, "")
+        site_name: providerName,
+        provider_name: providerName
       }
     };
   } catch {

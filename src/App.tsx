@@ -392,6 +392,72 @@ export function decodeEntitiesClient(str?: string | null): string {
     .replace(/&apos;/g, "'");
 }
 
+export function cleanPressieText(str?: string | null): string {
+  if (!str) return "";
+  return decodeEntitiesClient(str)
+    .replace(/\n*\[Add your field notes or commentary here\.\.\.\]\s*/gi, "")
+    .trim();
+}
+
+export function getEffectiveSourceUrl(dispatch?: Dispatch | null): string | null {
+  if (!dispatch) return null;
+  const direct = dispatch.sourceUrl || dispatch.embedData?.url;
+  if (direct && /^https?:\/\//i.test(direct.trim())) return direct.trim();
+  const textToScan = `${dispatch.content || ""} ${dispatch.imageCaption || ""}`;
+  const m = textToScan.match(/https?:\/\/[^\s<>"')\]]+/i);
+  return m ? m[0].replace(/[.,;!?]+$/, "") : null;
+}
+
+export function getSourceHostLabel(url?: string | null, fallback?: string): string {
+  if (fallback && fallback.trim() && fallback !== "External Source") return fallback.trim();
+  if (!url) return "Original Source";
+  try {
+    const host = new URL(url).hostname.replace(/^www\./i, "");
+    if (/tubitv\.com/i.test(host)) return "Tubi";
+    if (/youtube\.com|youtu\.be/i.test(host)) return "YouTube";
+    if (/facebook\.com|fb\.watch/i.test(host)) return "Facebook";
+    if (/instagram\.com/i.test(host)) return "Instagram";
+    if (/tiktok\.com/i.test(host)) return "TikTok";
+    if (/netflix\.com/i.test(host)) return "Netflix";
+    if (/hulu\.com/i.test(host)) return "Hulu";
+    if (/imdb\.com/i.test(host)) return "IMDb";
+    return host;
+  } catch {
+    return fallback || "Original Source";
+  }
+}
+
+export function renderTextWithLinks(
+  rawText?: string | null,
+  linkClassName: string = "text-amber-500 hover:text-amber-400 underline decoration-amber-500/60 underline-offset-2 font-semibold break-all"
+) {
+  const cleaned = cleanPressieText(rawText);
+  if (!cleaned) return null;
+  const parts = cleaned.split(/(https?:\/\/[^\s<>"')\]]+)/gi);
+  return parts.map((part, idx) => {
+    if (/^https?:\/\//i.test(part)) {
+      const cleanUrl = part.replace(/[.,;!?]+$/, "");
+      const trailing = part.slice(cleanUrl.length);
+      return (
+        <React.Fragment key={idx}>
+          <a
+            href={cleanUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={linkClassName}
+            title="Open original source in new tab"
+          >
+            {cleanUrl} ↗
+          </a>
+          {trailing}
+        </React.Fragment>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
 export function hasPlayableSourceMedia(dispatch?: Dispatch | null): boolean {
   if (!dispatch) return false;
   const ed = dispatch.embedData;
@@ -399,16 +465,17 @@ export function hasPlayableSourceMedia(dispatch?: Dispatch | null): boolean {
     return true;
   }
   const t = (dispatch.embedType || "").toLowerCase();
-  if (["youtube", "facebook_video", "instagram", "tiktok", "vimeo", "video", "reddit", "x"].includes(t)) {
+  if (["youtube", "facebook_video", "streaming_video", "instagram", "tiktok", "vimeo", "video", "reddit", "x"].includes(t)) {
     return true;
   }
-  const u = dispatch.sourceUrl || ed?.url || "";
+  const u = getEffectiveSourceUrl(dispatch) || "";
   if (
     /(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)/i.test(u) ||
     /(?:facebook\.com\/(?:share\/[rv]\/|reel\/|watch\/?|[\w.]+\/videos\/)|fb\.watch\/)/i.test(u) ||
     /instagram\.com\/(?:p|reel|reels|tv)\//i.test(u) ||
     /tiktok\.com\/@[\w.-]+\/video\//i.test(u) ||
     /vimeo\.com\/\d+/i.test(u) ||
+    /(?:tubitv\.com|netflix\.com|hulu\.com|max\.com|primevideo\.com|peacocktv\.com|pluto\.tv|plex\.tv|imdb\.com\/title)\//i.test(u) ||
     /\.(?:mp4|webm|mov)(?:\?.*)?$/i.test(u)
   ) {
     return true;
@@ -417,17 +484,22 @@ export function hasPlayableSourceMedia(dispatch?: Dispatch | null): boolean {
 }
 
 // Renders a wire/regular pressie's resolved link embed (Direct MP4 / Facebook Reel & Video /
-// YouTube / Instagram / TikTok / Vimeo / Reddit / X rich embeds, or Open Graph link card).
+// Streaming Movie Trailer / YouTube / Instagram / TikTok / Vimeo / Reddit / X rich embeds, or Open Graph link card).
 function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [liveEmbedData, setLiveEmbedData] = useState<any>(null);
   const ed = { ...(dispatch.embedData || {}), ...(liveEmbedData || {}) };
-  const sourceUrl = dispatch.sourceUrl || ed.url || "";
+  const sourceUrl = getEffectiveSourceUrl(dispatch) || "";
+  const providerLabel = getSourceHostLabel(sourceUrl, ed.provider_name || ed.site_name);
+  const isStreamingService = /(?:tubitv\.com|netflix\.com|hulu\.com|max\.com|primevideo\.com|peacocktv\.com|pluto\.tv|plex\.tv|imdb\.com)/i.test(
+    sourceUrl
+  ) || dispatch.embedType === "streaming_video";
+
   const directVideoUrl = ed.video_url || ed.hd_video_url || ed.sd_video_url || (
     /\.(?:mp4|webm|mov)(?:\?.*)?$/i.test(sourceUrl) ? sourceUrl : null
   );
 
-  // Auto-resolve fresh stream/embed metadata if this is a video URL missing video_url
+  // Auto-resolve fresh stream/embed metadata if this is a video/streaming URL missing video_url/iframe_url
   useEffect(() => {
     setLiveEmbedData(null);
     if (!sourceUrl) return;
@@ -435,7 +507,8 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
       /(?:facebook\.com\/(?:share\/[rv]\/|reel\/|watch\/?|[\w.]+\/videos\/)|fb\.watch\/)/i.test(sourceUrl) ||
       /instagram\.com\/(?:p|reel|reels|tv)\//i.test(sourceUrl) ||
       /tiktok\.com\/@[\w.-]+\/video\//i.test(sourceUrl) ||
-      /vimeo\.com\/\d+/i.test(sourceUrl);
+      /vimeo\.com\/\d+/i.test(sourceUrl) ||
+      /(?:tubitv\.com|netflix\.com|hulu\.com|max\.com|primevideo\.com|peacocktv\.com|pluto\.tv|plex\.tv|imdb\.com\/title)\//i.test(sourceUrl);
     if (isVideoSource && !dispatch.embedData?.video_url && !dispatch.embedData?.iframe_url) {
       let cancelled = false;
       fetch(`/api/resolve-url?url=${encodeURIComponent(sourceUrl)}`)
@@ -515,7 +588,7 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
 
   if (activeMp4Url && playerMode === "native") {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
         <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black relative shadow-xl">
           <video
             key={activeMp4Url}
@@ -532,7 +605,7 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
           <div className="px-3 py-2 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
-                ▶ Original Source Video ({ed.provider_name || "Direct Stream"})
+                ▶ Original Source Video ({providerLabel})
               </span>
               {ed.hd_video_url && ed.sd_video_url && (
                 <button
@@ -559,9 +632,10 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
                   href={sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-bold"
                 >
-                  ↗ Open Original Source
+                  ↗ Open Original on {providerLabel}
                 </a>
               )}
             </div>
@@ -577,22 +651,24 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
       /instagram\.com/i.test(sourceUrl) ||
       /tiktok\.com/i.test(sourceUrl);
     return (
-      <div className="space-y-2">
-        <div className={`rounded-xl overflow-hidden border border-zinc-800 bg-black relative shadow-xl ${
-          isVerticalReel ? "min-h-[540px] flex flex-col justify-center" : "aspect-video"
-        }`}>
-          <iframe
-            src={iframeUrl}
-            title={decodeEntitiesClient(ed.title || dispatch.title)}
-            className={`w-full ${isVerticalReel ? "h-[540px]" : "h-full"} border-0`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-          <div className="px-3 py-2 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black relative shadow-xl">
+          <div className={isVerticalReel ? "min-h-[540px] flex flex-col justify-center" : "aspect-video"}>
+            <iframe
+              src={iframeUrl}
+              title={decodeEntitiesClient(ed.title || dispatch.title)}
+              className={`w-full ${isVerticalReel ? "h-[540px]" : "h-full"} border-0`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+          <div className="px-3 py-2.5 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
             <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-bold">
-              🌐 Official {ed.provider_name || "Source"} Embedded Player
+              {isStreamingService
+                ? `🎬 Official ${providerLabel} Preview / Trailer Player`
+                : `🌐 Official ${providerLabel} Embedded Player`}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {activeMp4Url && (
                 <button
                   type="button"
@@ -607,9 +683,12 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
                   href={sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-bold"
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black tracking-wide shadow-sm transition"
                 >
-                  ↗ Open Original Source
+                  {isStreamingService
+                    ? `▶ Watch Full Movie / Feature on ${providerLabel} (New Tab) ↗`
+                    : `↗ Open Original on ${providerLabel}`}
                 </a>
               )}
             </div>
@@ -3505,9 +3584,9 @@ export const FieldPressMaster: React.FC = () => {
             return curr.includes(cleanUrl) ? curr : `${curr}\n\n🔗 Shared Source (${data.siteName || "Web"}): ${cleanUrl}`;
           }
           if (desc) {
-            return `${desc}\n\n🔗 Shared via ${data.siteName || "External Source"}: ${cleanUrl}\n\n[Add your field notes or commentary here...]`;
+            return `${desc}\n\n🔗 Shared via ${data.siteName || "External Source"}: ${cleanUrl}`;
           }
-          return `Shared from ${data.siteName || "External Source"}: ${resolvedTitle || cleanUrl}\n\n🔗 Source Link: ${cleanUrl}\n\n[Add your field notes or commentary here...]`;
+          return `Shared from ${data.siteName || "External Source"}: ${resolvedTitle || cleanUrl}\n\n🔗 Source Link: ${cleanUrl}`;
         });
 
         setUnfurlTitleStatus(`✓ Imported from ${data.siteName || "source"}! You can now edit the title, add notes in the body, or attach more photos below.`);
@@ -5193,8 +5272,8 @@ export const FieldPressMaster: React.FC = () => {
                       {isComic ? (
                         /* Comic Speech / Dialogue Balloon */
                         <div className="relative bg-white dark:bg-zinc-800/95 border-3 border-black dark:border-yellow-400 rounded-2xl p-4 shadow-[4px_4px_0px_0px_#000] dark:shadow-[4px_4px_0px_0px_#facc15] my-3">
-                          <p className="font-sans font-black text-sm sm:text-base text-zinc-900 dark:text-zinc-100 leading-snug tracking-wide">
-                            "{d.content}"
+                          <p className="font-sans font-black text-sm sm:text-base text-zinc-900 dark:text-zinc-100 leading-snug tracking-wide whitespace-pre-wrap">
+                            "{renderTextWithLinks(d.content, "text-blue-600 dark:text-yellow-400 underline font-black")}"
                           </p>
                           <div className="absolute -bottom-3 left-8 w-0 h-0 border-l-[10px] border-l-transparent border-t-[12px] border-t-black dark:border-t-yellow-400 border-r-[10px] border-r-transparent" />
                           <div className="absolute -bottom-2 left-8 w-0 h-0 border-l-[8px] border-l-transparent border-t-[10px] border-t-white dark:border-t-zinc-800 border-r-[8px] border-r-transparent" />
@@ -5203,37 +5282,100 @@ export const FieldPressMaster: React.FC = () => {
                         /* Early 1900s Printing-Press Multi-Column Newsprint with Dateline & Engraved Drop Cap */
                         <div className="font-serif text-xs sm:text-[13.5px] leading-[1.65] text-[#18120c] text-justify sm:columns-2 gap-7 sm:[column-rule:1px_solid_rgba(31,22,13,0.35)] my-3">
                           <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#18120c] border-2 border-[#18120c] px-2 py-1 bg-[#e5d7bc] shadow-[2px_2px_0px_#18120c]">
-                            {d.content[0]}
+                            {cleanPressieText(d.content)[0] || "F"}
                           </span>
                           <span className="font-black uppercase tracking-widest text-[11px] text-[#2b1d0e]">
                             {d.location.toUpperCase()} ({themeCfg.datelinePrefix}) —{" "}
                           </span>
-                          <span>{d.content.slice(1)}</span>
+                          <span className="whitespace-pre-wrap">
+                            {renderTextWithLinks(
+                              cleanPressieText(d.content).slice(1),
+                              "text-[#7c2d12] hover:text-black underline decoration-[#7c2d12] font-bold break-all"
+                            )}
+                          </span>
                         </div>
                       ) : isFieldnote ? (
                         <div className="font-serif text-xs sm:text-sm leading-relaxed text-[#18281e] border-l-4 border-[#2d5a40] pl-4 py-1 my-2 bg-[#e1eadc]/70">
                           <span className="font-mono font-bold text-[11px] uppercase text-[#1f422d] block mb-1">
                             {themeCfg.datelinePrefix} • {d.location}
                           </span>
-                          <p>{d.content}</p>
+                          <p className="whitespace-pre-wrap">
+                            {renderTextWithLinks(d.content, "text-[#0f5132] hover:text-black underline font-bold break-all")}
+                          </p>
                         </div>
                       ) : isArcade ? (
                         /* 8-Bit Arcade Terminal with Cursor */
                         <div className="font-['VT323'] text-xl sm:text-2xl text-[#00ff66] leading-snug tracking-wider bg-zinc-950/90 p-4 border border-[#00ff66]/40 my-2">
-                          <p>
-                            {d.content} <span className="animate-pulse">█</span>
+                          <p className="whitespace-pre-wrap">
+                            {renderTextWithLinks(d.content, "text-amber-400 hover:text-yellow-300 underline break-all")}{" "}
+                            <span className="animate-pulse">█</span>
                           </p>
                         </div>
                       ) : isTactical ? (
                         /* Tactical Recon Debrief */
                         <div className="font-mono text-xs sm:text-sm leading-relaxed text-cyan-300/90 border-l-2 border-cyan-500/60 pl-4 py-1 my-2 bg-cyan-950/20">
-                          <p>{d.content}</p>
+                          <p className="whitespace-pre-wrap">
+                            {renderTextWithLinks(d.content, "text-amber-400 hover:text-amber-300 underline font-bold break-all")}
+                          </p>
                         </div>
                       ) : (
                         /* Modern Sleek Feature */
-                        <p className="font-sans text-sm sm:text-base leading-relaxed text-zinc-300 font-normal max-w-3xl my-2">
-                          {d.content}
+                        <p className="font-sans text-sm sm:text-base leading-relaxed text-zinc-300 font-normal max-w-3xl my-2 whitespace-pre-wrap">
+                          {renderTextWithLinks(d.content, "text-amber-400 hover:text-amber-300 underline font-semibold break-all")}
                         </p>
+                      )}
+
+                      {/* Playable Video / Official Trailer & Direct Source Link Stage on Edition Card */}
+                      {hasPlayableSourceMedia(d) && (
+                        <div className="my-3" onClick={(e) => e.stopPropagation()}>
+                          <WireEmbed dispatch={d} />
+                        </div>
+                      )}
+
+                      {getEffectiveSourceUrl(d) && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`my-2.5 px-3 py-2 rounded-lg border flex flex-wrap items-center justify-between gap-2 text-xs ${
+                            isOldTimey
+                              ? "rounded-none bg-[#e5d7bc] border-[#1f160d] text-[#18120c] font-serif"
+                              : isFieldnote
+                                ? "bg-[#dfead9] border-[#2d5a40]/50 text-[#18281e]"
+                                : "bg-zinc-900/90 border-amber-500/40 text-zinc-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span>🔗</span>
+                            <span className="font-bold flex-shrink-0">
+                              Source ({getSourceHostLabel(getEffectiveSourceUrl(d), d.embedData?.provider_name)}):
+                            </span>
+                            <a
+                              href={getEffectiveSourceUrl(d) || "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`underline font-semibold truncate ${
+                                isOldTimey
+                                  ? "text-[#7c2d12] hover:text-black"
+                                  : isFieldnote
+                                    ? "text-[#0f5132] hover:text-black"
+                                    : "text-amber-400 hover:text-amber-300"
+                              }`}
+                            >
+                              {getEffectiveSourceUrl(d)} ↗
+                            </a>
+                          </div>
+                          <a
+                            href={getEffectiveSourceUrl(d) || "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`px-2.5 py-1 text-[11px] font-black uppercase tracking-wider transition flex-shrink-0 ${
+                              isOldTimey
+                                ? "bg-[#18120c] text-[#f3ead8] hover:bg-[#3b2917]"
+                                : "rounded bg-amber-500 hover:bg-amber-400 text-zinc-950"
+                            }`}
+                          >
+                            ▶ Open Source (New Tab) ↗
+                          </a>
+                        </div>
                       )}
 
                       {d.repostedByCallsign && (
@@ -8110,16 +8252,18 @@ export const FieldPressMaster: React.FC = () => {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
                       <span>🎬</span>
-                      <span>Original Source Video &amp; Media ({selectedStory.embedData?.provider_name || "Verified Source"})</span>
+                      <span>
+                        Original Source Video &amp; Media ({getSourceHostLabel(getEffectiveSourceUrl(selectedStory), selectedStory.embedData?.provider_name)})
+                      </span>
                     </div>
-                    {selectedStory.sourceUrl && (
+                    {getEffectiveSourceUrl(selectedStory) && (
                       <a
-                        href={selectedStory.sourceUrl}
+                        href={getEffectiveSourceUrl(selectedStory) || "#"}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-bold text-amber-400 hover:text-amber-300 underline"
+                        className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black tracking-wide transition shadow-sm"
                       >
-                        ↗ View Original on {selectedStory.embedData?.provider_name || "Source"}
+                        ↗ Watch / Open Original on {getSourceHostLabel(getEffectiveSourceUrl(selectedStory), selectedStory.embedData?.provider_name)} (New Tab)
                       </a>
                     )}
                   </div>
@@ -8213,7 +8357,12 @@ export const FieldPressMaster: React.FC = () => {
                         <span className={isReaderOldTimey ? "font-black not-italic" : "text-amber-400 font-bold"}>
                           {isReaderOldTimey ? `ENGRAVED PLATE #${safeIdx + 1}:` : `EVIDENCE FRAME #${safeIdx + 1}:`}
                         </span>{" "}
-                        {decodeEntitiesClient(activeFrame.caption || selectedStory.imageCaption)}
+                        {renderTextWithLinks(
+                          activeFrame.caption || selectedStory.imageCaption,
+                          isReaderOldTimey
+                            ? "text-[#7c2d12] hover:text-black underline font-bold"
+                            : "text-amber-400 hover:text-amber-300 underline font-bold"
+                        )}
                       </div>
                     )}
                   </div>
@@ -8291,22 +8440,72 @@ export const FieldPressMaster: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Direct New-Tab Source Hyperlink Bar (Always visible when a source URL is attached or shared) */}
+                {getEffectiveSourceUrl(selectedStory) && (
+                  <div className={`p-3 rounded-lg border flex flex-wrap items-center justify-between gap-3 ${
+                    isReaderOldTimey
+                      ? "rounded-none bg-[#e5d7bc] border-2 border-[#1f160d] text-[#18120c] font-serif"
+                      : "bg-amber-500/10 border-amber-500/40 text-zinc-100"
+                  }`}>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-base">🔗</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-[10px] font-black uppercase tracking-wider ${
+                          isReaderOldTimey ? "text-[#3b2917]" : "text-amber-400"
+                        }`}>
+                          Shared Original Source • {getSourceHostLabel(getEffectiveSourceUrl(selectedStory), selectedStory.embedData?.provider_name)}
+                        </div>
+                        <a
+                          href={getEffectiveSourceUrl(selectedStory) || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`text-xs font-bold underline truncate block ${
+                            isReaderOldTimey ? "text-[#7c2d12] hover:text-black" : "text-amber-300 hover:text-white"
+                          }`}
+                        >
+                          {getEffectiveSourceUrl(selectedStory)} ↗
+                        </a>
+                      </div>
+                    </div>
+                    <a
+                      href={getEffectiveSourceUrl(selectedStory) || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-3.5 py-1.5 text-xs font-black uppercase tracking-wider transition flex-shrink-0 ${
+                        isReaderOldTimey
+                          ? "bg-[#18120c] text-[#f3ead8] hover:bg-[#3b2917]"
+                          : "rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md"
+                      }`}
+                    >
+                      ▶ Open on {getSourceHostLabel(getEffectiveSourceUrl(selectedStory), selectedStory.embedData?.provider_name)} (New Tab) ↗
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Main Body Narrative */}
               {isReaderOldTimey ? (
                 <div className="font-serif text-base sm:text-lg leading-[1.75] text-[#18120c] text-justify sm:columns-2 gap-8 sm:[column-rule:1px_solid_rgba(31,22,13,0.35)] py-2">
                   <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#18120c] border-2 border-[#18120c] px-2.5 py-1 bg-[#e5d7bc] shadow-[2px_2px_0px_#18120c]">
-                    {decodeEntitiesClient(selectedStory.content)[0]}
+                    {cleanPressieText(selectedStory.content)[0] || "F"}
                   </span>
                   <span className="font-black uppercase tracking-widest text-xs text-[#2b1d0e]">
                     {selectedStory.location.toUpperCase()} ({readerThemeCfg.datelinePrefix}) —{" "}
                   </span>
-                  <span>{decodeEntitiesClient(selectedStory.content).slice(1)}</span>
+                  <span className="whitespace-pre-wrap">
+                    {renderTextWithLinks(
+                      cleanPressieText(selectedStory.content).slice(1),
+                      "text-[#7c2d12] hover:text-black underline decoration-[#7c2d12] font-bold break-all"
+                    )}
+                  </span>
                 </div>
               ) : (
                 <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
-                  {decodeEntitiesClient(selectedStory.content)}
+                  {renderTextWithLinks(
+                    selectedStory.content,
+                    "text-amber-400 hover:text-amber-300 underline decoration-amber-500/60 font-bold break-all"
+                  )}
                 </div>
               )}
 
