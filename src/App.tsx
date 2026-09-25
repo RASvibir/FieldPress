@@ -156,6 +156,13 @@ export interface Dispatch {
   content: string;
   imageUrl?: string;
   imageCaption?: string;
+  gallery?: Array<{
+    id: string;
+    url: string;
+    source?: "ai" | "search" | "upload" | "url" | "lead" | string;
+    caption?: string;
+    timestamp?: string;
+  }>;
   isLead?: boolean;
   isPressRoll?: boolean;
   editionStyle?: "tactical" | "newspaper" | "comic" | "arcade" | "magazine" | "fieldnote" | "almanac" | "curio" | "wire";
@@ -2254,6 +2261,8 @@ export const FieldPressMaster: React.FC = () => {
   const [newVicinityPinOnly, setNewVicinityPinOnly] = useState<boolean>(true);
   const [mapSignalFilter, setMapSignalFilter] = useState<"ALL" | "ANON_DECOUPLED" | "NAMED">("ALL");
   const [mapRegionPreset, setMapRegionPreset] = useState<"NATIONAL" | "MIDWEST" | "GLOBAL">("NATIONAL");
+  const [activeReaderImageIdx, setActiveReaderImageIdx] = useState<number>(0);
+  const [readerLightboxUrl, setReaderLightboxUrl] = useState<string | null>(null);
   const [newImageUrl, setNewImageUrl] = useState<string>("");
   // Optional embed link (YouTube/Reddit/X/any URL) -- resolved server-side
   // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
@@ -2754,57 +2763,99 @@ export const FieldPressMaster: React.FC = () => {
     }
   };
 
-  // Re-encodes uploaded images through an offscreen HTML5 <canvas> to scrub 100% of embedded
-  // EXIF headers (exact GPS coordinates, camera serial numbers, device owner tags, timestamps).
-  const handleUploadImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const rawDataUrl = event.target?.result as string;
-      if (!rawDataUrl) return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 1400;
-        let w = img.width || 1200;
-        let h = img.height || 675;
-        if (w > maxDim || h > maxDim) {
-          if (w > h) {
-            h = Math.round((h * maxDim) / w);
-            w = maxDim;
-          } else {
-            w = Math.round((w * maxDim) / h);
-            h = maxDim;
-          }
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, w, h);
-        }
-        // Exporting from canvas produces a pure RGB stream with ZERO EXIF/GPS/Camera metadata
-        const scrubbedDataUrl = ctx ? canvas.toDataURL("image/jpeg", 0.9) : rawDataUrl;
-        const cleanCaption = newIsAnonymous
-          ? "[🛡️ EXIF & GPS Metadata Stripped] Field Evidence Still"
-          : `[🛡️ EXIF Scrubbed] ${file.name.replace(/\.[^/.]+$/, "")}`;
-        const item = {
-          id: "upload-" + Date.now(),
-          url: scrubbedDataUrl,
-          source: "upload" as const,
-          caption: cleanCaption,
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        };
-        setEvidenceGallery((prev) => [item, ...prev.slice(0, 8)]);
-        setNewImageUrl(scrubbedDataUrl);
-        setNewImageCaption(cleanCaption);
-        setSavedSuccessToast("🛡️ Photo attached with 100% EXIF, GPS & device metadata stripped.");
-        setTimeout(() => setSavedSuccessToast(""), 3500);
-      };
-      img.src = rawDataUrl;
+  // Helper that returns all valid gallery frames for any dispatch (combining d.gallery + d.imageUrl)
+  const getGalleryForDispatch = (d?: Dispatch | null) => {
+    if (!d) return [];
+    const list: Array<{ id: string; url: string; caption?: string; source?: string; timestamp?: string }> = [];
+    const seen = new Set<string>();
+    const addFrame = (url?: string, caption?: string, source?: string, timestamp?: string, id?: string) => {
+      if (!url || typeof url !== "string" || !url.trim()) return;
+      const clean = url.trim();
+      if (seen.has(clean)) return;
+      seen.add(clean);
+      list.push({
+        id: id || `frame-${list.length + 1}`,
+        url: clean,
+        caption: caption || d.imageCaption || "",
+        source: source || "upload",
+        timestamp: timestamp || "Verified Frame"
+      });
     };
-    reader.readAsDataURL(file);
+    if (d.imageUrl) {
+      addFrame(d.imageUrl, d.imageCaption, "lead", "Lead Frame", "frame-lead");
+    }
+    if (Array.isArray(d.gallery)) {
+      for (const item of d.gallery) {
+        if (item && item.url) {
+          addFrame(item.url, item.caption, item.source, item.timestamp, item.id);
+        }
+      }
+    }
+    if (d.embedData && typeof d.embedData === "object" && Array.isArray((d.embedData as any).gallery)) {
+      for (const item of (d.embedData as any).gallery) {
+        if (item && item.url) {
+          addFrame(item.url, item.caption, item.source, item.timestamp, item.id);
+        }
+      }
+    }
+    return list;
+  };
+
+  // Re-encodes uploaded images (single or multiple) through an offscreen HTML5 <canvas>
+  // to scrub 100% of embedded EXIF headers (exact GPS coordinates, camera serial numbers, timestamps).
+  const handleUploadImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    files.slice(0, 8).forEach((file, idx) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawDataUrl = event.target?.result as string;
+        if (!rawDataUrl) return;
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxDim = 1400;
+          let w = img.width || 1200;
+          let h = img.height || 675;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+          }
+          // Exporting from canvas produces a pure RGB stream with ZERO EXIF/GPS/Camera metadata
+          const scrubbedDataUrl = ctx ? canvas.toDataURL("image/jpeg", 0.9) : rawDataUrl;
+          const cleanCaption = newIsAnonymous
+            ? `[🛡️ EXIF & GPS Metadata Stripped] Field Evidence Frame #${idx + 1}`
+            : `[🛡️ EXIF Scrubbed] ${file.name.replace(/\.[^/.]+$/, "")}`;
+          const item = {
+            id: `upload-${Date.now()}-${idx}`,
+            url: scrubbedDataUrl,
+            source: "upload" as const,
+            caption: cleanCaption,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          };
+          setEvidenceGallery((prev) => [item, ...prev.slice(0, 11)]);
+          if (idx === 0) {
+            setNewImageUrl((curr) => curr || scrubbedDataUrl);
+            setNewImageCaption((curr) => curr || cleanCaption);
+          }
+          setSavedSuccessToast(`🛡️ ${files.length > 1 ? `${files.length} photos` : "Photo"} attached with 100% EXIF, GPS & device metadata stripped.`);
+          setTimeout(() => setSavedSuccessToast(""), 3500);
+        };
+        img.src = rawDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const extractYoutubeVideoId = (rawUrl?: string | null): string | null => {
@@ -3003,7 +3054,18 @@ export const FieldPressMaster: React.FC = () => {
       setNewImageCaption(draftToEdit.imageCaption || "");
       setNewSourceUrl(draftToEdit.sourceUrl || "");
       setVisualPrompt(draftToEdit.title || "");
-      if (safeImg) {
+      const existingFrames = getGalleryForDispatch(draftToEdit);
+      if (existingFrames.length > 0) {
+        setEvidenceGallery(
+          existingFrames.map((f, idx) => ({
+            id: f.id || `init-${Date.now()}-${idx}`,
+            url: f.url,
+            source: (f.source as any) || "upload",
+            caption: f.caption || "",
+            timestamp: f.timestamp || "Original"
+          }))
+        );
+      } else if (safeImg) {
         setEvidenceGallery([{
           id: "init-" + Date.now(),
           url: safeImg,
@@ -3101,8 +3163,9 @@ export const FieldPressMaster: React.FC = () => {
       decoupleLocationPin: newDecoupleLocationPin,
       vicinityPinOnly: newVicinityPinOnly,
       content: newContent.trim(),
-      imageUrl: newImageUrl || undefined,
-      imageCaption: newImageCaption || undefined,
+      imageUrl: newImageUrl || (evidenceGallery[0]?.url ?? undefined),
+      imageCaption: newImageCaption || (evidenceGallery[0]?.caption ?? undefined),
+      gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       sourceUrl: newSourceUrl.trim() || undefined,
       editionStyle: newEditionStyle,
       isPressRoll: true
@@ -3114,6 +3177,7 @@ export const FieldPressMaster: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...draftItem,
+          gallery: evidenceGallery,
           isPressRoll: true,
           isAnonymous: newIsAnonymous,
           decoupleLocationPin: newDecoupleLocationPin,
@@ -3192,6 +3256,7 @@ export const FieldPressMaster: React.FC = () => {
       content: fallbackContent,
       imageUrl: chosenImage,
       imageCaption: chosenCaption,
+      gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       sourceUrl: newSourceUrl.trim() || undefined,
       isPressRoll: false,
       editionStyle: newEditionStyle,
@@ -3203,6 +3268,7 @@ export const FieldPressMaster: React.FC = () => {
     try {
       const payload = {
         ...pressieItem,
+        gallery: evidenceGallery,
         isPressRoll: false,
         isAnonymous: newIsAnonymous,
         decoupleLocationPin: newDecoupleLocationPin,
@@ -4207,6 +4273,12 @@ export const FieldPressMaster: React.FC = () => {
                               <span>REAL FOOTAGE</span>
                             </div>
                           )}
+                          {getGalleryForDispatch(d).length > 1 && (
+                            <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-black/85 text-amber-400 text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg border border-amber-500/50">
+                              <span>📸</span>
+                              <span>{getGalleryForDispatch(d).length} PHOTOS</span>
+                            </div>
+                          )}
 
                           {/* Edition-Specific Image Overlays */}
                           {isArcade && (
@@ -4588,6 +4660,30 @@ export const FieldPressMaster: React.FC = () => {
                           {isSecArcade && (
                             <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] opacity-75 z-10" />
                           )}
+                          {getGalleryForDispatch(disp).length > 1 && (
+                            <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-black/85 text-amber-400 border border-amber-500/40 text-[9px] font-black tracking-wider flex items-center gap-1 shadow">
+                              <span>📸</span>
+                              <span>{getGalleryForDispatch(disp).length} PHOTOS</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {getGalleryForDispatch(disp).length > 1 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto mb-2.5 pb-0.5">
+                          {getGalleryForDispatch(disp).slice(0, 4).map((frame, fIdx) => (
+                            <img
+                              key={frame.id || fIdx}
+                              src={frame.url}
+                              alt={frame.caption || `Frame ${fIdx + 1}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveReaderImageIdx(fIdx);
+                                setSelectedStory(disp);
+                              }}
+                              className="h-9 w-14 rounded object-cover border border-zinc-700 hover:border-amber-400 transition flex-shrink-0"
+                              title={`View Frame #${fIdx + 1}: ${frame.caption || ""}`}
+                            />
+                          ))}
                         </div>
                       )}
 
@@ -4846,24 +4942,55 @@ export const FieldPressMaster: React.FC = () => {
                     : "No dispatches match the active search or category filter."}
                 </div>
               ) : (
-                filteredDispatches.map((d) => (
+                filteredDispatches.map((d) => {
+                  const cardGallery = getGalleryForDispatch(d);
+                  return (
                   <div
                     key={d.id}
-                    onClick={() => setSelectedStory(d)}
+                    onClick={() => {
+                      setActiveReaderImageIdx(0);
+                      setSelectedStory(d);
+                    }}
                     className={`p-4 rounded-lg border transition hover:border-amber-500/50 flex flex-col sm:flex-row sm:items-start justify-between gap-4 cursor-pointer group ${cardThemeClass}`}
                   >
-                    {d.imageUrl && (
-                      <div className="relative w-full sm:w-40 aspect-video sm:aspect-auto sm:h-24 rounded-md overflow-hidden flex-shrink-0 bg-black/50 border border-zinc-800">
-                        <img
-                          src={d.imageUrl}
-                          alt={d.title}
-                          onError={(e) => handleImgFallbackError(e, d)}
-                          className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                        />
-                        {(d.embedType === "youtube" || extractYoutubeVideoId(d.sourceUrl)) && (
-                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-red-600/95 text-white text-[8px] font-black tracking-wider flex items-center gap-0.5 shadow">
-                            <span>▶</span>
-                            <span>FOOTAGE</span>
+                    {(d.imageUrl || cardGallery.length > 0) && (
+                      <div className="w-full sm:w-44 flex-shrink-0 space-y-1.5">
+                        <div className="relative w-full aspect-video sm:h-24 rounded-md overflow-hidden bg-black/50 border border-zinc-800">
+                          <img
+                            src={d.imageUrl || cardGallery[0]?.url}
+                            alt={d.title}
+                            onError={(e) => handleImgFallbackError(e, d)}
+                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                          {(d.embedType === "youtube" || extractYoutubeVideoId(d.sourceUrl)) && (
+                            <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-red-600/95 text-white text-[8px] font-black tracking-wider flex items-center gap-0.5 shadow">
+                              <span>▶</span>
+                              <span>FOOTAGE</span>
+                            </div>
+                          )}
+                          {cardGallery.length > 1 && (
+                            <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-500/40 text-[8px] font-black tracking-wider flex items-center gap-0.5 shadow">
+                              <span>📸</span>
+                              <span>{cardGallery.length} PHOTOS</span>
+                            </div>
+                          )}
+                        </div>
+                        {cardGallery.length > 1 && (
+                          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                            {cardGallery.slice(0, 4).map((frame, fIdx) => (
+                              <img
+                                key={frame.id || fIdx}
+                                src={frame.url}
+                                alt={frame.caption || `Frame ${fIdx + 1}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveReaderImageIdx(fIdx);
+                                  setSelectedStory(d);
+                                }}
+                                className="h-8 w-11 rounded object-cover border border-zinc-700 hover:border-amber-400 transition flex-shrink-0"
+                                title={`Click to open Frame ${fIdx + 1}: ${frame.caption || ""}`}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
@@ -5005,7 +5132,8 @@ export const FieldPressMaster: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
               {/* Load More (#201) - feed/search now come a page at a time via
                   cursor pagination instead of one flat LIMIT-200 request. */}
@@ -5711,17 +5839,17 @@ export const FieldPressMaster: React.FC = () => {
                       ref={imageFileInputRef}
                       onChange={handleUploadImageFile}
                       accept="image/*"
-                      capture="environment"
+                      multiple
                       className="hidden"
                     />
                     <button
                       type="button"
                       onClick={() => imageFileInputRef.current?.click()}
                       className="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs flex items-center gap-1 border border-amber-500/30 transition cursor-pointer"
-                      title="Upload or capture photo from device"
+                      title="Upload one or multiple photos from device (EXIF & GPS automatically stripped)"
                     >
                       <Upload className="h-3 w-3" />
-                      <span>Upload / Capture Photo</span>
+                      <span>Upload Photo(s)</span>
                     </button>
                     <button
                       type="button"
@@ -6852,16 +6980,32 @@ export const FieldPressMaster: React.FC = () => {
       {/* ========================================================================= */}
       {/* 7. IMMERSIVE FULL-PAGE PRESSIE READER WITH REACTS & COMMENTS              */}
       {/* ========================================================================= */}
-      {selectedStory && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-md overflow-y-auto font-mono">
-          <div className={`w-full max-w-4xl mx-auto my-4 sm:my-8 rounded-2xl border shadow-2xl overflow-hidden transition ${
+      {selectedStory && (() => {
+        const readerGallery = getGalleryForDispatch(selectedStory);
+        const safeIdx = readerGallery.length > 0 ? Math.min(activeReaderImageIdx, readerGallery.length - 1) : 0;
+        const activeFrame = readerGallery[safeIdx] || (selectedStory.imageUrl ? {
+          id: "lead",
+          url: selectedStory.imageUrl,
+          caption: selectedStory.imageCaption || "",
+          source: "lead",
+          timestamp: "Lead Frame"
+        } : null);
+
+        return (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedStory(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md overflow-y-auto overscroll-contain font-mono py-4 sm:py-8 px-2 sm:px-4"
+        >
+          <div className={`w-full max-w-4xl mx-auto mb-12 rounded-2xl border shadow-2xl transition ${
             isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
           }`}>
-            {/* Sticky Header Navigation */}
-            <div className={`sticky top-0 z-20 px-6 py-4 border-b flex items-center justify-between backdrop-blur-md ${
+            {/* Sticky Header Navigation with Quick Scroll Section Jumps */}
+            <div className={`sticky top-0 z-30 px-4 sm:px-6 py-3.5 border-b rounded-t-2xl flex flex-wrap items-center justify-between gap-2 backdrop-blur-md ${
               isDark ? "bg-zinc-900/95 border-zinc-800" : "bg-white/95 border-zinc-200"
             }`}>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setSelectedStory(null)}
                   className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
@@ -6871,13 +7015,17 @@ export const FieldPressMaster: React.FC = () => {
                 <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[11px] font-bold uppercase">
                   {selectedStory.category}
                 </span>
-                {selectedStory.editionStyle === "wire" && (
-                  <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/40 text-[11px] font-bold uppercase tracking-wider">
-                    Wire
+                {readerGallery.length > 1 && (
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
+                    📸 {readerGallery.length} Photos Attached
                   </span>
                 )}
-                <span className="text-zinc-400 text-xs">[{selectedStory.location}]</span>
-                <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{selectedStory.id}</span>
+                {(selectedStory.embedType === "youtube" || extractYoutubeVideoId(selectedStory.sourceUrl)) && (
+                  <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-bold">
+                    🎥 Broadcast Video
+                  </span>
+                )}
+                <span className="text-zinc-400 text-xs hidden sm:inline">[{selectedStory.location}]</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -6896,20 +7044,91 @@ export const FieldPressMaster: React.FC = () => {
               </div>
             </div>
 
-            {/* Article Content */}
-            <div className="p-6 sm:p-10 space-y-6">
-              {/* Evidence Photo Banner */}
-              {selectedStory.imageUrl && (
-                <div className="rounded-xl overflow-hidden border border-zinc-800 relative aspect-video max-h-[480px] bg-black shadow-lg">
-                  <img
-                    src={selectedStory.imageUrl}
-                    alt={selectedStory.title}
-                    onError={(e) => handleImgFallbackError(e, selectedStory)}
-                    className="w-full h-full object-cover"
-                  />
-                  {selectedStory.imageCaption && (
-                    <div className="absolute bottom-0 inset-x-0 bg-black/80 backdrop-blur-xs p-3 text-xs text-zinc-300 border-t border-zinc-800">
-                      <span className="text-amber-400 font-bold">EVIDENCE STILL:</span> {selectedStory.imageCaption}
+            {/* Scrollable Article Body */}
+            <div className="p-5 sm:p-10 space-y-6">
+              {/* Interactive Multi-Image Evidence Stage & Filmstrip */}
+              {activeFrame && (
+                <div className="space-y-2.5">
+                  <div className="rounded-xl overflow-hidden border border-zinc-800 relative aspect-video max-h-[520px] bg-black shadow-lg group">
+                    <img
+                      src={activeFrame.url}
+                      alt={activeFrame.caption || selectedStory.title}
+                      onError={(e) => handleImgFallbackError(e, selectedStory)}
+                      onClick={() => setReaderLightboxUrl(activeFrame.url)}
+                      className="w-full h-full object-cover cursor-zoom-in"
+                    />
+
+                    {/* Top-Left Frame Counter & Top-Right Fullscreen Button */}
+                    <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                      <span className="px-2.5 py-1 rounded-full bg-black/80 text-amber-400 border border-amber-500/40 text-[11px] font-bold backdrop-blur-xs">
+                        📸 Frame {safeIdx + 1} of {Math.max(1, readerGallery.length)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setReaderLightboxUrl(activeFrame.url)}
+                        className="pointer-events-auto px-2.5 py-1 rounded-full bg-black/80 hover:bg-zinc-900 text-zinc-200 border border-zinc-700 text-[11px] font-bold cursor-pointer transition"
+                      >
+                        🔍 Expand Fullscreen
+                      </button>
+                    </div>
+
+                    {/* Prev / Next Carousel Controls when multiple images exist */}
+                    {readerGallery.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveReaderImageIdx((safeIdx - 1 + readerGallery.length) % readerGallery.length)}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
+                          title="Previous photo"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveReaderImageIdx((safeIdx + 1) % readerGallery.length)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
+                          title="Next photo"
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
+
+                    {(activeFrame.caption || selectedStory.imageCaption) && (
+                      <div className="absolute bottom-0 inset-x-0 bg-black/85 backdrop-blur-xs p-3 text-xs text-zinc-200 border-t border-zinc-800">
+                        <span className="text-amber-400 font-bold">EVIDENCE FRAME #{safeIdx + 1}:</span>{" "}
+                        {activeFrame.caption || selectedStory.imageCaption}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clickable Multi-Image Filmstrip */}
+                  {readerGallery.length > 1 && (
+                    <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5">
+                      {readerGallery.map((frame, idx) => {
+                        const isSelected = idx === safeIdx;
+                        return (
+                          <button
+                            key={frame.id || idx}
+                            type="button"
+                            onClick={() => setActiveReaderImageIdx(idx)}
+                            className={`relative rounded-lg overflow-hidden border-2 transition flex-shrink-0 cursor-pointer ${
+                              isSelected
+                                ? "border-amber-500 ring-2 ring-amber-500/40 scale-[1.02]"
+                                : "border-zinc-700/80 opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <img
+                              src={frame.url}
+                              alt={frame.caption || `Frame ${idx + 1}`}
+                              className="h-14 w-24 object-cover"
+                            />
+                            <span className="absolute bottom-0.5 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-bold">
+                              #{idx + 1}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -6955,6 +7174,47 @@ export const FieldPressMaster: React.FC = () => {
               <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
                 {selectedStory.content}
               </div>
+
+              {/* Complete Multi-Photo Visual Evidence Gallery Grid (shown when >1 photo) */}
+              {readerGallery.length > 1 && (
+                <div className={`p-4 rounded-xl border space-y-3 ${subCardThemeClass}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                      <span>🖼️</span>
+                      <span>Attached Visual Evidence Roll ({readerGallery.length} Verified Frames)</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-400">Click any photo to view fullscreen</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {readerGallery.map((frame, idx) => (
+                      <div
+                        key={frame.id || idx}
+                        onClick={() => {
+                          setActiveReaderImageIdx(idx);
+                          setReaderLightboxUrl(frame.url);
+                        }}
+                        className="rounded-lg overflow-hidden border border-zinc-800 bg-black/50 hover:border-amber-500/60 transition cursor-zoom-in flex flex-col"
+                      >
+                        <div className="relative aspect-video bg-zinc-950">
+                          <img
+                            src={frame.url}
+                            alt={frame.caption || `Evidence frame ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 text-amber-400 text-[10px] font-bold">
+                            Frame #{idx + 1}
+                          </span>
+                        </div>
+                        {frame.caption && (
+                          <div className="p-2.5 text-[11px] text-zinc-300 leading-snug border-t border-zinc-800/80">
+                            {frame.caption}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Resolved link embed / Real Broadcast Footage (wire pressies + any regular pressie with a link) */}
               {(selectedStory.embedType || extractYoutubeVideoId(selectedStory.sourceUrl)) && (
@@ -7146,6 +7406,28 @@ export const FieldPressMaster: React.FC = () => {
 
             </div>
           </div>
+        </div>
+        );
+      })()}
+
+      {/* Fullscreen Image Lightbox Modal */}
+      {readerLightboxUrl && (
+        <div
+          onClick={() => setReaderLightboxUrl(null)}
+          className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setReaderLightboxUrl(null)}
+            className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-200 border border-zinc-700 hover:bg-zinc-800 font-mono text-xs font-bold cursor-pointer"
+          >
+            ✕ Close Fullscreen
+          </button>
+          <img
+            src={readerLightboxUrl}
+            alt="Fullscreen Evidence Frame"
+            className="max-w-full max-h-[88vh] object-contain rounded-xl border border-zinc-800 shadow-2xl"
+          />
         </div>
       )}
 
