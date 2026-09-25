@@ -643,8 +643,20 @@ async function run() {
     return Number((Math.round((val + offset) * 25) / 25).toFixed(2));
   }
 
+  const SECONDARY_FIELD_STILLS = [
+    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=85"
+  ];
+
   let inserted = 0;
-  for (const item of NATIONAL_PRESSIES_30) {
+  for (let idx = 0; idx < NATIONAL_PRESSIES_30.length; idx++) {
+    const item = NATIONAL_PRESSIES_30[idx];
     const acct = ACCOUNTS[item.who] || ACCOUNTS.vibir;
     const yt = await fetchYoutubeEmbed(item.youtubeId, item.title);
 
@@ -659,6 +671,40 @@ async function run() {
       : acct.bureau;
     const fuzzyLat = fuzzVicinity(item.lat, item.id + "_lat");
     const fuzzyLng = fuzzVicinity(item.lng, item.id + "_lng");
+
+    const ytFrameUrl = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+    const altSceneUrl = SECONDARY_FIELD_STILLS[idx % SECONDARY_FIELD_STILLS.length];
+    const galleryFrames = [
+      {
+        id: `${item.id}-f1`,
+        url: item.imageUrl,
+        caption: item.imageCaption,
+        source: "lead",
+        timestamp: "Lead Frame"
+      },
+      ...(ytFrameUrl !== item.imageUrl
+        ? [{
+            id: `${item.id}-f2`,
+            url: ytFrameUrl,
+            caption: `[🎥 Broadcast Video Still] Verified camera frame from ${item.location}`,
+            source: "search",
+            timestamp: "Broadcast Capture"
+          }]
+        : []),
+      ...(altSceneUrl !== item.imageUrl
+        ? [{
+            id: `${item.id}-f3`,
+            url: altSceneUrl,
+            caption: `[📸 Regional Context Still] Secondary field documentation — ${item.category} (${item.location})`,
+            source: "upload",
+            timestamp: "Field Archive"
+          }]
+        : [])
+    ];
+    const embedDataWithGallery = {
+      ...(yt.embedData || {}),
+      gallery: galleryFrames
+    };
 
     await sql`
       INSERT INTO fieldpress_dispatches (
@@ -704,7 +750,7 @@ async function run() {
         'fork',
         ${yt.sourceUrl},
         ${yt.embedType},
-        ${JSON.stringify(yt.embedData)},
+        ${JSON.stringify(embedDataWithGallery)},
         ${item.createdAt},
         ${item.createdAt}
       )

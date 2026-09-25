@@ -36,6 +36,38 @@ function fuzzVicinityCoord(val, seedStr = "fp") {
   return Number((quantized + offset).toFixed(2));
 }
 
+function sanitizeGallery(rawGallery, primaryImageUrl, primaryCaption) {
+  const out = [];
+  const seen = new Set();
+  const pushItem = (url, caption, source, timestamp, id) => {
+    if (typeof url !== "string" || !url.trim()) return;
+    const cleanUrl = url.trim().slice(0, 400000);
+    if (seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    out.push({
+      id: typeof id === "string" && id ? id.slice(0, 64) : `img-${out.length + 1}`,
+      url: cleanUrl,
+      caption: typeof caption === "string" ? caption.trim().slice(0, 500) : "",
+      source: typeof source === "string" ? source.trim().slice(0, 40) : "upload",
+      timestamp: typeof timestamp === "string" ? timestamp.trim().slice(0, 60) : "Verified Still"
+    });
+  };
+
+  if (primaryImageUrl) {
+    pushItem(primaryImageUrl, primaryCaption || "", "lead", "Lead Frame", "img-lead");
+  }
+  if (Array.isArray(rawGallery)) {
+    for (const item of rawGallery.slice(0, 12)) {
+      if (item && typeof item === "object") {
+        pushItem(item.url, item.caption, item.source, item.timestamp, item.id);
+      } else if (typeof item === "string") {
+        pushItem(item, "", "gallery", "Field Still");
+      }
+    }
+  }
+  return out;
+}
+
 function toClientShape(row, callerId = null) {
   const isAnon =
     row.callsign === "anon-signal" ||
@@ -49,6 +81,9 @@ function toClientShape(row, callerId = null) {
   const isOwner = Boolean(callerId && row.account_id === callerId);
   const safeLat = row.latitude != null ? fuzzVicinityCoord(Number(row.latitude), row.id + "lat") : null;
   const safeLng = row.longitude != null ? fuzzVicinityCoord(Number(row.longitude), row.id + "lng") : null;
+
+  const embedObj = row.embed_data && typeof row.embed_data === "object" ? row.embed_data : {};
+  const gallery = sanitizeGallery(embedObj.gallery, row.image_url, row.image_caption);
 
   return {
     id: row.id,
@@ -64,8 +99,9 @@ function toClientShape(row, callerId = null) {
     isAnonymous: isAnon,
     decoupleLocationPin: isDecoupled,
     content: row.content,
-    imageUrl: row.image_url || undefined,
-    imageCaption: row.image_caption || undefined,
+    imageUrl: row.image_url || (gallery[0]?.url ?? undefined),
+    imageCaption: row.image_caption || (gallery[0]?.caption ?? undefined),
+    gallery: gallery.length > 0 ? gallery : undefined,
     isLead: row.is_lead,
     isPressRoll: row.is_press_roll,
     editionStyle: row.edition_style || undefined,
@@ -233,7 +269,7 @@ async function create(req, res) {
 
     const {
       title, category, content, location, coordinates,
-      imageUrl, imageCaption, isLead, isPressRoll, editionStyle,
+      imageUrl, imageCaption, gallery, isLead, isPressRoll, editionStyle,
       sharingOption, parentDispatchId, id: clientId, sourceUrl,
       isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
@@ -255,6 +291,11 @@ async function create(req, res) {
     if (cleanSourceUrl) {
       embed = await resolveEmbed(cleanSourceUrl);
     }
+    const cleanGallery = sanitizeGallery(gallery, imageUrl, imageCaption);
+    const mergedCreateEmbedData =
+      embed?.embed_data || cleanGallery.length > 0
+        ? JSON.stringify({ ...(embed?.embed_data || {}), ...(cleanGallery.length > 0 ? { gallery: cleanGallery } : {}) })
+        : null;
 
     const id = typeof clientId === "string" && clientId.trim() ? clientId.trim().slice(0, 128) : `d-${Date.now()}-${caller.id.slice(-6)}`;
     const rawLat = Array.isArray(coordinates) && typeof coordinates[1] === "number" ? coordinates[1] : null;
@@ -285,10 +326,10 @@ async function create(req, res) {
       ) VALUES (
         ${id}, ${caller.id}, ${title.trim().slice(0, 500)}, ${cleanCategory},
         ${effectiveAuthor}, ${effectiveCallsign}, ${effectiveBureau}, ${effectiveLocation},
-        ${lat}, ${lng}, ${content.trim()}, ${imageUrl || null}, ${imageCaption || null},
+        ${lat}, ${lng}, ${content.trim()}, ${imageUrl || (cleanGallery[0]?.url ?? null)}, ${imageCaption || (cleanGallery[0]?.caption ?? null)},
         ${!!isLead}, ${!!isPressRoll}, ${editionStyle || null}, ${cleanSharing},
         ${parentDispatchId || null}, ${cleanSourceUrl}, ${embed?.embed_type || null},
-        ${embed?.embed_data ? JSON.stringify(embed.embed_data) : null}
+        ${mergedCreateEmbedData}
       )
       ON CONFLICT (id) DO UPDATE SET
         author = EXCLUDED.author,
@@ -335,7 +376,7 @@ async function update(req, res, id) {
     }
     const {
       title, category, content, location, coordinates,
-      imageUrl, imageCaption, isLead, isPressRoll, editionStyle, sharingOption,
+      imageUrl, imageCaption, gallery, isLead, isPressRoll, editionStyle, sharingOption,
       sourceUrl, isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
 
@@ -369,17 +410,22 @@ async function update(req, res, id) {
     }
 
     let embedType = existing.embed_type;
-    let embedData = existing.embed_data;
+    let baseEmbedObj = existing.embed_data && typeof existing.embed_data === "object" ? { ...existing.embed_data } : {};
     if (cleanSourceUrl !== existing.source_url) {
       if (!cleanSourceUrl) {
         embedType = null;
-        embedData = null;
+        baseEmbedObj = {};
       } else {
         const embed = await resolveEmbed(cleanSourceUrl);
         embedType = embed?.embed_type || null;
-        embedData = embed?.embed_data ? JSON.stringify(embed.embed_data) : null;
+        baseEmbedObj = embed?.embed_data ? { ...embed.embed_data } : {};
       }
     }
+    const cleanUpdateGallery = sanitizeGallery(gallery ?? baseEmbedObj.gallery, imageUrl, imageCaption);
+    if (cleanUpdateGallery.length > 0) {
+      baseEmbedObj.gallery = cleanUpdateGallery;
+    }
+    const embedData = Object.keys(baseEmbedObj).length > 0 ? JSON.stringify(baseEmbedObj) : null;
 
     const [row] = await sql`
       UPDATE fieldpress_dispatches SET
