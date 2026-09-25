@@ -4936,7 +4936,7 @@ export const FieldPressMaster: React.FC = () => {
                         <div className={`text-[10px] ${subTextThemeClass}`}>{d.bureau}</div>
                         {Array.isArray(d.coordinates) && d.coordinates.length === 2 && (
                           <div className="text-[9px] text-emerald-400/90 mt-0.5">
-                            📍 ~5 km Vicinity ({d.coordinates[0].toFixed(2)}°N, {Math.abs(d.coordinates[1]).toFixed(2)}°W)
+                            📍 ~5 km Vicinity ({d.coordinates[1].toFixed(2)}°N, {Math.abs(d.coordinates[0]).toFixed(2)}°W)
                           </div>
                         )}
                       </div>
@@ -5210,7 +5210,7 @@ export const FieldPressMaster: React.FC = () => {
                             {isAnon ? "🕵️ ANON VICINITY SIGNAL" : isDecoupled ? "🔀 PIN DECOUPLED" : "📡 NAMED VICINITY PIN"}
                           </span>
                           <span className="text-zinc-400">
-                            ~{Number(coords[0]).toFixed(2)}°N, {Math.abs(Number(coords[1])).toFixed(2)}°W
+                            ~{Number(coords[1]).toFixed(2)}°N, {Math.abs(Number(coords[0])).toFixed(2)}°W
                           </span>
                         </div>
                         <div className="text-xs font-bold line-clamp-1 mb-1">{sig.title}</div>
@@ -6938,7 +6938,7 @@ export const FieldPressMaster: React.FC = () => {
                     <span>{selectedStory.bureau}</span>
                     {Array.isArray(selectedStory.coordinates) && selectedStory.coordinates.length === 2 && (
                       <span className="px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                        📍 ~5 km Vicinity Sector ({selectedStory.coordinates[0].toFixed(2)}°N, {Math.abs(selectedStory.coordinates[1]).toFixed(2)}°W)
+                        📍 ~5 km Vicinity Sector ({selectedStory.coordinates[1].toFixed(2)}°N, {Math.abs(selectedStory.coordinates[0]).toFixed(2)}°W)
                       </span>
                     )}
                   </div>
