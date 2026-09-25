@@ -630,10 +630,35 @@ async function run() {
     await sql`UPDATE fieldpress_dispatches SET image_url = ${lf.img} WHERE id = ${lf.id}`;
   }
 
+  const ANON_IDS = new Set(["Fp_nat_2026_004", "Fp_nat_2026_011", "Fp_nat_2026_019", "Fp_nat_2026_025"]);
+  const DECOUPLED_IDS = new Set(["Fp_nat_2026_002", "Fp_nat_2026_008", "Fp_nat_2026_014", "Fp_nat_2026_022", "Fp_nat_2026_028"]);
+
+  function fuzzVicinity(val, seedStr) {
+    let h = 2166136261;
+    for (let i = 0; i < seedStr.length; i++) {
+      h ^= seedStr.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const offset = (((h >>> 0) % 1000) / 1000 - 0.5) * 0.036;
+    return Number((Math.round((val + offset) * 25) / 25).toFixed(2));
+  }
+
   let inserted = 0;
   for (const item of NATIONAL_PRESSIES_30) {
     const acct = ACCOUNTS[item.who] || ACCOUNTS.vibir;
     const yt = await fetchYoutubeEmbed(item.youtubeId, item.title);
+
+    const isAnon = ANON_IDS.has(item.id);
+    const isDecoupled = DECOUPLED_IDS.has(item.id) || isAnon;
+    const finalAuthor = isAnon ? "Anonymous Field Source" : acct.author;
+    const finalCallsign = isAnon ? "anon-signal" : acct.callsign;
+    const finalBureau = isAnon
+      ? "Anonymous Vicinity Sector • Metadata Stripped • Pin Decoupled"
+      : isDecoupled
+      ? `${acct.bureau} • Pin Decoupled`
+      : acct.bureau;
+    const fuzzyLat = fuzzVicinity(item.lat, item.id + "_lat");
+    const fuzzyLng = fuzzVicinity(item.lng, item.id + "_lng");
 
     await sql`
       INSERT INTO fieldpress_dispatches (
@@ -664,12 +689,12 @@ async function run() {
         ${acct.id},
         ${item.title},
         ${item.category},
-        ${acct.author},
-        ${acct.callsign},
-        ${acct.bureau},
+        ${finalAuthor},
+        ${finalCallsign},
+        ${finalBureau},
         ${item.location},
-        ${item.lat},
-        ${item.lng},
+        ${fuzzyLat},
+        ${fuzzyLng},
         ${item.content},
         ${item.imageUrl},
         ${item.imageCaption},
