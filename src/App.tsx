@@ -169,9 +169,15 @@ export interface Dispatch {
   sharingOption?: "fork" | "colab" | "none";
   parentDispatchId?: string;
   sourceUrl?: string;
-  embedType?: "youtube" | "reddit" | "x" | "link_card";
+  embedType?: "youtube" | "reddit" | "x" | "facebook_video" | "instagram" | "tiktok" | "vimeo" | "video" | "link_card" | string;
   embedData?: {
     html?: string | null;
+    iframe_url?: string | null;
+    video_url?: string | null;
+    hd_video_url?: string | null;
+    sd_video_url?: string | null;
+    url?: string | null;
+    description?: string | null;
     thumbnail_url?: string | null;
     title?: string;
     provider_name?: string;
@@ -362,13 +368,123 @@ function wrapCanvasText(
   return y + lineHeight;
 }
 
-// Renders a wire/regular pressie's resolved link embed (YouTube/Reddit/X
-// rich embeds, or a generic Open Graph link card fallback). Embed HTML is
-// resolved and cached server-side at ingest time (see api/_lib/resolveEmbed.mjs)
-// — this component only renders the cached result and, for providers whose
-// embed relies on a widget script (Reddit/X), lazily loads that script once.
+export function decodeEntitiesClient(str?: string | null): string {
+  if (!str) return "";
+  return str
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      try {
+        return String.fromCodePoint(parseInt(hex, 16));
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&#0*(\d+);/g, (_, dec) => {
+      try {
+        return String.fromCodePoint(parseInt(dec, 10));
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+export function hasPlayableSourceMedia(dispatch?: Dispatch | null): boolean {
+  if (!dispatch) return false;
+  const ed = dispatch.embedData;
+  if (ed?.video_url || ed?.hd_video_url || ed?.sd_video_url || ed?.iframe_url || ed?.html) {
+    return true;
+  }
+  const t = (dispatch.embedType || "").toLowerCase();
+  if (["youtube", "facebook_video", "instagram", "tiktok", "vimeo", "video", "reddit", "x"].includes(t)) {
+    return true;
+  }
+  const u = dispatch.sourceUrl || ed?.url || "";
+  if (
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)/i.test(u) ||
+    /(?:facebook\.com\/(?:share\/[rv]\/|reel\/|watch\/?|[\w.]+\/videos\/)|fb\.watch\/)/i.test(u) ||
+    /instagram\.com\/(?:p|reel|reels|tv)\//i.test(u) ||
+    /tiktok\.com\/@[\w.-]+\/video\//i.test(u) ||
+    /vimeo\.com\/\d+/i.test(u) ||
+    /\.(?:mp4|webm|mov)(?:\?.*)?$/i.test(u)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+// Renders a wire/regular pressie's resolved link embed (Direct MP4 / Facebook Reel & Video /
+// YouTube / Instagram / TikTok / Vimeo / Reddit / X rich embeds, or Open Graph link card).
 function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [liveEmbedData, setLiveEmbedData] = useState<any>(null);
+  const ed = { ...(dispatch.embedData || {}), ...(liveEmbedData || {}) };
+  const sourceUrl = dispatch.sourceUrl || ed.url || "";
+  const directVideoUrl = ed.video_url || ed.hd_video_url || ed.sd_video_url || (
+    /\.(?:mp4|webm|mov)(?:\?.*)?$/i.test(sourceUrl) ? sourceUrl : null
+  );
+
+  // Auto-resolve fresh stream/embed metadata if this is a video URL missing video_url
+  useEffect(() => {
+    setLiveEmbedData(null);
+    if (!sourceUrl) return;
+    const isVideoSource =
+      /(?:facebook\.com\/(?:share\/[rv]\/|reel\/|watch\/?|[\w.]+\/videos\/)|fb\.watch\/)/i.test(sourceUrl) ||
+      /instagram\.com\/(?:p|reel|reels|tv)\//i.test(sourceUrl) ||
+      /tiktok\.com\/@[\w.-]+\/video\//i.test(sourceUrl) ||
+      /vimeo\.com\/\d+/i.test(sourceUrl);
+    if (isVideoSource && !dispatch.embedData?.video_url && !dispatch.embedData?.iframe_url) {
+      let cancelled = false;
+      fetch(`/api/resolve-url?url=${encodeURIComponent(sourceUrl)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!cancelled && data?.embedData) {
+            setLiveEmbedData(data.embedData);
+          }
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [dispatch.id, sourceUrl]);
+
+  // Determine official iframe embed URL if available (or synthesize for Facebook/YouTube/Instagram/TikTok/Vimeo)
+  let iframeUrl: string | null = ed.iframe_url || null;
+  if (!iframeUrl && sourceUrl) {
+    const ytMatch = sourceUrl.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/i);
+    if (ytMatch) {
+      iframeUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
+    } else if (/(?:facebook\.com\/(?:share\/[rv]\/|reel\/|watch\/?|[\w.]+\/videos\/)|fb\.watch\/)/i.test(sourceUrl)) {
+      const targetFbUrl = ed.url || sourceUrl;
+      iframeUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(targetFbUrl)}&show_text=false`;
+    } else {
+      const igMatch = sourceUrl.match(/instagram\.com\/(?:p|reel|reels|tv)\/([\w-]+)/i);
+      if (igMatch) {
+        iframeUrl = `https://www.instagram.com/p/${igMatch[1]}/embed/`;
+      } else {
+        const ttMatch = sourceUrl.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/i);
+        if (ttMatch) {
+          iframeUrl = `https://www.tiktok.com/embed/v2/${ttMatch[1]}`;
+        } else {
+          const vmMatch = sourceUrl.match(/vimeo\.com\/(\d+)/i);
+          if (vmMatch) {
+            iframeUrl = `https://player.vimeo.com/video/${vmMatch[1]}`;
+          }
+        }
+      }
+    }
+  }
+
+  const [playerMode, setPlayerMode] = useState<"native" | "iframe">(directVideoUrl ? "native" : "iframe");
+  const [videoQuality, setVideoQuality] = useState<"hd" | "sd">(ed.hd_video_url ? "hd" : "sd");
+
+  useEffect(() => {
+    setPlayerMode(directVideoUrl ? "native" : "iframe");
+  }, [dispatch.id, directVideoUrl]);
 
   useEffect(() => {
     if (dispatch.embedType === "reddit" && !document.getElementById("reddit-embed-widget-script")) {
@@ -392,31 +508,137 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
     }
   }, [dispatch.id, dispatch.embedType]);
 
-  if (!dispatch.embedType || !dispatch.embedData) return null;
-  const { embedType, embedData, sourceUrl } = dispatch;
+  const activeMp4Url =
+    videoQuality === "hd"
+      ? ed.hd_video_url || ed.video_url || ed.sd_video_url || directVideoUrl
+      : ed.sd_video_url || ed.video_url || ed.hd_video_url || directVideoUrl;
 
-  if (embedType === "youtube" && embedData.html) {
+  if (activeMp4Url && playerMode === "native") {
+    return (
+      <div className="space-y-2">
+        <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black relative shadow-xl">
+          <video
+            key={activeMp4Url}
+            src={activeMp4Url}
+            poster={ed.thumbnail_url || dispatch.imageUrl || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            onError={() => {
+              if (iframeUrl || ed.html) setPlayerMode("iframe");
+            }}
+            className="w-full max-h-[560px] object-contain bg-black mx-auto"
+          />
+          <div className="px-3 py-2 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
+                ▶ Original Source Video ({ed.provider_name || "Direct Stream"})
+              </span>
+              {ed.hd_video_url && ed.sd_video_url && (
+                <button
+                  type="button"
+                  onClick={() => setVideoQuality(videoQuality === "hd" ? "sd" : "hd")}
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 font-bold cursor-pointer"
+                >
+                  Quality: {videoQuality.toUpperCase()}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {(iframeUrl || ed.html) && (
+                <button
+                  type="button"
+                  onClick={() => setPlayerMode("iframe")}
+                  className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold cursor-pointer"
+                >
+                  🌐 Switch to Embedded Source Player
+                </button>
+              )}
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-bold"
+                >
+                  ↗ Open Original Source
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (iframeUrl) {
+    const isVerticalReel =
+      /facebook\.com.*(?:reel|\/r\/)/i.test(sourceUrl) ||
+      /instagram\.com/i.test(sourceUrl) ||
+      /tiktok\.com/i.test(sourceUrl);
+    return (
+      <div className="space-y-2">
+        <div className={`rounded-xl overflow-hidden border border-zinc-800 bg-black relative shadow-xl ${
+          isVerticalReel ? "min-h-[540px] flex flex-col justify-center" : "aspect-video"
+        }`}>
+          <iframe
+            src={iframeUrl}
+            title={decodeEntitiesClient(ed.title || dispatch.title)}
+            className={`w-full ${isVerticalReel ? "h-[540px]" : "h-full"} border-0`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+          <div className="px-3 py-2 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+            <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-bold">
+              🌐 Official {ed.provider_name || "Source"} Embedded Player
+            </span>
+            <div className="flex items-center gap-2">
+              {activeMp4Url && (
+                <button
+                  type="button"
+                  onClick={() => setPlayerMode("native")}
+                  className="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold cursor-pointer"
+                >
+                  🎬 Switch to Native HD Video Stream
+                </button>
+              )}
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-bold"
+                >
+                  ↗ Open Original Source
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (ed.html) {
+    if (dispatch.embedType === "reddit" || dispatch.embedType === "x") {
+      return (
+        <div
+          ref={containerRef}
+          className="rounded-xl overflow-hidden border border-zinc-800 bg-white p-2 [&>blockquote]:m-0"
+          dangerouslySetInnerHTML={{ __html: ed.html }}
+        />
+      );
+    }
     return (
       <div
         className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video [&_iframe]:!w-full [&_iframe]:!h-full"
-        dangerouslySetInnerHTML={{ __html: embedData.html }}
+        dangerouslySetInnerHTML={{ __html: ed.html }}
       />
     );
   }
 
-  if ((embedType === "reddit" || embedType === "x") && embedData.html) {
-    return (
-      <div
-        ref={containerRef}
-        className="rounded-xl overflow-hidden border border-zinc-800 bg-white p-2 [&>blockquote]:m-0"
-        dangerouslySetInnerHTML={{ __html: embedData.html }}
-      />
-    );
-  }
+  if (!dispatch.embedType && !ed.title && !ed.thumbnail_url) return null;
 
-  // Generic link-card fallback (Facebook, Instagram, news sites, anything
-  // without a native embed) — always links out rather than embedding an
-  // untrusted third-party iframe.
   return (
     <a
       href={sourceUrl || "#"}
@@ -424,19 +646,19 @@ function WireEmbed({ dispatch }: { dispatch: Dispatch }) {
       rel="noopener noreferrer"
       className="block rounded-xl overflow-hidden border border-zinc-800 hover:border-amber-500/60 transition group"
     >
-      {embedData.thumbnail_url && (
+      {ed.thumbnail_url && (
         <div className="aspect-video bg-black overflow-hidden">
           <img
-            src={embedData.thumbnail_url}
+            src={ed.thumbnail_url}
             alt=""
             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
           />
         </div>
       )}
       <div className="p-3">
-        <div className="text-sm font-bold line-clamp-2">{embedData.title}</div>
-        {embedData.provider_name && (
-          <div className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">{embedData.provider_name}</div>
+        <div className="text-sm font-bold line-clamp-2">{decodeEntitiesClient(ed.title || dispatch.title)}</div>
+        {ed.provider_name && (
+          <div className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">{ed.provider_name}</div>
         )}
       </div>
     </a>
@@ -7861,9 +8083,40 @@ export const FieldPressMaster: React.FC = () => {
                 </div>
               )}
 
+              {/* Playable Original Source Video & Media Stage (featured at top whenever original video/embed exists) */}
+              {hasPlayableSourceMedia(selectedStory) && (
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      <span>🎬</span>
+                      <span>Original Source Video &amp; Media ({selectedStory.embedData?.provider_name || "Verified Source"})</span>
+                    </div>
+                    {selectedStory.sourceUrl && (
+                      <a
+                        href={selectedStory.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold text-amber-400 hover:text-amber-300 underline"
+                      >
+                        ↗ View Original on {selectedStory.embedData?.provider_name || "Source"}
+                      </a>
+                    )}
+                  </div>
+                  <WireEmbed dispatch={selectedStory} />
+                </div>
+              )}
+
               {/* Interactive Multi-Image Evidence Stage & Filmstrip */}
               {activeFrame && (
                 <div className="space-y-2.5">
+                  {hasPlayableSourceMedia(selectedStory) && (
+                    <div className="flex items-center justify-between text-xs font-mono text-zinc-400 pt-1">
+                      <span className="font-bold uppercase tracking-wider text-amber-400">
+                        🖼️ Attached Still Frame &amp; Darkroom Filter Preview
+                      </span>
+                      <span>Toggle Edition Theme Filter on still frame below</span>
+                    </div>
+                  )}
                   <div className={`overflow-hidden relative aspect-video max-h-[520px] bg-black shadow-lg group ${
                     isReaderOldTimey
                       ? "rounded-none border-2 border-[#1f160d] p-1.5 bg-[#e5d7bc]"
@@ -7871,7 +8124,7 @@ export const FieldPressMaster: React.FC = () => {
                   }`}>
                     <img
                       src={activeFrame.url}
-                      alt={activeFrame.caption || selectedStory.title}
+                      alt={decodeEntitiesClient(activeFrame.caption || selectedStory.title)}
                       onError={(e) => handleImgFallbackError(e, selectedStory)}
                       onClick={() => setReaderLightboxUrl(activeFrame.url)}
                       className={`w-full h-full object-cover cursor-zoom-in transition ${
@@ -7939,7 +8192,7 @@ export const FieldPressMaster: React.FC = () => {
                         <span className={isReaderOldTimey ? "font-black not-italic" : "text-amber-400 font-bold"}>
                           {isReaderOldTimey ? `ENGRAVED PLATE #${safeIdx + 1}:` : `EVIDENCE FRAME #${safeIdx + 1}:`}
                         </span>{" "}
-                        {activeFrame.caption || selectedStory.imageCaption}
+                        {decodeEntitiesClient(activeFrame.caption || selectedStory.imageCaption)}
                       </div>
                     )}
                   </div>
@@ -7984,7 +8237,7 @@ export const FieldPressMaster: React.FC = () => {
                   ? "font-serif text-3xl sm:text-5xl font-black uppercase tracking-tight leading-[1.03] text-[#140e08] border-b-2 border-[#1f160d] pb-3"
                   : "text-2xl sm:text-4xl font-black tracking-tight leading-tight"
                 }>
-                  {selectedStory.title}
+                  {decodeEntitiesClient(selectedStory.title)}
                 </h1>
                 <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${
                   isReaderOldTimey ? "border-[#1f160d] text-[#3b2917] font-serif" : `${borderThemeClass} ${subTextThemeClass}`
@@ -8023,16 +8276,16 @@ export const FieldPressMaster: React.FC = () => {
               {isReaderOldTimey ? (
                 <div className="font-serif text-base sm:text-lg leading-[1.75] text-[#18120c] text-justify sm:columns-2 gap-8 sm:[column-rule:1px_solid_rgba(31,22,13,0.35)] py-2">
                   <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#18120c] border-2 border-[#18120c] px-2.5 py-1 bg-[#e5d7bc] shadow-[2px_2px_0px_#18120c]">
-                    {selectedStory.content[0]}
+                    {decodeEntitiesClient(selectedStory.content)[0]}
                   </span>
                   <span className="font-black uppercase tracking-widest text-xs text-[#2b1d0e]">
                     {selectedStory.location.toUpperCase()} ({readerThemeCfg.datelinePrefix}) —{" "}
                   </span>
-                  <span>{selectedStory.content.slice(1)}</span>
+                  <span>{decodeEntitiesClient(selectedStory.content).slice(1)}</span>
                 </div>
               ) : (
                 <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
-                  {selectedStory.content}
+                  {decodeEntitiesClient(selectedStory.content)}
                 </div>
               )}
 
@@ -8093,7 +8346,7 @@ export const FieldPressMaster: React.FC = () => {
                               ? "text-[#18120c] font-serif italic border-[#1f160d]/40"
                               : "text-zinc-300 border-zinc-800/80"
                           }`}>
-                            {frame.caption}
+                            {decodeEntitiesClient(frame.caption)}
                           </div>
                         )}
                       </div>
@@ -8102,36 +8355,18 @@ export const FieldPressMaster: React.FC = () => {
                 </div>
               )}
 
-              {/* Resolved link embed / Real Broadcast Footage (wire pressies + any regular pressie with a link) */}
-              {(selectedStory.embedType || extractYoutubeVideoId(selectedStory.sourceUrl)) && (
+              {/* Source attribution footer link when video is already rendered at top */}
+              {selectedStory.sourceUrl && !hasPlayableSourceMedia(selectedStory) && (
                 <div className="space-y-2 pt-2">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
-                    <span>🎥</span>
-                    <span>Verified Field & Broadcast Footage</span>
-                  </div>
-                  {selectedStory.embedType ? (
-                    <WireEmbed dispatch={selectedStory} />
-                  ) : extractYoutubeVideoId(selectedStory.sourceUrl) ? (
-                    <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${extractYoutubeVideoId(selectedStory.sourceUrl)}`}
-                        title={selectedStory.title}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  ) : null}
-                  {selectedStory.sourceUrl && (
-                    <a
-                      href={selectedStory.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-amber-500 hover:text-amber-400 hover:underline inline-block"
-                    >
-                      Watch / Read original at source →
-                    </a>
-                  )}
+                  <WireEmbed dispatch={selectedStory} />
+                  <a
+                    href={selectedStory.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-amber-500 hover:text-amber-400 hover:underline inline-block"
+                  >
+                    Watch / Read original at source →
+                  </a>
                 </div>
               )}
 
