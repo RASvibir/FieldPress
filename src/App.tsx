@@ -175,6 +175,14 @@ export interface Dispatch {
     thumbnail_url?: string | null;
     title?: string;
     provider_name?: string;
+    gallery?: Array<{
+      id: string;
+      url: string;
+      source?: string;
+      caption?: string;
+      timestamp?: string;
+    }>;
+    useThemePhotoFilter?: boolean;
   };
   createdAt?: string;
   updatedAt?: string;
@@ -2265,6 +2273,329 @@ export const FieldPressMaster: React.FC = () => {
   const [readerLightboxUrl, setReaderLightboxUrl] = useState<string | null>(null);
   const [isUnfurlingTitleUrl, setIsUnfurlingTitleUrl] = useState<boolean>(false);
   const [unfurlTitleStatus, setUnfurlTitleStatus] = useState<string>("");
+  const [builderUseThemePhotoFilter, setBuilderUseThemePhotoFilter] = useState<boolean>(true);
+  // Maps dispatch.id -> boolean (true = theme photo filter active, false = raw unfiltered color photo)
+  const [editionPhotoFilterOverrides, setEditionPhotoFilterOverrides] = useState<Record<string, boolean>>({});
+
+  const isThemePhotoFilterActive = (dispatch?: Dispatch | null): boolean => {
+    if (!dispatch) return true;
+    if (typeof editionPhotoFilterOverrides[dispatch.id] === "boolean") {
+      return editionPhotoFilterOverrides[dispatch.id];
+    }
+    if (typeof dispatch.embedData?.useThemePhotoFilter === "boolean") {
+      return dispatch.embedData.useThemePhotoFilter;
+    }
+    if (dispatch.imageCaption && dispatch.imageCaption.includes("[RAW COLOR]")) {
+      return false;
+    }
+    return true;
+  };
+
+  const toggleThemePhotoFilter = (dispatchId: string, currentVal: boolean, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditionPhotoFilterOverrides((prev) => ({
+      ...prev,
+      [dispatchId]: !currentVal
+    }));
+  };
+
+  const getEditionThemeConfig = (rawStyle?: string) => {
+    const s = (rawStyle || "newspaper").toLowerCase();
+    if (s === "newspaper") {
+      return {
+        id: "newspaper",
+        name: "1910 Broadsheet",
+        title: "1910 Printing-Press Broadsheet",
+        masthead: "THE FIELDPRESS DAILY GAZETTE",
+        mastheadTitle: "THE FIELDPRESS DAILY GAZETTE",
+        subhead: "ALL THE VERIFIED TELEMETRY FIT TO PRINT • MORNING PRESS EDITION",
+        mastheadSub: "ALL THE VERIFIED TELEMETRY FIT TO PRINT • MORNING PRESS EDITION",
+        earLeft: "WEATHER: FAIR & BRISK • WIND NW 8 MPH",
+        mastheadLeftEar: "WEATHER: FAIR & BRISK • WIND NW 8 MPH",
+        earRight: "PRICE TWO CENTS • VOL. XCIV NO. 142",
+        mastheadRightEar: "PRICE TWO CENTS • VOL. XCIV NO. 142",
+        datelinePrefix: "BY TELEGRAPH",
+        filterBadge: "🗞️ 1910 Halftone B&W",
+        filterLabel: "1910 Halftone B&W",
+        filterDesc: "Monochrome silver-gelatin black & white with early rotary printing-press halftone ink dots.",
+        imgFilterClass: "grayscale contrast-[1.58] brightness-[0.94] filter",
+        isOldTimey: true,
+        paperBg: "bg-[#f3ead8]",
+        paperText: "text-[#18120c]",
+        paperBorder: "border-[#1e160e]",
+        paperBgClass: "bg-[#f3ead8] text-[#18120c] border-4 border-double border-[#1e160e] shadow-[0_12px_36px_rgba(0,0,0,0.45)]",
+        plateFrameClass: "border-2 border-[#1e160e] p-1.5 bg-[#e6d8be] shadow-inner rounded-none"
+      };
+    }
+    if (s === "almanac") {
+      return {
+        id: "almanac",
+        name: "Heritage Almanac",
+        title: "1880s Farmer's & Naturalist Almanac",
+        masthead: "THE OLD CORRIDOR FARMER'S ALMANAC",
+        mastheadTitle: "THE OLD CORRIDOR FARMER'S ALMANAC",
+        subhead: "CALCULATED FOR THE MERIDIAN OF THE HEARTLAND • ASTRONOMICAL & FIELD REGISTER",
+        mastheadSub: "CALCULATED FOR THE MERIDIAN OF THE HEARTLAND • ASTRONOMICAL & FIELD REGISTER",
+        earLeft: "MOON PHASE: WAXING GIBBOUS • RISES 4:18 PM",
+        mastheadLeftEar: "MOON PHASE: WAXING GIBBOUS • RISES 4:18 PM",
+        earRight: "ESTABLISHED 1884 • YEARLY COMPENDIUM",
+        mastheadRightEar: "ESTABLISHED 1884 • YEARLY COMPENDIUM",
+        datelinePrefix: "ALMANAC REGISTER",
+        filterBadge: "🕰️ 1880s Sepia Plate",
+        filterLabel: "1880s Sepia Plate",
+        filterDesc: "Warm copperplate daguerreotype sepia etching with archival parchment toning.",
+        imgFilterClass: "grayscale sepia-[0.85] contrast-[1.36] brightness-[0.91] filter",
+        isOldTimey: true,
+        paperBg: "bg-[#EFE2C6]",
+        paperText: "text-[#24180B]",
+        paperBorder: "border-[#3D2812]",
+        paperBgClass: "bg-[#EFE2C6] text-[#24180B] border-4 border-double border-[#3D2812] shadow-[0_12px_36px_rgba(0,0,0,0.45)]",
+        plateFrameClass: "border-2 border-[#3D2812] p-1.5 bg-[#dfcfa9] shadow-inner rounded-none"
+      };
+    }
+    if (s === "curio") {
+      return {
+        id: "curio",
+        name: "Penny Curio",
+        title: "1895 Penny Curio & Marvel Broadside",
+        masthead: "WONDER & CURIO ILLUSTRATED GAZETTE",
+        mastheadTitle: "WONDER & CURIO ILLUSTRATED GAZETTE",
+        subhead: "A CABINET OF REMARKABLE DISCOVERIES, ODDITIES & SCIENTIFIC MARVELS",
+        mastheadSub: "A CABINET OF REMARKABLE DISCOVERIES, ODDITIES & SCIENTIFIC MARVELS",
+        earLeft: "AUTHENTICATED BY FIELD WITNESSES",
+        mastheadLeftEar: "AUTHENTICATED BY FIELD WITNESSES",
+        earRight: "SPECIAL ILLUSTRATED SUPPLEMENT • ONE PENNY",
+        mastheadRightEar: "SPECIAL ILLUSTRATED SUPPLEMENT • ONE PENNY",
+        datelinePrefix: "CURIO DISPATCH",
+        filterBadge: "🎪 Tin-Type Lithograph",
+        filterLabel: "Tin-Type Lithograph",
+        filterDesc: "Victorian wet-collodion tin-type plate with high-contrast antique brass & Prussian ink.",
+        imgFilterClass: "grayscale-[0.88] sepia-[0.55] hue-rotate-[-15deg] contrast-[1.45] saturate-[1.35] brightness-[0.93] filter",
+        isOldTimey: true,
+        paperBg: "bg-[#f5ebd6]",
+        paperText: "text-[#1c130b]",
+        paperBorder: "border-[#4a2511]",
+        paperBgClass: "bg-[#f5ebd6] text-[#1c130b] border-4 border-double border-[#4a2511] shadow-[0_12px_36px_rgba(0,0,0,0.45)]",
+        plateFrameClass: "border-2 border-[#4a2511] p-1.5 bg-[#e8d9b8] shadow-inner rounded-none"
+      };
+    }
+    if (s === "fieldnote") {
+      return {
+        id: "fieldnote",
+        name: "Field Note",
+        title: "1974 Expedition Field Journal",
+        masthead: "FIELD STATION ECOLOGICAL LOGBOOK",
+        mastheadTitle: "FIELD STATION ECOLOGICAL LOGBOOK",
+        subhead: "WATERSHED & BIODIVERSITY SURVEY • DIRECT OBSERVATION RECORD",
+        mastheadSub: "WATERSHED & BIODIVERSITY SURVEY • DIRECT OBSERVATION RECORD",
+        earLeft: "SPECIMEN LOG: VERIFIED",
+        mastheadLeftEar: "SPECIMEN LOG: VERIFIED",
+        earRight: "ARCHIVAL KODACHROME PLATE",
+        mastheadRightEar: "ARCHIVAL KODACHROME PLATE",
+        datelinePrefix: "FIELD SURVEY LOG",
+        filterBadge: "🌿 Kodachrome 64 Film",
+        filterLabel: "Kodachrome 64 Film",
+        filterDesc: "Warm 1970s National Geographic Kodachrome 64 analog slide film grain & color profile.",
+        imgFilterClass: "contrast-[1.18] saturate-[1.38] sepia-[0.22] brightness-[1.02] filter",
+        isOldTimey: false,
+        paperBg: "bg-[#eef2eb]",
+        paperText: "text-[#18281e]",
+        paperBorder: "border-[#2d5a40]",
+        paperBgClass: "",
+        plateFrameClass: "border-2 border-emerald-700/60 p-1 bg-emerald-950/20 rounded-lg"
+      };
+    }
+    if (s === "comic") {
+      return {
+        id: "comic",
+        name: "Comic Strip",
+        title: "Sunday Pulp Graphic Strip",
+        masthead: "💥 FIELDPRESS PULP ACTION COMICS",
+        mastheadTitle: "💥 FIELDPRESS PULP ACTION COMICS",
+        subhead: "FOUR-COLOR PRINTING PRESS EDITION",
+        mastheadSub: "FOUR-COLOR PRINTING PRESS EDITION",
+        earLeft: "APPROVED BY THE PRESS CODE",
+        mastheadLeftEar: "APPROVED BY THE PRESS CODE",
+        earRight: "10¢ • ALL-NEW TRUE STORY!",
+        mastheadRightEar: "10¢ • ALL-NEW TRUE STORY!",
+        datelinePrefix: "ACTION PANEL",
+        filterBadge: "💥 Pulp Ben-Day Ink",
+        filterLabel: "Pulp Ben-Day Ink",
+        filterDesc: "Hyper-saturated four-color pulp comic ink with classic Ben-Day halftone dots.",
+        imgFilterClass: "contrast-[1.5] saturate-[2.1] brightness-[1.04] filter",
+        isOldTimey: false,
+        paperBg: "bg-[#fffdf0]",
+        paperText: "text-black",
+        paperBorder: "border-black",
+        paperBgClass: "",
+        plateFrameClass: "border-4 border-black dark:border-yellow-400 rounded-2xl shadow-[5px_5px_0px_0px_#000]"
+      };
+    }
+    if (s === "arcade") {
+      return {
+        id: "arcade",
+        name: "8-Bit Arcade",
+        title: "1984 Green Phosphor CRT Terminal",
+        masthead: "■ 1-PLAYER TELEMETRY TERMINAL",
+        mastheadTitle: "■ 1-PLAYER TELEMETRY TERMINAL",
+        subhead: "8-BIT VECTOR & RASTER CRT DISPLAY",
+        mastheadSub: "8-BIT VECTOR & RASTER CRT DISPLAY",
+        earLeft: "BAUD: 9600 • PARITY: NONE",
+        mastheadLeftEar: "BAUD: 9600 • PARITY: NONE",
+        earRight: "HIGH SCORE: 994,200",
+        mastheadRightEar: "HIGH SCORE: 994,200",
+        datelinePrefix: "CRT TERMINAL",
+        filterBadge: "🕹️ Green CRT Matrix",
+        filterLabel: "Green CRT Matrix",
+        filterDesc: "Monochrome 1984 green phosphor CRT monitor matrix with horizontal scanlines.",
+        imgFilterClass: "grayscale contrast-[1.65] brightness-90 sepia hue-rotate-[85deg] saturate-[380%] filter",
+        isOldTimey: false,
+        paperBg: "bg-black",
+        paperText: "text-[#00ff66]",
+        paperBorder: "border-[#00ff66]",
+        paperBgClass: "",
+        plateFrameClass: "border-2 border-[#00ff66] shadow-[0_0_15px_rgba(0,255,102,0.4)] rounded-none bg-black"
+      };
+    }
+    if (s === "tactical") {
+      return {
+        id: "tactical",
+        name: "Tactical Recon",
+        title: "Tactical Recon Telemetry Wire",
+        masthead: "RECON PROTOCOL // FREQ: 144.390 MHZ",
+        mastheadTitle: "RECON PROTOCOL // FREQ: 144.390 MHZ",
+        subhead: "GEOSPATIAL SATELLITE & FIELD TELEMETRY",
+        mastheadSub: "GEOSPATIAL SATELLITE & FIELD TELEMETRY",
+        earLeft: "SIGNAL LOCK: CONFIRMED",
+        mastheadLeftEar: "SIGNAL LOCK: CONFIRMED",
+        earRight: "VICINITY RING ±5 KM",
+        mastheadRightEar: "VICINITY RING ±5 KM",
+        datelinePrefix: "RECON WIRE",
+        filterBadge: "🛰️ FLIR Night-Vision",
+        filterLabel: "FLIR Night-Vision",
+        filterDesc: "High-contrast phosphor-cyan optical recon telemetry filter with HUD targeting grid.",
+        imgFilterClass: "grayscale-[0.72] contrast-[1.32] brightness-[0.95] sepia-[0.35] hue-rotate-[145deg] saturate-[210%] filter",
+        isOldTimey: false,
+        paperBg: "bg-[#030a12]",
+        paperText: "text-cyan-300",
+        paperBorder: "border-cyan-500/80",
+        paperBgClass: "",
+        plateFrameClass: "border border-cyan-500/60 shadow-[0_0_15px_rgba(6,182,212,0.2)] rounded-lg bg-zinc-950"
+      };
+    }
+    return {
+      id: "magazine",
+      name: "Modern Sleek",
+      title: "Modern Sleek Editorial Gloss",
+      masthead: "FIELDPRESS MAGAZINE • FEATURE REPORT",
+      mastheadTitle: "FIELDPRESS MAGAZINE • FEATURE REPORT",
+      subhead: "CONTEMPORARY LONGFORM PHOTOJOURNALISM",
+      mastheadSub: "CONTEMPORARY LONGFORM PHOTOJOURNALISM",
+      earLeft: "NATIONAL DESK",
+      mastheadLeftEar: "NATIONAL DESK",
+      earRight: "COLLECTOR'S ISSUE",
+      mastheadRightEar: "COLLECTOR'S ISSUE",
+      datelinePrefix: "FEATURE DESK",
+      filterBadge: "✨ Cinema Bleach-Bypass",
+      filterLabel: "Cinema Bleach-Bypass",
+      filterDesc: "High-contrast Leica cinema bleach-bypass editorial color grade with studio vignette.",
+      imgFilterClass: "contrast-[1.18] saturate-[1.24] brightness-[1.02] filter",
+      isOldTimey: false,
+      paperBg: "bg-zinc-950",
+      paperText: "text-zinc-100",
+      paperBorder: "border-purple-500/40",
+      paperBgClass: "",
+      plateFrameClass: "border border-purple-500/40 rounded-2xl shadow-lg bg-purple-950/20"
+    };
+  };
+
+  const renderThemePhotoOverlay = (rawStyle?: string, isFilterActive = true) => {
+    if (!isFilterActive) return null;
+    const s = (rawStyle || "newspaper").toLowerCase();
+    if (s === "newspaper") {
+      // Early 1900s rotary printing-press halftone dot screen + aged ink grain
+      return (
+        <>
+          <div
+            className="absolute inset-0 pointer-events-none z-10 opacity-35 mix-blend-multiply"
+            style={{
+              backgroundImage: "radial-gradient(#0f0b07 0.9px, transparent 0.9px)",
+              backgroundSize: "3px 3px"
+            }}
+          />
+          <div className="absolute inset-0 pointer-events-none z-10 bg-gradient-to-t from-[#2b1d0f]/35 via-transparent to-[#2b1d0f]/20 mix-blend-multiply border border-[#1e160e]/40" />
+        </>
+      );
+    }
+    if (s === "almanac") {
+      // 1880s Daguerreotype sepia vignette + fine woodcut horizontal line screen
+      return (
+        <>
+          <div
+            className="absolute inset-0 pointer-events-none z-10 opacity-25 mix-blend-multiply"
+            style={{
+              backgroundImage: "repeating-linear-gradient(0deg, rgba(45,26,10,0.35) 0px, rgba(45,26,10,0.35) 1px, transparent 1px, transparent 3px)"
+            }}
+          />
+          <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_40px_rgba(36,20,6,0.65)]" />
+        </>
+      );
+    }
+    if (s === "curio") {
+      // Victorian Tin-Type corner brass vignette + stipple screen
+      return (
+        <>
+          <div
+            className="absolute inset-0 pointer-events-none z-10 opacity-30 mix-blend-multiply"
+            style={{
+              backgroundImage: "radial-gradient(#2a1408 0.8px, transparent 0.8px)",
+              backgroundSize: "4px 4px"
+            }}
+          />
+          <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_45px_rgba(20,10,4,0.75)] border-2 border-amber-700/40" />
+        </>
+      );
+    }
+    if (s === "comic") {
+      // Classic Sunday-funnies Ben-Day halftone dots
+      return (
+        <div
+          className="absolute inset-0 pointer-events-none z-10 opacity-25 mix-blend-multiply"
+          style={{
+            backgroundImage: "radial-gradient(#000 1.1px, transparent 1.1px)",
+            backgroundSize: "5px 5px"
+          }}
+        />
+      );
+    }
+    if (s === "arcade") {
+      // 1984 CRT horizontal phosphor scanlines
+      return (
+        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.55)_50%)] bg-[length:100%_4px] opacity-80 z-10" />
+      );
+    }
+    if (s === "tactical") {
+      // HUD optical targeting reticle + telemetry scanlines
+      return (
+        <>
+          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(6,182,212,0)_50%,rgba(6,182,212,0.08)_50%)] bg-[length:100%_3px] z-10" />
+          <div className="absolute top-1.5 left-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┌</div>
+          <div className="absolute top-1.5 right-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┐</div>
+          <div className="absolute bottom-7 left-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">└</div>
+          <div className="absolute bottom-7 right-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┘</div>
+        </>
+      );
+    }
+    if (s === "fieldnote") {
+      return (
+        <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_25px_rgba(20,40,20,0.35)] border border-emerald-500/20" />
+      );
+    }
+    return (
+      <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_30px_rgba(0,0,0,0.4)]" />
+    );
+  };
+
   const [newImageUrl, setNewImageUrl] = useState<string>("");
   // Optional embed link (YouTube/Reddit/X/any URL) -- resolved server-side
   // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
@@ -3284,6 +3615,10 @@ export const FieldPressMaster: React.FC = () => {
       imageUrl: newImageUrl || (evidenceGallery[0]?.url ?? undefined),
       imageCaption: newImageCaption || (evidenceGallery[0]?.caption ?? undefined),
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
+      embedData: {
+        gallery: evidenceGallery,
+        useThemePhotoFilter: builderUseThemePhotoFilter
+      },
       sourceUrl: newSourceUrl.trim() || undefined,
       editionStyle: newEditionStyle,
       isPressRoll: true
@@ -3296,6 +3631,10 @@ export const FieldPressMaster: React.FC = () => {
         body: JSON.stringify({
           ...draftItem,
           gallery: evidenceGallery,
+          embedData: {
+            gallery: evidenceGallery,
+            useThemePhotoFilter: builderUseThemePhotoFilter
+          },
           isPressRoll: true,
           isAnonymous: newIsAnonymous,
           decoupleLocationPin: newDecoupleLocationPin,
@@ -3375,6 +3714,10 @@ export const FieldPressMaster: React.FC = () => {
       imageUrl: chosenImage,
       imageCaption: chosenCaption,
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
+      embedData: {
+        gallery: evidenceGallery,
+        useThemePhotoFilter: builderUseThemePhotoFilter
+      },
       sourceUrl: newSourceUrl.trim() || undefined,
       isPressRoll: false,
       editionStyle: newEditionStyle,
@@ -3387,6 +3730,10 @@ export const FieldPressMaster: React.FC = () => {
       const payload = {
         ...pressieItem,
         gallery: evidenceGallery,
+        embedData: {
+          gallery: evidenceGallery,
+          useThemePhotoFilter: builderUseThemePhotoFilter
+        },
         isPressRoll: false,
         isAnonymous: newIsAnonymous,
         decoupleLocationPin: newDecoupleLocationPin,
@@ -4280,14 +4627,54 @@ export const FieldPressMaster: React.FC = () => {
         {/* TAB 1: DAILY BROADSHEET EDITION */}
         {activeTab === "edition" && (
           <div className="space-y-8">
+            {/* Edition Theme Photo Filter Legend & Master Quick-Toggle Strip */}
+            <div className={`px-4 py-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 font-mono text-xs ${
+              isDark ? "bg-zinc-900/90 border-zinc-800 text-zinc-300" : "bg-[#f6efe2] border-[#c8b396] text-[#2c2014]"
+            }`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/40 font-black text-[10px] uppercase tracking-wider">
+                  🖨️ Edition Printing Press & Darkroom Filters
+                </span>
+                <span className="text-[11px] opacity-85">
+                  Each of the 8 Edition Themes includes its own signature darkroom/press photo filter toggle (1910 Halftone B&amp;W, 1880s Sepia Plate, Tin-Type, Kodachrome, FLIR, Ben-Day, CRT, Cinema). Click the filter badge on any photo to switch between Theme Filter &amp; Original Color.
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextMap: Record<string, boolean> = {};
+                    dispatches.forEach((item) => { nextMap[item.id] = true; });
+                    setEditionPhotoFilterOverrides(nextMap);
+                  }}
+                  className="px-2.5 py-1 rounded bg-amber-500 text-zinc-950 font-bold text-[10px] hover:bg-amber-400 transition cursor-pointer"
+                >
+                  🎨 All Theme Filters ON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextMap: Record<string, boolean> = {};
+                    dispatches.forEach((item) => { nextMap[item.id] = false; });
+                    setEditionPhotoFilterOverrides(nextMap);
+                  }}
+                  className="px-2.5 py-1 rounded border border-zinc-600 hover:bg-zinc-800 text-zinc-300 font-bold text-[10px] transition cursor-pointer"
+                >
+                  📸 All Original Color
+                </button>
+              </div>
+            </div>
+
             {dispatches[0] && (() => {
               const d = dispatches[0];
               const style = d.editionStyle || "newspaper";
-              const isComic = style === "comic";
-              const isNewspaper = style === "newspaper";
-              const isArcade = style === "arcade";
-              const isTactical = style === "tactical";
-              const isMagazine = style === "magazine";
+              const themeCfg = getEditionThemeConfig(style);
+              const filterActive = isThemePhotoFilterActive(d);
+              const isComic = themeCfg.id === "comic";
+              const isOldTimey = themeCfg.isOldTimey; // newspaper, almanac, curio
+              const isFieldnote = themeCfg.id === "fieldnote";
+              const isArcade = themeCfg.id === "arcade";
+              const isTactical = themeCfg.id === "tactical";
 
               return (
                 <article
@@ -4295,16 +4682,81 @@ export const FieldPressMaster: React.FC = () => {
                   className={`transition cursor-pointer relative overflow-hidden select-none ${
                     isComic
                       ? "bg-[#fffdf0] dark:bg-[#18181b] border-4 border-black dark:border-yellow-400 shadow-[8px_8px_0px_0px_#000] dark:shadow-[8px_8px_0px_0px_#facc15] rounded-3xl p-6 sm:p-8"
-                      : isNewspaper
-                        ? "bg-[#faf5eb] dark:bg-[#1b1713] text-[#2c2014] dark:text-[#f5ede0] border-4 border-double border-[#5c3e21] dark:border-[#8f6842] shadow-xl p-6 sm:p-10 rounded-none"
-                        : isArcade
-                          ? "bg-black border-4 border-[#00ff66] shadow-[0_0_30px_rgba(0,255,102,0.35)] text-[#00ff66] p-6 sm:p-8 rounded-none font-['VT323']"
-                          : isTactical
-                            ? "bg-[#030a12] border-2 border-cyan-500/80 shadow-[0_0_25px_rgba(6,182,212,0.2)] text-cyan-300 p-6 sm:p-8 rounded-xl font-mono"
-                            : "bg-gradient-to-br from-zinc-950 via-zinc-900 to-purple-950/40 border border-purple-500/40 shadow-2xl rounded-3xl p-6 sm:p-10 text-zinc-100"
+                      : isOldTimey
+                        ? `${themeCfg.paperBg} ${themeCfg.paperText} border-4 border-double ${themeCfg.paperBorder} shadow-[0_14px_38px_rgba(0,0,0,0.45)] p-5 sm:p-10 rounded-none`
+                        : isFieldnote
+                          ? `${themeCfg.paperBg} ${themeCfg.paperText} border-2 ${themeCfg.paperBorder} shadow-xl p-6 sm:p-9 rounded-xl`
+                          : isArcade
+                            ? "bg-black border-4 border-[#00ff66] shadow-[0_0_30px_rgba(0,255,102,0.35)] text-[#00ff66] p-6 sm:p-8 rounded-none font-['VT323']"
+                            : isTactical
+                              ? "bg-[#030a12] border-2 border-cyan-500/80 shadow-[0_0_25px_rgba(6,182,212,0.2)] text-cyan-300 p-6 sm:p-8 rounded-xl font-mono"
+                              : "bg-gradient-to-br from-zinc-950 via-zinc-900 to-purple-950/40 border border-purple-500/40 shadow-2xl rounded-3xl p-6 sm:p-10 text-zinc-100"
                   }`}
                 >
-                  {/* Edition Decorative Headers */}
+                  {/* Subtle Cotton Newsprint Grain Texture for Old-Timey Editions */}
+                  {isOldTimey && (
+                    <div
+                      className="absolute inset-0 pointer-events-none opacity-[0.055] mix-blend-multiply"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(#1a1108 0.75px, transparent 0.75px), radial-gradient(#3d2712 0.5px, transparent 0.5px)",
+                        backgroundSize: "12px 12px, 7px 7px",
+                        backgroundPosition: "0 0, 3px 3px",
+                      }}
+                    />
+                  )}
+
+                  {/* Authentic Early Printing-Press Newspaper / Almanac / Curio Masthead */}
+                  {isOldTimey && (
+                    <div className="relative z-10 mb-6 select-none">
+                      {/* Top Fine Rule + Dateline Strip */}
+                      <div className="border-t-2 border-b border-[#1f160d] py-1 flex flex-wrap items-center justify-between text-[10px] font-serif uppercase tracking-[0.22em] font-bold text-[#3b2917]">
+                        <span>{themeCfg.earLeft}</span>
+                        <span>{themeCfg.subhead}</span>
+                        <span>{themeCfg.earRight}</span>
+                      </div>
+
+                      {/* Grand Early Printing-Press Masthead Banner with Left & Right Ear-Boxes */}
+                      <div className="py-3 sm:py-4 border-b-4 border-double border-[#1f160d] grid grid-cols-12 items-center gap-2">
+                        <div className="hidden sm:flex sm:col-span-2 flex-col justify-center border-2 border-[#1f160d] p-2 text-center font-serif bg-[#ebe0c9]/70">
+                          <span className="text-[9px] font-black uppercase tracking-widest border-b border-[#1f160d]/40 pb-0.5 mb-0.5">
+                            TELEGRAPH WIRE
+                          </span>
+                          <span className="text-[9px] italic leading-tight text-[#2b1e10]">
+                            Direct Copper Line &amp; Rotary Press
+                          </span>
+                        </div>
+
+                        <div className="col-span-12 sm:col-span-8 text-center px-2">
+                          <div className="font-serif text-2xl sm:text-4xl md:text-5xl font-black tracking-tight uppercase text-[#140e08] leading-none">
+                            {themeCfg.masthead}
+                          </div>
+                          <div className="mt-1.5 text-[10px] sm:text-xs font-serif italic tracking-widest text-[#3b2917]">
+                            “All The Verified Field Telemetry Fit To Print — Set In Lead Type &amp; Halftone Plate”
+                          </div>
+                        </div>
+
+                        <div className="hidden sm:flex sm:col-span-2 flex-col justify-center border-2 border-[#1f160d] p-2 text-center font-serif bg-[#ebe0c9]/70">
+                          <span className="text-[9px] font-black uppercase tracking-widest border-b border-[#1f160d]/40 pb-0.5 mb-0.5">
+                            DARKROOM PLATE
+                          </span>
+                          <span className="text-[9px] font-bold leading-tight text-[#2b1e10]">
+                            {filterActive ? themeCfg.filterLabel : "Original Color"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Edition Decorative Headers */}
+                  {isFieldnote && (
+                    <div className="border-b-2 border-[#2d5a40] pb-2 mb-4 flex flex-wrap items-center justify-between font-mono text-[11px] uppercase tracking-widest font-bold text-[#1f422d]">
+                      <span>🌿 {themeCfg.masthead}</span>
+                      <span>{themeCfg.earLeft}</span>
+                      <span>{themeCfg.earRight}</span>
+                    </div>
+                  )}
+
                   {isComic && (
                     <div className="flex items-center justify-between mb-4">
                       <span className="px-3 py-1 bg-yellow-400 text-black border-2 border-black font-black uppercase text-xs tracking-wider transform -rotate-2 shadow-[2px_2px_0px_0px_#000]">
@@ -4313,14 +4765,6 @@ export const FieldPressMaster: React.FC = () => {
                       <span className="px-3 py-1 bg-rose-600 text-white border-2 border-black font-black uppercase text-xs transform rotate-2 shadow-[2px_2px_0px_0px_#000]">
                         ACTION DISPATCH!
                       </span>
-                    </div>
-                  )}
-
-                  {isNewspaper && (
-                    <div className="border-t-2 border-b-2 border-black/80 dark:border-amber-700/60 mb-4 py-1.5 flex items-center justify-between font-serif text-[11px] uppercase tracking-[0.25em] font-bold text-[#442c16] dark:text-amber-300">
-                      <span>THE MIDWEST CORRIDOR GAZETTE</span>
-                      <span className="hidden sm:inline">EST. 1926 • VOL. XCIV NO. 28</span>
-                      <span>PRICE TWO CENTS</span>
                     </div>
                   )}
 
@@ -4344,7 +4788,7 @@ export const FieldPressMaster: React.FC = () => {
                     </div>
                   )}
 
-                  {isMagazine && (
+                  {themeCfg.id === "magazine" && (
                     <div className="border-b border-white/10 pb-2.5 mb-4 flex items-center justify-between text-[11px] font-sans tracking-widest text-purple-300 uppercase">
                       <span>FIELDPRESS MAGAZINE • AUTONOMOUS SYSTEMS REPORT</span>
                       <span className="text-zinc-400">ISSUE NO. 24</span>
@@ -4352,21 +4796,23 @@ export const FieldPressMaster: React.FC = () => {
                   )}
 
                   {/* Juxtaposition of Image and Editorial Headline & Body */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start mb-6">
-                    {/* Juxtaposed Smaller Image with Authentic Edition Filter */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start mb-6 relative z-10">
+                    {/* Juxtaposed Image with Interactive Edition Theme Filter Toggle */}
                     {d.imageUrl && (
                       <div className="md:col-span-5 lg:col-span-5 space-y-2">
                         <div
-                          className={`relative aspect-[4/3] max-h-[250px] sm:max-h-[270px] overflow-hidden ${
+                          className={`relative aspect-[4/3] max-h-[265px] sm:max-h-[285px] overflow-hidden ${
                             isComic
                               ? "border-4 border-black dark:border-yellow-400 rounded-2xl shadow-[5px_5px_0px_0px_#000] dark:shadow-[5px_5px_0px_0px_#facc15] bg-yellow-400"
-                              : isNewspaper
-                                ? "border-2 border-[#5c3e21] p-1 bg-amber-950/20 shadow-md rounded-none"
-                                : isArcade
-                                  ? "border-2 border-[#00ff66] shadow-[0_0_15px_rgba(0,255,102,0.4)] rounded-none bg-black"
-                                  : isTactical
-                                    ? "border border-cyan-500/60 shadow-[0_0_15px_rgba(6,182,212,0.2)] rounded-lg bg-zinc-950"
-                                    : "border border-purple-500/40 rounded-2xl shadow-lg bg-purple-950/20"
+                              : isOldTimey
+                                ? "border-2 border-[#1f160d] p-1.5 bg-[#e5d7bc] shadow-[3px_3px_0px_rgba(31,22,13,0.85)] rounded-none"
+                                : isFieldnote
+                                  ? "border-2 border-[#2d5a40] p-1 bg-[#e4ecdf] shadow-md rounded-lg"
+                                  : isArcade
+                                    ? "border-2 border-[#00ff66] shadow-[0_0_15px_rgba(0,255,102,0.4)] rounded-none bg-black"
+                                    : isTactical
+                                      ? "border border-cyan-500/60 shadow-[0_0_15px_rgba(6,182,212,0.2)] rounded-lg bg-zinc-950"
+                                      : "border border-purple-500/40 rounded-2xl shadow-lg bg-purple-950/20"
                           }`}
                         >
                           <img
@@ -4374,19 +4820,34 @@ export const FieldPressMaster: React.FC = () => {
                             alt={d.title}
                             onError={(e) => handleImgFallbackError(e, d)}
                             className={`w-full h-full object-cover transition duration-300 group-hover:scale-103 ${
-                              isComic
-                                ? "contrast-[1.4] saturate-[1.8] brightness-[1.05] filter"
-                                : isNewspaper
-                                  ? "grayscale contrast-[1.4] sepia-[0.55] brightness-[0.88] filter"
-                                  : isArcade
-                                    ? "grayscale contrast-[1.6] brightness-90 sepia hue-rotate-[85deg] saturate-[350%] filter"
-                                    : isTactical
-                                      ? "grayscale-[0.55] contrast-[1.25] brightness-[0.95] sepia-[0.2] hue-rotate-[160deg] saturate-[160%] filter"
-                                      : "contrast-[1.08] saturate-[1.2] brightness-100 filter"
+                              filterActive ? themeCfg.imgFilterClass : "filter-none"
                             }`}
                           />
+
+                          {/* Unique Edition Halftone / Sepia / Tin-Type / Kodachrome / FLIR / Ben-Day / CRT Overlay */}
+                          {renderThemePhotoOverlay(style, filterActive)}
+
+                          {/* Interactive Per-Edition Theme Photo Filter Toggle Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => toggleThemePhotoFilter(d.id, filterActive, e)}
+                            title={`Toggle between ${themeCfg.filterLabel} (${themeCfg.filterDesc}) and Original Color`}
+                            className={`absolute top-2 left-2 z-30 px-2.5 py-1 rounded text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg transition cursor-pointer ${
+                              filterActive
+                                ? isOldTimey
+                                  ? "bg-[#18120c] text-[#f5ecd9] border border-[#c8b396] hover:bg-[#2c2014]"
+                                  : "bg-amber-500 text-zinc-950 border border-amber-300 hover:bg-amber-400"
+                                : "bg-black/80 text-white border border-white/30 hover:bg-black"
+                            }`}
+                          >
+                            <span>{filterActive ? themeCfg.filterBadge : "📸 Original Color"}</span>
+                            <span className="text-[8px] opacity-80 px-1 py-0.2 rounded bg-black/25">
+                              {filterActive ? "ON" : "RAW"}
+                            </span>
+                          </button>
+
                           {(d.embedType === "youtube" || extractYoutubeVideoId(d.sourceUrl)) && (
-                            <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded bg-red-600/95 text-white text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg border border-red-400/50">
+                            <div className="absolute bottom-9 left-2 z-20 px-2 py-0.5 rounded bg-red-600/95 text-white text-[10px] font-black tracking-wider flex items-center gap-1 shadow-lg border border-red-400/50">
                               <span>▶</span>
                               <span>REAL FOOTAGE</span>
                             </div>
@@ -4398,37 +4859,23 @@ export const FieldPressMaster: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Edition-Specific Image Overlays */}
-                          {isArcade && (
-                            <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] opacity-75 z-10" />
-                          )}
-                          {isTactical && (
-                            <>
-                              <div className="absolute top-1.5 left-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┌</div>
-                              <div className="absolute top-1.5 right-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┐</div>
-                              <div className="absolute bottom-7 left-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">└</div>
-                              <div className="absolute bottom-7 right-1.5 text-[10px] font-mono text-cyan-400 font-bold leading-none pointer-events-none z-10">┘</div>
-                            </>
-                          )}
-                          {isNewspaper && (
-                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-amber-950/40 via-transparent to-amber-950/20 mix-blend-multiply border border-amber-900/30 z-10" />
-                          )}
-
                           {d.imageCaption && (
                             <div
                               className={`absolute bottom-0 inset-x-0 p-2 text-xs z-20 ${
                                 isComic
                                   ? "bg-yellow-400 text-black border-t-2 border-black font-black uppercase text-[10px]"
-                                  : isNewspaper
-                                    ? "bg-[#faf5eb]/90 dark:bg-[#1b1713]/90 text-[#442c16] dark:text-amber-200 font-serif italic border-t border-[#5c3e21]"
-                                    : isArcade
-                                      ? "bg-black/90 text-[#00ff66] font-['VT323'] text-sm border-t border-[#00ff66]"
-                                      : isTactical
-                                        ? "bg-zinc-950/85 text-cyan-300 font-mono text-[10px] border-t border-cyan-500/40"
-                                        : "bg-black/60 backdrop-blur-xs text-zinc-200 font-sans text-[10px]"
+                                  : isOldTimey
+                                    ? "bg-[#efe4ce]/95 text-[#18120c] font-serif italic border-t border-[#1f160d] text-[11px]"
+                                    : isFieldnote
+                                      ? "bg-[#eef2eb]/95 text-[#18281e] font-mono text-[10px] border-t border-[#2d5a40]"
+                                      : isArcade
+                                        ? "bg-black/90 text-[#00ff66] font-['VT323'] text-sm border-t border-[#00ff66]"
+                                        : isTactical
+                                          ? "bg-zinc-950/85 text-cyan-300 font-mono text-[10px] border-t border-cyan-500/40"
+                                          : "bg-black/60 backdrop-blur-xs text-zinc-200 font-sans text-[10px]"
                               }`}
                             >
-                              <span>{d.imageCaption}</span>
+                              <span>{isOldTimey ? `FIG. 1 — ${d.imageCaption}` : d.imageCaption}</span>
                             </div>
                           )}
                         </div>
@@ -4442,31 +4889,33 @@ export const FieldPressMaster: React.FC = () => {
                           className={`font-bold text-[10px] uppercase px-2.5 py-0.5 rounded ${
                             isComic
                               ? "bg-yellow-400 text-black border-2 border-black font-black shadow-[2px_2px_0px_0px_#000]"
-                              : isNewspaper
-                                ? "bg-[#f2e8d3] text-[#442c18] dark:bg-zinc-800 dark:text-amber-200 border border-[#5c3e21] font-serif"
-                                : isArcade
-                                  ? "bg-black text-[#00ff66] border border-[#00ff66] font-['VT323'] text-sm tracking-wider"
-                                  : isTactical
-                                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-mono"
-                                    : "bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full font-sans"
+                              : isOldTimey
+                                ? "bg-[#18120c] text-[#f3ead8] border border-[#18120c] font-serif rounded-none tracking-widest"
+                                : isFieldnote
+                                  ? "bg-[#2d5a40] text-[#eef2eb] font-mono"
+                                  : isArcade
+                                    ? "bg-black text-[#00ff66] border border-[#00ff66] font-['VT323'] text-sm tracking-wider"
+                                    : isTactical
+                                      ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-mono"
+                                      : "bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full font-sans"
                           }`}
                         >
                           {d.category}
                         </span>
-                        <span className="text-zinc-400">•</span>
-                        <span className="font-bold flex items-center gap-1 text-zinc-400">
-                          <MapPin className="h-3 w-3 text-amber-500" /> {d.location}
+                        <span className={isOldTimey ? "text-[#5c4328]" : "text-zinc-400"}>•</span>
+                        <span className={`font-bold flex items-center gap-1 ${isOldTimey ? "text-[#2b1d0e] font-serif uppercase tracking-wider" : isFieldnote ? "text-[#1f422d]" : "text-zinc-400"}`}>
+                          <MapPin className={`h-3 w-3 ${isOldTimey ? "text-[#7a2016]" : "text-amber-500"}`} /> {d.location}
                         </span>
-                        <span className="text-zinc-400">•</span>
-                        <span className="text-zinc-400">{d.timestamp}</span>
+                        <span className={isOldTimey ? "text-[#5c4328]" : "text-zinc-400"}>•</span>
+                        <span className={isOldTimey ? "text-[#44301b] font-serif italic" : "text-zinc-400"}>{d.timestamp}</span>
                         {wasDispatchEdited(d) && (
                           <>
-                            <span className="text-zinc-400">•</span>
+                            <span className={isOldTimey ? "text-[#5c4328]" : "text-zinc-400"}>•</span>
                             <span className="italic text-zinc-500" title="This dispatch was edited after it was first published">(edited)</span>
                           </>
                         )}
-                        <span className="text-zinc-400">•</span>
-                        <span className="font-mono text-[10px] text-zinc-500 tracking-wide">{d.id}</span>
+                        <span className={isOldTimey ? "text-[#5c4328]" : "text-zinc-400"}>•</span>
+                        <span className={`font-mono text-[10px] tracking-wide ${isOldTimey ? "text-[#5c4328]" : "text-zinc-500"}`}>{d.id}</span>
                       </div>
 
                       {/* Headline with Heavy Authentic Edition Character */}
@@ -4475,18 +4924,27 @@ export const FieldPressMaster: React.FC = () => {
                         className={`cursor-pointer transition ${
                           isComic
                             ? "font-['Bangers'] text-4xl sm:text-6xl font-black uppercase tracking-wider text-black dark:text-yellow-400 drop-shadow-[2px_2px_0px_rgba(255,255,255,1)] dark:drop-shadow-[3px_3px_0px_rgba(0,0,0,1)] leading-none my-2 hover:text-rose-600"
-                            : isNewspaper
-                              ? "font-serif text-3xl sm:text-5xl font-black tracking-tight leading-[1.05] text-[#1c130b] dark:text-[#faf6ee] my-3 hover:text-amber-700"
-                              : isArcade
-                                ? "font-['VT323'] text-4xl sm:text-6xl text-[#55ff99] tracking-wider drop-shadow-[0_0_10px_rgba(0,255,102,0.7)] leading-none my-2 hover:text-white"
-                                : isTactical
-                                  ? "font-mono text-2xl sm:text-4xl font-black tracking-tight text-cyan-200 uppercase leading-tight my-2 hover:text-cyan-400"
-                                  : "font-['Space_Grotesk'] text-3xl sm:text-5xl font-black tracking-tight leading-tight bg-gradient-to-r from-white via-zinc-100 to-purple-200 bg-clip-text text-transparent my-3 hover:opacity-80"
+                            : isOldTimey
+                              ? "font-serif text-3xl sm:text-5xl font-black tracking-tight uppercase leading-[1.02] text-[#140e08] my-2 border-b-2 border-[#1f160d] pb-2.5 hover:text-[#6e1c14]"
+                              : isFieldnote
+                                ? "font-serif text-3xl sm:text-4xl font-black tracking-tight text-[#14241b] my-2 hover:text-[#2d5a40]"
+                                : isArcade
+                                  ? "font-['VT323'] text-4xl sm:text-6xl text-[#55ff99] tracking-wider drop-shadow-[0_0_10px_rgba(0,255,102,0.7)] leading-none my-2 hover:text-white"
+                                  : isTactical
+                                    ? "font-mono text-2xl sm:text-4xl font-black tracking-tight text-cyan-200 uppercase leading-tight my-2 hover:text-cyan-400"
+                                    : "font-['Space_Grotesk'] text-3xl sm:text-5xl font-black tracking-tight leading-tight bg-gradient-to-r from-white via-zinc-100 to-purple-200 bg-clip-text text-transparent my-3 hover:opacity-80"
                         }`}
                         title="Click to read full dispatch"
                       >
                         {d.title}
                       </h2>
+
+                      {/* Sub-deck Deckhead for Old-Timey Newspapers */}
+                      {isOldTimey && (
+                        <div className="font-serif text-xs sm:text-sm font-bold italic text-[#2c2014] border-b border-[#1f160d]/40 pb-2">
+                          SPECIAL DISPATCH TO {themeCfg.masthead} — Verified Telemetry &amp; Eye-Witness Account Filed From {d.location}.
+                        </div>
+                      )}
 
                       {/* Body Copy Formatted Authentically to Edition Medium */}
                       {isComic ? (
@@ -4498,13 +4956,23 @@ export const FieldPressMaster: React.FC = () => {
                           <div className="absolute -bottom-3 left-8 w-0 h-0 border-l-[10px] border-l-transparent border-t-[12px] border-t-black dark:border-t-yellow-400 border-r-[10px] border-r-transparent" />
                           <div className="absolute -bottom-2 left-8 w-0 h-0 border-l-[8px] border-l-transparent border-t-[10px] border-t-white dark:border-t-zinc-800 border-r-[8px] border-r-transparent" />
                         </div>
-                      ) : isNewspaper ? (
-                        /* 1920s Broadsheet with Drop Cap */
-                        <div className="font-serif text-xs sm:text-sm leading-relaxed text-[#2c2014] dark:text-[#ded2bf] text-justify sm:columns-2 gap-8 my-3">
-                          <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#5c3e21] dark:text-amber-400 border border-[#5c3e21]/40 p-1.5 bg-amber-100/60 dark:bg-zinc-800">
+                      ) : isOldTimey ? (
+                        /* Early 1900s Printing-Press Multi-Column Newsprint with Dateline & Engraved Drop Cap */
+                        <div className="font-serif text-xs sm:text-[13.5px] leading-[1.65] text-[#18120c] text-justify sm:columns-2 gap-7 sm:[column-rule:1px_solid_rgba(31,22,13,0.35)] my-3">
+                          <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#18120c] border-2 border-[#18120c] px-2 py-1 bg-[#e5d7bc] shadow-[2px_2px_0px_#18120c]">
                             {d.content[0]}
                           </span>
+                          <span className="font-black uppercase tracking-widest text-[11px] text-[#2b1d0e]">
+                            {d.location.toUpperCase()} ({themeCfg.datelinePrefix}) —{" "}
+                          </span>
                           <span>{d.content.slice(1)}</span>
+                        </div>
+                      ) : isFieldnote ? (
+                        <div className="font-serif text-xs sm:text-sm leading-relaxed text-[#18281e] border-l-4 border-[#2d5a40] pl-4 py-1 my-2 bg-[#e1eadc]/70">
+                          <span className="font-mono font-bold text-[11px] uppercase text-[#1f422d] block mb-1">
+                            {themeCfg.datelinePrefix} • {d.location}
+                          </span>
+                          <p>{d.content}</p>
                         </div>
                       ) : isArcade ? (
                         /* 8-Bit Arcade Terminal with Cursor */
@@ -4540,9 +5008,9 @@ export const FieldPressMaster: React.FC = () => {
                           </div>
                         ) : null;
                       })()}
-                      <div className="pt-2 flex items-center justify-between text-xs font-mono text-zinc-400">
+                      <div className={`pt-2 flex items-center justify-between text-xs font-mono ${isOldTimey ? "text-[#3b2917] border-t border-[#1f160d]/30" : isFieldnote ? "text-[#1f422d]" : "text-zinc-400"}`}>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-zinc-300">Byline:</span>
+                          <span className="font-bold">Byline:</span>
                           <span>{d.author} (@{d.callsign})</span>
                           <span>•</span>
                           <span>{d.bureau}</span>
@@ -4552,10 +5020,33 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
 
                   {/* Actions Toolbar */}
-                  <div className="pt-4 border-t border-zinc-700/40 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-zinc-400">Edition Model:</span>
-                      <span className="font-bold text-amber-500 uppercase">{d.editionStyle || "newspaper"}</span>
+                  <div className={`pt-4 border-t flex flex-wrap items-center justify-between gap-3 text-xs font-mono relative z-10 ${
+                    isOldTimey ? "border-[#1f160d]" : "border-zinc-700/40"
+                  }`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-[11px] ${isOldTimey ? "text-[#3b2917] font-bold" : "text-zinc-400"}`}>Edition Model:</span>
+                      <span className={`font-bold uppercase px-2 py-0.5 rounded ${
+                        isOldTimey ? "bg-[#18120c] text-[#f3ead8]" : "text-amber-500 bg-amber-500/10"
+                      }`}>
+                        {themeCfg.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => toggleThemePhotoFilter(d.id, filterActive, e)}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+                          filterActive
+                            ? isOldTimey
+                              ? "bg-[#2c2014] text-[#f3ead8] border-[#18120c]"
+                              : "bg-amber-500/20 text-amber-400 border-amber-500/50"
+                            : isOldTimey
+                              ? "bg-white/70 text-[#18120c] border-[#18120c]"
+                              : "bg-zinc-800 text-zinc-300 border-zinc-700"
+                        }`}
+                        title={`Switch photo rendering between ${themeCfg.filterLabel} and Original Color`}
+                      >
+                        <span>{filterActive ? themeCfg.filterBadge : "📸 Original Color"}</span>
+                        <span className="text-[9px] opacity-75">({filterActive ? "Filter ON" : "Filter OFF"})</span>
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -4564,7 +5055,9 @@ export const FieldPressMaster: React.FC = () => {
                           e.stopPropagation();
                           toggleBookmark(d.id);
                         }}
-                        className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 transition flex items-center gap-1 cursor-pointer"
+                        className={`px-3 py-1.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                          isOldTimey ? "border-[#1f160d] bg-[#e5d7bc] text-[#18120c] hover:bg-[#d8c6a4]" : "border-zinc-700 hover:bg-zinc-800"
+                        }`}
                       >
                         <Bookmark className={`h-3.5 w-3.5 ${bookmarks.includes(d.id) ? "fill-amber-500 text-amber-500" : ""}`} />
                         <span>{bookmarks.includes(d.id) ? "Saved" : "Save"}</span>
@@ -4618,15 +5111,21 @@ export const FieldPressMaster: React.FC = () => {
                           e.stopPropagation();
                           handleShareStory(d);
                         }}
-                        className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 transition flex items-center gap-1 cursor-pointer"
+                        className={`px-3 py-1.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                          isOldTimey ? "border-[#1f160d] bg-[#e5d7bc] text-[#18120c] hover:bg-[#d8c6a4]" : "border-zinc-700 hover:bg-zinc-800"
+                        }`}
                       >
-                        <Share2 className="h-3.5 w-3.5 text-amber-400" />
+                        <Share2 className="h-3.5 w-3.5 text-amber-500" />
                         <span>Share</span>
                       </button>
 
                       <button
                         onClick={() => setSelectedStory(d)}
-                        className="px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1 cursor-pointer shadow-xs"
+                        className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer shadow-xs ${
+                          isOldTimey
+                            ? "bg-[#18120c] text-[#f3ead8] hover:bg-[#2c2014]"
+                            : "bg-amber-500 text-zinc-950 hover:bg-amber-400"
+                        }`}
                       >
                         <Eye className="h-3.5 w-3.5" />
                         <span>Read Full Page</span>
@@ -4635,36 +5134,36 @@ export const FieldPressMaster: React.FC = () => {
                   </div>
 
                   {/* Field Commentary Under Feed */}
-                  <div className="mt-5 pt-4 border-t border-zinc-700/40 space-y-3" onClick={(e) => e.stopPropagation()}>
+                  <div className={`mt-5 pt-4 border-t space-y-3 relative z-10 ${isOldTimey ? "border-[#1f160d]" : "border-zinc-700/40"}`} onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                        <MessageSquare className="h-3.5 w-3.5" /> Field Notes & Commentary ({getCommentsForDispatch(d.id).length})
+                      <span className={`font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 ${isOldTimey ? "text-[#18120c]" : "text-amber-500"}`}>
+                        <MessageSquare className="h-3.5 w-3.5" /> Field Notes &amp; Commentary ({getCommentsForDispatch(d.id).length})
                       </span>
-                      <span className="text-[11px] text-zinc-400">Live dispatches under feed</span>
+                      <span className={`text-[11px] ${isOldTimey ? "text-[#44301b]" : "text-zinc-400"}`}>Live dispatches under feed</span>
                     </div>
 
                     {getCommentsForDispatch(d.id).length > 0 ? (
                       <div className="space-y-2">
                         {getCommentsForDispatch(d.id).map((c) => (
-                          <div key={c.id} className={`p-2.5 rounded-lg border space-y-1 ${subCardThemeClass}`}>
+                          <div key={c.id} className={`p-2.5 rounded-lg border space-y-1 ${isOldTimey ? "bg-[#e7dac1] border-[#1f160d]/40 text-[#18120c]" : subCardThemeClass}`}>
                             <div className="flex items-center justify-between text-[11px]">
                               <div
                                 className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition"
                                 onClick={() => openCorrespondentFromComment(c.author, c.callsign)}
                               >
-                                <span className="font-bold text-zinc-200">{c.author}</span>
-                                <span className="text-amber-500 font-semibold">@{c.callsign}</span>
+                                <span className="font-bold">{c.author}</span>
+                                <span className="text-amber-600 font-semibold">@{c.callsign}</span>
                               </div>
-                              <span className={subTextThemeClass}>{c.timestamp}</span>
+                              <span className="opacity-75">{c.timestamp}</span>
                             </div>
-                            <p className={`text-xs leading-relaxed ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+                            <p className="text-xs leading-relaxed">
                               {c.text}
                             </p>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className={`text-xs italic ${subTextThemeClass}`}>No commentary filed yet. Dispatch a note below.</p>
+                      <p className="text-xs italic opacity-75">No commentary filed yet. Dispatch a note below.</p>
                     )}
 
                     {/* Inline Note Dispatch Form */}
@@ -4683,105 +5182,119 @@ export const FieldPressMaster: React.FC = () => {
                         value={feedCommentInputs[d.id] || ""}
                         onChange={(e) => setFeedCommentInputs({ ...feedCommentInputs, [d.id]: e.target.value })}
                         placeholder={`Dispatch note as @${pressPass.callsign || "ViBiR"}...`}
-                        className={`flex-1 rounded-lg px-3 py-1.5 text-xs focus:outline-none transition ${inputThemeClass}`}
+                        className={`flex-1 rounded-lg px-3 py-1.5 text-xs focus:outline-none transition ${
+                          isOldTimey ? "bg-[#faf5ea] border border-[#1f160d] text-[#18120c]" : inputThemeClass
+                        }`}
                       />
                       <button
                         type="submit"
                         disabled={!(feedCommentInputs[d.id] || "").trim()}
-                        className="px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap"
+                        className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shadow-xs whitespace-nowrap ${
+                          isOldTimey ? "bg-[#18120c] text-[#f3ead8] hover:bg-[#2c2014]" : "bg-amber-500 text-zinc-950 hover:bg-amber-400"
+                        }`}
                       >
                         <Send className="h-3 w-3" />
                         <span>Dispatch Note</span>
                       </button>
                     </form>
-
-                    {/* Quick Emoji Bar */}
-                    <div className="flex flex-wrap items-center gap-1 pt-1.5 text-xs">
-                      <span className="text-[10px] text-zinc-400 font-mono mr-1">Insert Emoji:</span>
-                      {["📰", "⚡", "🔍", "💬", "🤝", "🔥", "🔻", "📡", "👍", "❤️"].map((em) => (
-                        <button
-                          key={em}
-                          type="button"
-                          onClick={() => {
-                            const prev = feedCommentInputs[d.id] || "";
-                            setFeedCommentInputs({ ...feedCommentInputs, [d.id]: prev + " " + em });
-                          }}
-                          className="px-1.5 py-0.5 rounded bg-zinc-800/60 hover:bg-zinc-700 text-xs border border-zinc-700/50 transition cursor-pointer select-none"
-                        >
-                          {em}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </article>
               );
             })()}
 
-            {/* Grid of Secondary Dispatches with Authentic Array of Edition Variations */}
+            {/* Grid of Secondary Dispatches with All 8 Edition Themes & Theme Photo Filter Toggles */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {dispatches.slice(1).map((disp, idx) => {
-                const fallbackStyles: Array<"tactical" | "magazine" | "comic" | "arcade"> = ["tactical", "magazine", "comic", "arcade"];
-                const sStyle = disp.editionStyle || fallbackStyles[idx % 4];
-                const isSecComic = sStyle === "comic";
-                const isSecNewspaper = sStyle === "newspaper";
-                const isSecArcade = sStyle === "arcade";
-                const isSecTactical = sStyle === "tactical";
+                const fallbackStyles: Array<PressyoEdition> = ["newspaper", "almanac", "curio", "fieldnote", "tactical", "comic", "arcade", "magazine"];
+                const sStyle = (disp.editionStyle || fallbackStyles[idx % fallbackStyles.length]) as PressyoEdition;
+                const sTheme = getEditionThemeConfig(sStyle);
+                const sFilterActive = isThemePhotoFilterActive(disp);
+                const isSecComic = sTheme.id === "comic";
+                const isSecOldTimey = sTheme.isOldTimey;
+                const isSecFieldnote = sTheme.id === "fieldnote";
+                const isSecArcade = sTheme.id === "arcade";
+                const isSecTactical = sTheme.id === "tactical";
 
                 return (
                   <article
                     key={disp.id}
                     onClick={() => setSelectedStory(disp)}
-                    className={`p-5 rounded-2xl border flex flex-col justify-between transition cursor-pointer relative overflow-hidden ${
+                    className={`p-5 border flex flex-col justify-between transition cursor-pointer relative overflow-hidden ${
                       isSecComic
-                        ? "bg-[#fffdf0] dark:bg-[#18181b] border-3 border-black dark:border-yellow-400 shadow-[5px_5px_0px_0px_#000] dark:shadow-[5px_5px_0px_0px_#facc15]"
-                        : isSecNewspaper
-                          ? "bg-[#faf5eb] dark:bg-[#1b1713] text-[#2c2014] dark:text-[#f5ede0] border-2 border-double border-[#5c3e21] dark:border-[#8f6842] shadow-md rounded-none"
-                          : isSecArcade
-                            ? "bg-black border-2 border-[#00ff66] shadow-[0_0_15px_rgba(0,255,102,0.25)] text-[#00ff66] font-['VT323'] rounded-none"
-                            : isSecTactical
-                              ? "bg-[#030a12] border border-cyan-500/70 shadow-[0_0_15px_rgba(6,182,212,0.15)] text-cyan-300 font-mono"
-                              : "bg-gradient-to-br from-zinc-950 to-purple-950/30 border border-purple-500/30 shadow-md text-zinc-100"
+                        ? "rounded-2xl bg-[#fffdf0] dark:bg-[#18181b] border-3 border-black dark:border-yellow-400 shadow-[5px_5px_0px_0px_#000] dark:shadow-[5px_5px_0px_0px_#facc15]"
+                        : isSecOldTimey
+                          ? `rounded-none ${sTheme.paperBg} ${sTheme.paperText} border-2 border-double ${sTheme.paperBorder} shadow-[4px_4px_0px_rgba(24,18,12,0.85)]`
+                          : isSecFieldnote
+                            ? `rounded-xl ${sTheme.paperBg} ${sTheme.paperText} border-2 ${sTheme.paperBorder} shadow-md`
+                            : isSecArcade
+                              ? "rounded-none bg-black border-2 border-[#00ff66] shadow-[0_0_15px_rgba(0,255,102,0.25)] text-[#00ff66] font-['VT323']"
+                              : isSecTactical
+                                ? "rounded-2xl bg-[#030a12] border border-cyan-500/70 shadow-[0_0_15px_rgba(6,182,212,0.15)] text-cyan-300 font-mono"
+                                : "rounded-2xl bg-gradient-to-br from-zinc-950 to-purple-950/30 border border-purple-500/30 shadow-md text-zinc-100"
                     }`}
                   >
                     <div>
-                      {/* Secondary Thumbnail with Edition Image Aesthetic */}
+                      {/* Mini Printing-Press Masthead Strip for Old-Timey Secondary Cards */}
+                      {isSecOldTimey && (
+                        <div className="mb-2.5 pb-1.5 border-b-2 border-double border-[#1f160d] text-center font-serif">
+                          <div className="text-[11px] font-black uppercase tracking-widest text-[#140e08]">
+                            {sTheme.masthead}
+                          </div>
+                          <div className="text-[8px] uppercase tracking-[0.18em] text-[#3b2917] flex items-center justify-between border-t border-[#1f160d]/30 pt-0.5 mt-0.5">
+                            <span>{sTheme.datelinePrefix}</span>
+                            <span>{sTheme.earRight}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Secondary Thumbnail with Interactive Theme Filter Toggle */}
                       {disp.imageUrl && (
                         <div
                           onClick={() => setSelectedStory(disp)}
-                          className={`mb-3 rounded-lg overflow-hidden aspect-[16/10] max-h-[140px] bg-black cursor-pointer group relative ${
+                          className={`mb-3 overflow-hidden aspect-[16/10] max-h-[155px] bg-black cursor-pointer group relative ${
                             isSecComic
-                              ? "border-2 border-black dark:border-yellow-400 shadow-[3px_3px_0px_0px_#000]"
-                              : isSecNewspaper
-                                ? "border border-[#5c3e21]"
-                                : isSecArcade
-                                  ? "border border-[#00ff66]"
-                                  : isSecTactical
-                                    ? "border border-cyan-500/50"
-                                    : "border border-purple-500/30"
+                              ? "rounded-lg border-2 border-black dark:border-yellow-400 shadow-[3px_3px_0px_0px_#000]"
+                              : isSecOldTimey
+                                ? "rounded-none border-2 border-[#1f160d] p-1 bg-[#e5d7bc]"
+                                : isSecFieldnote
+                                  ? "rounded-lg border border-[#2d5a40]"
+                                  : isSecArcade
+                                    ? "rounded-none border border-[#00ff66]"
+                                    : isSecTactical
+                                      ? "rounded-lg border border-cyan-500/50"
+                                      : "rounded-lg border border-purple-500/30"
                           }`}
                         >
                           <img
                             src={disp.imageUrl}
                             alt={disp.title}
+                            onError={(e) => handleImgFallbackError(e, disp)}
                             className={`w-full h-full object-cover transition group-hover:scale-105 ${
-                              isSecComic
-                                ? "contrast-[1.4] saturate-[1.7] brightness-[1.03] filter"
-                                : isSecNewspaper
-                                  ? "grayscale contrast-[1.4] sepia-[0.55] brightness-[0.88] filter"
-                                  : isSecArcade
-                                    ? "grayscale contrast-[1.6] brightness-90 sepia hue-rotate-[85deg] saturate-[350%] filter"
-                                    : isSecTactical
-                                      ? "grayscale-[0.55] contrast-[1.25] brightness-[0.95] sepia-[0.2] hue-rotate-[160deg] saturate-[160%] filter"
-                                      : "contrast-[1.08] saturate-[1.2] filter"
+                              sFilterActive ? sTheme.imgFilterClass : "filter-none"
                             }`}
                           />
-                          {isSecArcade && (
-                            <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] opacity-75 z-10" />
-                          )}
+                          {renderThemePhotoOverlay(sStyle, sFilterActive)}
+
+                          {/* Interactive Theme Photo Filter Toggle Badge */}
+                          <button
+                            type="button"
+                            onClick={(e) => toggleThemePhotoFilter(disp.id, sFilterActive, e)}
+                            title={`Switch between ${sTheme.filterLabel} and Original Color`}
+                            className={`absolute top-1.5 left-1.5 z-30 px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase tracking-wide flex items-center gap-1 shadow transition cursor-pointer ${
+                              sFilterActive
+                                ? isSecOldTimey
+                                  ? "bg-[#18120c] text-[#f3ead8] border border-[#c8b396]"
+                                  : "bg-amber-500 text-zinc-950 border border-amber-300"
+                                : "bg-black/80 text-white border border-white/30"
+                            }`}
+                          >
+                            <span>{sFilterActive ? sTheme.filterBadge : "📸 Color"}</span>
+                          </button>
+
                           {getGalleryForDispatch(disp).length > 1 && (
-                            <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-black/85 text-amber-400 border border-amber-500/40 text-[9px] font-black tracking-wider flex items-center gap-1 shadow">
+                            <div className="absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded bg-black/85 text-amber-400 border border-amber-500/40 text-[9px] font-black tracking-wider flex items-center gap-1 shadow">
                               <span>📸</span>
-                              <span>{getGalleryForDispatch(disp).length} PHOTOS</span>
+                              <span>{getGalleryForDispatch(disp).length}</span>
                             </div>
                           )}
                         </div>
@@ -4798,7 +5311,9 @@ export const FieldPressMaster: React.FC = () => {
                                 setActiveReaderImageIdx(fIdx);
                                 setSelectedStory(disp);
                               }}
-                              className="h-9 w-14 rounded object-cover border border-zinc-700 hover:border-amber-400 transition flex-shrink-0"
+                              className={`h-9 w-14 rounded object-cover border border-zinc-700 hover:border-amber-400 transition flex-shrink-0 ${
+                                sFilterActive ? sTheme.imgFilterClass : ""
+                              }`}
                               title={`View Frame #${fIdx + 1}: ${frame.caption || ""}`}
                             />
                           ))}
@@ -4821,9 +5336,15 @@ export const FieldPressMaster: React.FC = () => {
                         ) : null;
                       })()}
                       <div className="flex items-center justify-between text-[11px] font-mono mb-2">
-                        <span className="font-bold text-amber-500 uppercase">{disp.category}</span>
-                        <span className="text-[10px] uppercase opacity-75 px-1.5 py-0.5 rounded border border-zinc-700/50">
-                          {sStyle}
+                        <span className={`font-bold uppercase ${isSecOldTimey ? "text-[#18120c] font-serif" : isSecFieldnote ? "text-[#1f422d]" : "text-amber-500"}`}>
+                          {disp.category}
+                        </span>
+                        <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded border ${
+                          isSecOldTimey
+                            ? "bg-[#18120c] text-[#f3ead8] border-[#18120c] font-serif rounded-none"
+                            : "opacity-80 border-zinc-700/50"
+                        }`}>
+                          {sTheme.name}
                         </span>
                       </div>
 
@@ -4832,21 +5353,25 @@ export const FieldPressMaster: React.FC = () => {
                         className={`text-base sm:text-lg font-bold leading-snug mb-2 hover:opacity-80 transition line-clamp-2 cursor-pointer ${
                           isSecComic
                             ? "font-['Bangers'] text-xl tracking-wide uppercase text-black dark:text-yellow-400"
-                            : isSecNewspaper
-                              ? "font-serif text-lg font-black text-[#1c130b] dark:text-[#faf6ee]"
-                              : isSecArcade
-                                ? "font-['VT323'] text-2xl tracking-wider text-[#55ff99]"
-                                : isSecTactical
-                                  ? "font-mono text-base font-black text-cyan-200 uppercase"
-                                  : "font-['Space_Grotesk'] text-lg font-extrabold text-zinc-100"
+                            : isSecOldTimey
+                              ? "font-serif text-lg font-black uppercase tracking-tight text-[#140e08] border-b border-[#1f160d]/40 pb-1"
+                              : isSecFieldnote
+                                ? "font-serif text-lg font-bold text-[#14241b]"
+                                : isSecArcade
+                                  ? "font-['VT323'] text-2xl tracking-wider text-[#55ff99]"
+                                  : isSecTactical
+                                    ? "font-mono text-base font-black text-cyan-200 uppercase"
+                                    : "font-['Space_Grotesk'] text-lg font-extrabold text-zinc-100"
                         }`}
                         title="Click to read full dispatch"
                       >
                         {disp.title}
                       </h3>
 
-                      <p className="text-xs leading-relaxed mb-4 line-clamp-3 opacity-90">
-                        {disp.content}
+                      <p className={`text-xs leading-relaxed mb-4 line-clamp-3 ${
+                        isSecOldTimey ? "font-serif text-[#261b10] text-justify" : "opacity-90"
+                      }`}>
+                        {isSecOldTimey ? `${disp.location.toUpperCase()} — ${disp.content}` : disp.content}
                       </p>
                     </div>
 
@@ -5864,20 +6389,20 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* Edition Style Model Selector */}
-              <div>
-                <label className={`block font-bold mb-1.5 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Edition Style Model (8 Pressie Archetypes)
+              <div className="space-y-2.5">
+                <label className={`block font-bold mb-1 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
+                  Edition Style Model (8 Pressie Archetypes + Signature Photo Filters)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono">
                   {[
-                    { id: "tactical", label: "Tactical", icon: "🛰️", desc: "Monospace Wire" },
-                    { id: "newspaper", label: "Broadsheet", icon: "📰", desc: "Antique Serif" },
-                    { id: "fieldnote", label: "Field Note", icon: "🌿", desc: "Ecology Log" },
-                    { id: "almanac", label: "Almanac", icon: "🧭", desc: "Heritage Guide" },
-                    { id: "curio", label: "Curio Zine", icon: "🎪", desc: "Americana Oddity" },
-                    { id: "comic", label: "Comic Strip", icon: "💥", desc: "Graphic Novel" },
-                    { id: "arcade", label: "8-Bit Arcade", icon: "🕹️", desc: "Pixel CRT" },
-                    { id: "magazine", label: "Modern Sleek", icon: "✨", desc: "Editorial Gloss" },
+                    { id: "tactical", label: "Tactical", icon: "🛰️", desc: "FLIR Night-Vision" },
+                    { id: "newspaper", label: "Broadsheet", icon: "📰", desc: "1910 Halftone B&W" },
+                    { id: "fieldnote", label: "Field Note", icon: "🌿", desc: "Kodachrome 64 Film" },
+                    { id: "almanac", label: "Almanac", icon: "🧭", desc: "1880s Sepia Plate" },
+                    { id: "curio", label: "Curio Zine", icon: "🎪", desc: "Tin-Type Lithograph" },
+                    { id: "comic", label: "Comic Strip", icon: "💥", desc: "Pulp Ben-Day Ink" },
+                    { id: "arcade", label: "8-Bit Arcade", icon: "🕹️", desc: "Green CRT Matrix" },
+                    { id: "magazine", label: "Modern Sleek", icon: "✨", desc: "Cinema Bleach-Bypass" },
                   ].map((style) => (
                     <button
                       key={style.id}
@@ -5895,6 +6420,54 @@ export const FieldPressMaster: React.FC = () => {
                     </button>
                   ))}
                 </div>
+
+                {/* Per-Edition Theme Photo Filter Toggle Bar */}
+                {(() => {
+                  const activeBuilderTheme = getEditionThemeConfig(newEditionStyle);
+                  return (
+                    <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2.5 font-mono text-xs transition ${
+                      builderUseThemePhotoFilter
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-200"
+                        : "bg-zinc-900/60 border-zinc-700/80 text-zinc-300"
+                    }`}>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span className="text-amber-400">{activeBuilderTheme.filterBadge}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 border border-white/10 uppercase">
+                            {builderUseThemePhotoFilter ? "Theme Filter Enabled" : "Original Color"}
+                          </span>
+                        </div>
+                        <p className={`text-[10px] ${subTextThemeClass}`}>
+                          {activeBuilderTheme.filterDesc}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setBuilderUseThemePhotoFilter(true)}
+                          className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] border transition cursor-pointer ${
+                            builderUseThemePhotoFilter
+                              ? "bg-amber-500 text-zinc-950 border-amber-400 shadow"
+                              : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
+                          }`}
+                        >
+                          {activeBuilderTheme.filterBadge} ON
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBuilderUseThemePhotoFilter(false)}
+                          className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] border transition cursor-pointer ${
+                            !builderUseThemePhotoFilter
+                              ? "bg-emerald-500 text-zinc-950 border-emerald-400 shadow"
+                              : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
+                          }`}
+                        >
+                          📸 Original Color
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Syndication & Forking Rights Selector */}
@@ -5997,7 +6570,19 @@ export const FieldPressMaster: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setBuilderUseThemePhotoFilter(!builderUseThemePhotoFilter)}
+                      className={`px-2 py-1 rounded text-[10px] font-mono font-bold border transition cursor-pointer ${
+                        builderUseThemePhotoFilter
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                          : "bg-zinc-800 text-zinc-300 border-zinc-700"
+                      }`}
+                      title="Toggle between Edition Theme Photo Filter and Original Color"
+                    >
+                      {builderUseThemePhotoFilter ? `${getEditionThemeConfig(newEditionStyle).filterBadge}: ON` : "📸 Original Color"}
+                    </button>
                     <input
                       type="file"
                       ref={imageFileInputRef}
@@ -6053,6 +6638,7 @@ export const FieldPressMaster: React.FC = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {evidenceGallery.map((item, idx) => {
                         const isActive = item.url === newImageUrl;
+                        const builderThemeCfg = getEditionThemeConfig(newEditionStyle);
                         return (
                           <div
                             key={item.id || idx}
@@ -6065,21 +6651,28 @@ export const FieldPressMaster: React.FC = () => {
                                 setNewImageUrl(item.url);
                                 if (item.caption) setNewImageCaption(item.caption);
                               }}
-                              className="relative aspect-video w-full cursor-pointer bg-zinc-900"
+                              className="relative aspect-video w-full cursor-pointer bg-zinc-900 overflow-hidden"
                               title="Click to set as active cover visual"
                             >
-                              <img src={item.url} alt={item.caption || "Evidence visual"} className="w-full h-full object-cover" />
+                              <img
+                                src={item.url}
+                                alt={item.caption || "Evidence visual"}
+                                className={`w-full h-full object-cover transition ${
+                                  builderUseThemePhotoFilter ? builderThemeCfg.imgFilterClass : "filter-none"
+                                }`}
+                              />
+                              {renderThemePhotoOverlay(newEditionStyle, builderUseThemePhotoFilter)}
                               {isActive ? (
-                                <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[9px] font-black flex items-center gap-1 shadow-md ring-1 ring-amber-400">
+                                <div className="absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[9px] font-black flex items-center gap-1 shadow-md ring-1 ring-amber-400">
                                   <Check className="h-3 w-3 stroke-[3]" />
                                   <span>Headline Image</span>
                                 </div>
                               ) : (
-                                <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-zinc-200 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition">
+                                <div className="absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded bg-black/80 text-zinc-200 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition">
                                   Select for Headline
                                 </div>
                               )}
-                              <div className="absolute top-1 right-1 px-1 py-0.5 rounded bg-black/70 text-zinc-400 text-[8px]">
+                              <div className="absolute top-1 right-1 z-20 px-1 py-0.5 rounded bg-black/70 text-zinc-400 text-[8px]">
                                 {item.source === "ai" ? "AI Gen" : "Upload"}
                               </div>
                             </div>
@@ -7154,6 +7747,10 @@ export const FieldPressMaster: React.FC = () => {
           source: "lead",
           timestamp: "Lead Frame"
         } : null);
+        const readerStyle = (selectedStory.editionStyle || "newspaper") as PressyoEdition;
+        const readerThemeCfg = getEditionThemeConfig(readerStyle);
+        const readerFilterActive = isThemePhotoFilterActive(selectedStory);
+        const isReaderOldTimey = readerThemeCfg.isOldTimey;
 
         return (
         <div
@@ -7162,46 +7759,81 @@ export const FieldPressMaster: React.FC = () => {
           }}
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md overflow-y-auto overscroll-contain font-mono py-4 sm:py-8 px-2 sm:px-4"
         >
-          <div className={`w-full max-w-4xl mx-auto mb-12 rounded-2xl border shadow-2xl transition ${
-            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
+          <div className={`w-full max-w-4xl mx-auto mb-12 border shadow-2xl transition relative ${
+            isReaderOldTimey
+              ? `rounded-none ${readerThemeCfg.paperBg} ${readerThemeCfg.paperText} border-4 border-double ${readerThemeCfg.paperBorder}`
+              : isDark
+                ? "rounded-2xl bg-zinc-900 border-zinc-700 text-zinc-100"
+                : "rounded-2xl bg-white border-zinc-300 text-zinc-900"
           }`}>
-            {/* Sticky Header Navigation with Quick Scroll Section Jumps */}
-            <div className={`sticky top-0 z-30 px-4 sm:px-6 py-3.5 border-b rounded-t-2xl flex flex-wrap items-center justify-between gap-2 backdrop-blur-md ${
-              isDark ? "bg-zinc-900/95 border-zinc-800" : "bg-white/95 border-zinc-200"
+            {/* Sticky Header Navigation with Edition Theme Photo Filter Toggle */}
+            <div className={`sticky top-0 z-30 px-4 sm:px-6 py-3.5 border-b flex flex-wrap items-center justify-between gap-2 backdrop-blur-md ${
+              isReaderOldTimey
+                ? "rounded-none bg-[#e8dcc4]/95 border-b-2 border-[#1f160d] text-[#18120c]"
+                : isDark
+                  ? "rounded-t-2xl bg-zinc-900/95 border-zinc-800"
+                  : "rounded-t-2xl bg-white/95 border-zinc-200"
             }`}>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setSelectedStory(null)}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    isReaderOldTimey
+                      ? "border-[#1f160d] bg-[#18120c] text-[#f3ead8] hover:bg-[#2c2014] rounded-none font-serif"
+                      : "border-zinc-700 hover:bg-zinc-800"
+                  }`}
                 >
                   ← Back to Feed
                 </button>
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[11px] font-bold uppercase">
-                  {selectedStory.category}
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
+                  isReaderOldTimey
+                    ? "bg-[#18120c] text-[#f3ead8] rounded-none font-serif"
+                    : "bg-amber-500/20 text-amber-400"
+                }`}>
+                  {readerThemeCfg.name} • {selectedStory.category}
                 </span>
+                {/* Interactive Per-Edition Theme Photo Filter Toggle in Sticky Header */}
+                <button
+                  type="button"
+                  onClick={(e) => toggleThemePhotoFilter(selectedStory.id, readerFilterActive, e)}
+                  title={`Switch between ${readerThemeCfg.filterLabel} (${readerThemeCfg.filterDesc}) and Original Color`}
+                  className={`px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+                    readerFilterActive
+                      ? isReaderOldTimey
+                        ? "bg-[#2b1d0e] text-[#f3ead8] border-[#18120c] rounded-none"
+                        : "bg-amber-500 text-zinc-950 border-amber-300 shadow"
+                      : isReaderOldTimey
+                        ? "bg-white text-[#18120c] border-[#18120c] rounded-none"
+                        : "bg-zinc-800 text-zinc-200 border-zinc-600"
+                  }`}
+                >
+                  <span>{readerFilterActive ? readerThemeCfg.filterBadge : "📸 Original Color"}</span>
+                  <span className="text-[9px] opacity-80">({readerFilterActive ? "ON" : "RAW"})</span>
+                </button>
                 {readerGallery.length > 1 && (
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
-                    📸 {readerGallery.length} Photos Attached
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 text-[10px] font-bold">
+                    📸 {readerGallery.length} Photos
                   </span>
                 )}
                 {(selectedStory.embedType === "youtube" || extractYoutubeVideoId(selectedStory.sourceUrl)) && (
-                  <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-500 border border-red-500/40 text-[10px] font-bold">
                     🎥 Broadcast Video
                   </span>
                 )}
-                <span className="text-zinc-400 text-xs hidden sm:inline">[{selectedStory.location}]</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleShareStory(selectedStory)}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    isReaderOldTimey ? "border-[#1f160d] bg-[#dfd0b4] text-[#18120c] rounded-none" : "border-zinc-700 hover:bg-zinc-800"
+                  }`}
                 >
-                  <Share2 className="h-3.5 w-3.5 text-amber-400" />
+                  <Share2 className="h-3.5 w-3.5 text-amber-500" />
                   <span>Share</span>
                 </button>
                 <button
                   onClick={() => setSelectedStory(null)}
-                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-zinc-800/30 transition cursor-pointer"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -7210,23 +7842,63 @@ export const FieldPressMaster: React.FC = () => {
 
             {/* Scrollable Article Body */}
             <div className="p-5 sm:p-10 space-y-6">
+              {/* Authentic Early Printing-Press Newspaper Masthead Header when viewing Old-Timey Editions */}
+              {isReaderOldTimey && (
+                <div className="mb-4 select-none">
+                  <div className="border-t-2 border-b border-[#1f160d] py-1 flex flex-wrap items-center justify-between text-[10px] font-serif uppercase tracking-[0.22em] font-bold text-[#3b2917]">
+                    <span>{readerThemeCfg.earLeft}</span>
+                    <span>{readerThemeCfg.subhead}</span>
+                    <span>{readerThemeCfg.earRight}</span>
+                  </div>
+                  <div className="py-3 border-b-4 border-double border-[#1f160d] text-center">
+                    <div className="font-serif text-3xl sm:text-5xl font-black tracking-tight uppercase text-[#140e08] leading-none">
+                      {readerThemeCfg.masthead}
+                    </div>
+                    <div className="mt-1 text-[11px] font-serif italic tracking-widest text-[#3b2917]">
+                      “Printed by Rotary Halftone Press • {readerFilterActive ? readerThemeCfg.filterLabel : "Original Color Plate"}”
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Interactive Multi-Image Evidence Stage & Filmstrip */}
               {activeFrame && (
                 <div className="space-y-2.5">
-                  <div className="rounded-xl overflow-hidden border border-zinc-800 relative aspect-video max-h-[520px] bg-black shadow-lg group">
+                  <div className={`overflow-hidden relative aspect-video max-h-[520px] bg-black shadow-lg group ${
+                    isReaderOldTimey
+                      ? "rounded-none border-2 border-[#1f160d] p-1.5 bg-[#e5d7bc]"
+                      : "rounded-xl border border-zinc-800"
+                  }`}>
                     <img
                       src={activeFrame.url}
                       alt={activeFrame.caption || selectedStory.title}
                       onError={(e) => handleImgFallbackError(e, selectedStory)}
                       onClick={() => setReaderLightboxUrl(activeFrame.url)}
-                      className="w-full h-full object-cover cursor-zoom-in"
+                      className={`w-full h-full object-cover cursor-zoom-in transition ${
+                        readerFilterActive ? readerThemeCfg.imgFilterClass : "filter-none"
+                      }`}
                     />
+                    {renderThemePhotoOverlay(readerStyle, readerFilterActive)}
 
-                    {/* Top-Left Frame Counter & Top-Right Fullscreen Button */}
-                    <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
-                      <span className="px-2.5 py-1 rounded-full bg-black/80 text-amber-400 border border-amber-500/40 text-[11px] font-bold backdrop-blur-xs">
-                        📸 Frame {safeIdx + 1} of {Math.max(1, readerGallery.length)}
-                      </span>
+                    {/* Top-Left Frame Counter + Theme Filter Toggle & Top-Right Fullscreen Button */}
+                    <div className="absolute top-3 inset-x-3 flex items-center justify-between gap-2 z-30 pointer-events-none">
+                      <div className="flex items-center gap-1.5 pointer-events-auto">
+                        <span className="px-2.5 py-1 rounded-full bg-black/80 text-amber-400 border border-amber-500/40 text-[11px] font-bold backdrop-blur-xs">
+                          📸 Frame {safeIdx + 1} of {Math.max(1, readerGallery.length)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => toggleThemePhotoFilter(selectedStory.id, readerFilterActive, e)}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer shadow-lg ${
+                            readerFilterActive
+                              ? "bg-amber-500 text-zinc-950 border-amber-300 hover:bg-amber-400"
+                              : "bg-black/85 text-white border-white/40 hover:bg-black"
+                          }`}
+                          title="Click to toggle between Edition Theme Photo Filter and Original Color"
+                        >
+                          {readerFilterActive ? `${readerThemeCfg.filterBadge}: ON` : "📸 Original Color"}
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setReaderLightboxUrl(activeFrame.url)}
@@ -7242,7 +7914,7 @@ export const FieldPressMaster: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setActiveReaderImageIdx((safeIdx - 1 + readerGallery.length) % readerGallery.length)}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
                           title="Previous photo"
                         >
                           ‹
@@ -7250,7 +7922,7 @@ export const FieldPressMaster: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setActiveReaderImageIdx((safeIdx + 1) % readerGallery.length)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 hover:bg-amber-500 hover:text-zinc-950 text-white border border-zinc-700 flex items-center justify-center font-black text-sm cursor-pointer transition shadow-lg"
                           title="Next photo"
                         >
                           ›
@@ -7259,8 +7931,14 @@ export const FieldPressMaster: React.FC = () => {
                     )}
 
                     {(activeFrame.caption || selectedStory.imageCaption) && (
-                      <div className="absolute bottom-0 inset-x-0 bg-black/85 backdrop-blur-xs p-3 text-xs text-zinc-200 border-t border-zinc-800">
-                        <span className="text-amber-400 font-bold">EVIDENCE FRAME #{safeIdx + 1}:</span>{" "}
+                      <div className={`absolute bottom-0 inset-x-0 z-20 p-3 text-xs border-t ${
+                        isReaderOldTimey
+                          ? "bg-[#efe4ce]/95 text-[#18120c] font-serif italic border-[#1f160d]"
+                          : "bg-black/85 backdrop-blur-xs text-zinc-200 border-zinc-800"
+                      }`}>
+                        <span className={isReaderOldTimey ? "font-black not-italic" : "text-amber-400 font-bold"}>
+                          {isReaderOldTimey ? `ENGRAVED PLATE #${safeIdx + 1}:` : `EVIDENCE FRAME #${safeIdx + 1}:`}
+                        </span>{" "}
                         {activeFrame.caption || selectedStory.imageCaption}
                       </div>
                     )}
@@ -7285,7 +7963,9 @@ export const FieldPressMaster: React.FC = () => {
                             <img
                               src={frame.url}
                               alt={frame.caption || `Frame ${idx + 1}`}
-                              className="h-14 w-24 object-cover"
+                              className={`h-14 w-24 object-cover ${
+                                readerFilterActive ? readerThemeCfg.imgFilterClass : ""
+                              }`}
                             />
                             <span className="absolute bottom-0.5 right-1 px-1 rounded bg-black/80 text-[9px] text-white font-bold">
                               #{idx + 1}
@@ -7300,19 +7980,24 @@ export const FieldPressMaster: React.FC = () => {
 
               {/* Headline & Metadata */}
               <div className="space-y-3">
-                <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+                <h1 className={isReaderOldTimey
+                  ? "font-serif text-3xl sm:text-5xl font-black uppercase tracking-tight leading-[1.03] text-[#140e08] border-b-2 border-[#1f160d] pb-3"
+                  : "text-2xl sm:text-4xl font-black tracking-tight leading-tight"
+                }>
                   {selectedStory.title}
                 </h1>
-                <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${borderThemeClass} ${subTextThemeClass}`}>
+                <div className={`pb-4 border-b flex flex-wrap items-center justify-between gap-3 text-xs ${
+                  isReaderOldTimey ? "border-[#1f160d] text-[#3b2917] font-serif" : `${borderThemeClass} ${subTextThemeClass}`
+                }`}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-zinc-200">Byline:</span>
+                    <span className="font-bold">Byline:</span>
                     {(selectedStory.isAnonymous || selectedStory.callsign === "anon-signal") && (
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black uppercase">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-500 border border-emerald-500/40 text-[10px] font-black uppercase">
                         🕵️ ANONYMOUS SOURCE • METADATA STRIPPED
                       </span>
                     )}
                     {(selectedStory.decoupleLocationPin || (selectedStory.bureau && selectedStory.bureau.includes("Pin Decoupled"))) && (
-                      <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-black uppercase">
+                      <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-500 border border-cyan-500/40 text-[10px] font-black uppercase">
                         🔀 VICINITY PIN DECOUPLED FROM IDENTITY
                       </span>
                     )}
@@ -7335,19 +8020,45 @@ export const FieldPressMaster: React.FC = () => {
               </div>
 
               {/* Main Body Narrative */}
-              <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
-                {selectedStory.content}
-              </div>
+              {isReaderOldTimey ? (
+                <div className="font-serif text-base sm:text-lg leading-[1.75] text-[#18120c] text-justify sm:columns-2 gap-8 sm:[column-rule:1px_solid_rgba(31,22,13,0.35)] py-2">
+                  <span className="float-left text-5xl font-serif font-black mr-3 leading-none text-[#18120c] border-2 border-[#18120c] px-2.5 py-1 bg-[#e5d7bc] shadow-[2px_2px_0px_#18120c]">
+                    {selectedStory.content[0]}
+                  </span>
+                  <span className="font-black uppercase tracking-widest text-xs text-[#2b1d0e]">
+                    {selectedStory.location.toUpperCase()} ({readerThemeCfg.datelinePrefix}) —{" "}
+                  </span>
+                  <span>{selectedStory.content.slice(1)}</span>
+                </div>
+              ) : (
+                <div className="text-base sm:text-lg leading-relaxed font-serif whitespace-pre-wrap py-2">
+                  {selectedStory.content}
+                </div>
+              )}
 
               {/* Complete Multi-Photo Visual Evidence Gallery Grid (shown when >1 photo) */}
               {readerGallery.length > 1 && (
-                <div className={`p-4 rounded-xl border space-y-3 ${subCardThemeClass}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                <div className={`p-4 rounded-xl border space-y-3 ${
+                  isReaderOldTimey ? "rounded-none bg-[#e6d8bd] border-2 border-[#1f160d]" : subCardThemeClass
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${
+                      isReaderOldTimey ? "text-[#18120c] font-serif" : "text-amber-400"
+                    }`}>
                       <span>🖼️</span>
                       <span>Attached Visual Evidence Roll ({readerGallery.length} Verified Frames)</span>
                     </div>
-                    <span className="text-[10px] text-zinc-400">Click any photo to view fullscreen</span>
+                    <button
+                      type="button"
+                      onClick={(e) => toggleThemePhotoFilter(selectedStory.id, readerFilterActive, e)}
+                      className={`px-2.5 py-1 rounded text-[10px] font-bold border transition cursor-pointer ${
+                        readerFilterActive
+                          ? "bg-amber-500 text-zinc-950 border-amber-300"
+                          : "bg-zinc-800 text-zinc-200 border-zinc-700"
+                      }`}
+                    >
+                      {readerFilterActive ? `${readerThemeCfg.filterBadge}: ON` : "📸 Original Color"}
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {readerGallery.map((frame, idx) => (
@@ -7357,20 +8068,31 @@ export const FieldPressMaster: React.FC = () => {
                           setActiveReaderImageIdx(idx);
                           setReaderLightboxUrl(frame.url);
                         }}
-                        className="rounded-lg overflow-hidden border border-zinc-800 bg-black/50 hover:border-amber-500/60 transition cursor-zoom-in flex flex-col"
+                        className={`overflow-hidden border transition cursor-zoom-in flex flex-col ${
+                          isReaderOldTimey
+                            ? "rounded-none border-[#1f160d] bg-[#f3ead8]"
+                            : "rounded-lg border-zinc-800 bg-black/50 hover:border-amber-500/60"
+                        }`}
                       >
-                        <div className="relative aspect-video bg-zinc-950">
+                        <div className="relative aspect-video bg-zinc-950 overflow-hidden">
                           <img
                             src={frame.url}
                             alt={frame.caption || `Evidence frame ${idx + 1}`}
-                            className="w-full h-full object-cover"
+                            className={`w-full h-full object-cover ${
+                              readerFilterActive ? readerThemeCfg.imgFilterClass : ""
+                            }`}
                           />
-                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 text-amber-400 text-[10px] font-bold">
+                          {renderThemePhotoOverlay(readerStyle, readerFilterActive)}
+                          <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/80 text-amber-400 text-[10px] font-bold">
                             Frame #{idx + 1}
                           </span>
                         </div>
                         {frame.caption && (
-                          <div className="p-2.5 text-[11px] text-zinc-300 leading-snug border-t border-zinc-800/80">
+                          <div className={`p-2.5 text-[11px] leading-snug border-t ${
+                            isReaderOldTimey
+                              ? "text-[#18120c] font-serif italic border-[#1f160d]/40"
+                              : "text-zinc-300 border-zinc-800/80"
+                          }`}>
                             {frame.caption}
                           </div>
                         )}
