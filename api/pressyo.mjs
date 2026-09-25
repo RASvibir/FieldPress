@@ -83,7 +83,10 @@ const EDITION_VOICE = {
   comic: "punchy comic book panel: short exclamatory bursts, onomatopoeia (BAM, ZAP, KAPOW), a pulpy superhero-adjacent tone.",
   arcade: "retro 8-bit arcade game telemetry: ALL CAPS status lines, terse system-log phrasing, references to levels/missions/bosses.",
   magazine: "sleek modern lifestyle magazine: clean, confident, conversational, trend-aware.",
-  tactical: "encrypted tactical field intelligence briefing: terse, clipped, coordinate/callsign-heavy, no flourish."
+  tactical: "encrypted tactical field intelligence briefing: terse, clipped, coordinate/callsign-heavy, no flourish.",
+  fieldnote: "naturalist field expedition notebook: observant, ecological, sensory-rich, noting coordinates, flora/fauna habitats, and conservation milestones.",
+  almanac: "timeless American Farmer's Almanac & WPA heritage guide: warm, folksy yet encyclopedic, weaving historical perspective and seasonal wisdom.",
+  curio: "offbeat Americana zine & watercooler oddity column: witty, affectionate, marveling at strange-but-true human and wildlife capers."
 };
 
 // Previously this always instructed the model to produce "real dispatch
@@ -143,17 +146,19 @@ PROMPT: <a concise 1-sentence photojournalism visual prompt matching the dispatc
 <the dispatch body>${contextBlock}`;
   }
 
-  if (editorAction === "rewrite_voice" || editorAction === "expand" || editorAction === "shorten" || editorAction === "factcheck_polish" || editorAction === "draft_from_topic" || editorAction === "custom_edit") {
+  if (editorAction === "rewrite_voice" || editorAction === "expand" || editorAction === "shorten" || editorAction === "factcheck_polish" || editorAction === "draft_from_topic" || editorAction === "social_thread" || editorAction === "uplift_angle" || editorAction === "custom_edit") {
     const actionInstructions = {
       rewrite_voice: `Rewrite the current dispatch headline and body completely into the "${styleName}" edition voice (${voice}). Preserve all core facts, locations, and telemetry while transforming the diction, pacing, and structure to unmistakably match the "${styleName}" edition style.`,
       expand: `Expand and enrich the current dispatch in the "${styleName}" edition voice (${voice}). Add vivid journalistic detail, infrastructure/corridor context, and stronger narrative pacing (aim for 2-3 rich paragraphs) while staying grounded in the original premise.`,
       shorten: `Tighten and condense the current dispatch into high-signal, punchy wire copy in the "${styleName}" edition voice (${voice}). Cut fluff, sharpen verbs, and keep only the most impactful details (aim for 1 tight paragraph or 3-5 crisp lines).`,
       factcheck_polish: `Polish the current dispatch for grammar, flow, internal consistency, and authentic telemetry terminology in the "${styleName}" edition voice (${voice}). Fix any awkward phrasing and sharpen the headline.`,
       draft_from_topic: `Draft a complete, compelling FieldPress dispatch from the provided headline/topic in the "${styleName}" edition voice (${voice}), complete with a strong headline, a Pollinations photojournalism visual prompt, and vivid dispatch copy.`,
+      uplift_angle: `Reframe and enrich the current dispatch in the "${styleName}" edition voice (${voice}) to highlight constructive solutions, measurable civic/scientific progress, and human or ecological resilience—turning raw news into high-signal, shareable positive journalism.`,
+      social_thread: `Append a ready-to-distribute "📣 SOCIAL WIRE & 15s BROADCAST READ" block at the bottom of the current dispatch in the "${styleName}" edition voice (${voice}), preserving the main story while adding a <280-char social hook and a 15-second spoken radio/podcast script.`,
       custom_edit: `Apply the user's editing instruction to the current dispatch while maintaining the "${styleName}" edition voice (${voice}). Return the updated headline, visual prompt, and full updated dispatch body.`
     };
 
-    return `You are Pressy'o, the autonomous in-editor newsroom copilot for FieldPress.
+    return `You are Pressy'o v3.0, the autonomous in-editor newsroom copilot for FieldPress (supporting 8 Pressie Edition Archetypes: tactical, newspaper, fieldnote, almanac, curio, comic, arcade, magazine; plus hybrid Real Archival Photo & AI Photojournalism workflows).
 Task: ${actionInstructions[editorAction] || actionInstructions.custom_edit}
 
 Respond in EXACTLY this format -- the very first line must be "TYPE: draft", nothing before it:
@@ -165,7 +170,18 @@ PROMPT: <a vivid 1-sentence photojournalism visual prompt for this dispatch>
 No meta-commentary about being an AI.${contextBlock}`;
   }
 
-  return `You are Pressy'o, the autonomous newsroom copilot for FieldPress, a hyperlocal citizen-journalism platform. You can draft dispatches, generate Pollinations visual prompts, or act as a normal conversational assistant -- answer questions, brainstorm, give feedback, fact-check, or refine the user's active draft when asked. Do not write full dispatch copy unless the user is asking you to draft, write, rewrite, or compose a dispatch/pressie/story.${contextBlock}
+  return `You are Pressy'o v3.0, the autonomous newsroom copilot for FieldPress, a citizen-journalism and national dispatch platform.
+You master all 8 Pressie Edition Styles:
+1. "tactical" (🛰️ Encrypted Tactical Wire)
+2. "newspaper" (📰 1920s Broadsheet Edition)
+3. "fieldnote" (🌿 Naturalist & Ecology Field Note)
+4. "almanac" (🧭 Heritage & Perennial Farmer's Almanac)
+5. "curio" (🎪 Offbeat Americana Zine & Oddity Column)
+6. "comic" (💥 Graphic Novel / Comic Strip)
+7. "arcade" (🕹️ 8-Bit Retro CRT Telemetry)
+8. "magazine" (✨ Modern Sleek Editorial Gloss)
+
+You also support FieldPress's Hybrid Visual Workflow (combining real archival/public-domain photography from Wikimedia/NASA/NPS with AI photojournalism renders) and multi-era curation (from breaking 2026 science, space, and conservation wins to retro heritage classics). Do not write full dispatch copy unless the user is asking you to draft, write, rewrite, or compose a dispatch/pressie/story.${contextBlock}
 
 Decide which kind of reply this message needs, then respond in EXACTLY one of these three formats -- the very first line must be "TYPE: draft", "TYPE: visual", or "TYPE: chat", nothing before it:
 
@@ -178,7 +194,7 @@ PROMPT: <a vivid 1-sentence photojournalism visual prompt for Pollinations image
 If the user is specifically asking for an image/visual prompt only:
 TYPE: visual
 PROMPT: <the visual generation prompt>
-<a brief 1-sentence explanation or framing tip>
+<a brief 1-sentence explanation or archival photo search tip>
 
 If just talking (anything else -- a question, feedback request, headline ideas list, brainstorm, small talk, clarifying question, etc.):
 TYPE: chat
