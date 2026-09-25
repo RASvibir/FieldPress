@@ -69,17 +69,19 @@ function isCrawler(userAgent) {
   return BOT_USER_AGENTS.some((token) => ua.includes(token.toLowerCase()));
 }
 
-function renderPage({ title, description, image, spaUrl, canonicalUrl, redirectForHumans }) {
+function renderPage({ title, description, image, videoUrl, spaUrl, canonicalUrl, redirectForHumans }) {
   const t = escapeHtml(title);
   const d = escapeHtml(description);
   const img = escapeHtml(image);
   const url = escapeHtml(canonicalUrl);
   const redirect = escapeHtml(spaUrl);
+  const vidTags = videoUrl
+    ? `
+  <meta property="og:video" content="${escapeHtml(videoUrl)}" />
+  <meta property="og:video:secure_url" content="${escapeHtml(videoUrl)}" />
+  <meta property="og:video:type" content="video/mp4" />`
+    : "";
 
-  // Crawlers stop right here and read the tags below. Only human browsers
-  // (redirectForHumans === true) get a client-side nudge onward -- and even
-  // then, the real redirect for humans happens via a server-side 302 before
-  // this HTML is ever sent (see handler), so this is just a no-JS fallback.
   const humanRedirectTags = redirectForHumans
     ? `
   <meta http-equiv="refresh" content="0; url=${redirect}" />
@@ -93,13 +95,13 @@ function renderPage({ title, description, image, spaUrl, canonicalUrl, redirectF
   <title>${t}</title>
   <meta name="description" content="${d}" />
 
-  <meta property="og:type" content="article" />
+  <meta property="og:type" content="${videoUrl ? "video.other" : "article"}" />
   <meta property="og:title" content="${t}" />
   <meta property="og:description" content="${d}" />
   <meta property="og:image" content="${img}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="675" />
-  <meta property="og:image:alt" content="${t}" />
+  <meta property="og:image:alt" content="${t}" />${vidTags}
   <meta property="og:url" content="${url}" />
   <meta property="og:site_name" content="FieldPress" />
 
@@ -121,16 +123,6 @@ export default async function handler(req, res) {
   const userAgent = req.headers?.["user-agent"] || "";
   const bot = isCrawler(userAgent);
 
-  // Real browsers: skip straight to the SPA with a genuine HTTP redirect.
-  // This is both more reliable than a meta-refresh and, critically, means
-  // crawlers (which take a different path below) are the only ones who
-  // ever see the OG-tagged HTML at all.
-  // The edge/CDN cache is keyed per-URL and does NOT vary by User-Agent by
-  // default, so a crawler-served response (below) and a human-served 302
-  // (above) would otherwise clobber each other for the same URL within the
-  // cache window -- whichever request happened to populate the cache wins
-  // for everyone else until it expires. Vary: User-Agent forces the CDN to
-  // cache crawler and human responses separately.
   res.setHeader("Vary", "User-Agent");
 
   if (!bot && id) {
@@ -158,16 +150,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rows = await sql`
-      SELECT title, content_snippet, location, category, author, callsign, edition_style, image_url
-      FROM dispatch_share_meta
-      WHERE id = ${id}
-      LIMIT 1;
-    `;
+    const [metaRows, dispatchRows] = await Promise.all([
+      sql`
+        SELECT title, content_snippet, location, category, author, callsign, edition_style, image_url
+        FROM dispatch_share_meta
+        WHERE id = ${id}
+        LIMIT 1;
+      `,
+      sql`
+        SELECT title, content, location, category, author, callsign, edition_style, image_url, embed_data
+        FROM fieldpress_dispatches
+        WHERE id = ${id} AND is_press_roll = false
+        LIMIT 1;
+      `
+    ]);
 
-    if (rows.length === 0) {
-      // Not yet synced (never shared, or predates this system) — generic
-      // fallback so the link still previews *something* rather than nothing.
+    const row = metaRows[0] || dispatchRows[0];
+    if (!row) {
       res.status(200).send(
         renderPage({
           title: FALLBACK_TITLE,
@@ -181,11 +180,15 @@ export default async function handler(req, res) {
       return;
     }
 
-    const row = rows[0];
+    const dispRow = dispatchRows[0] || {};
+    const embedData = dispRow.embed_data && typeof dispRow.embed_data === "object" ? dispRow.embed_data : {};
+    const videoUrl = embedData.video_url || embedData.hd_video_url || embedData.sd_video_url || null;
+    const rawSnippet = row.content_snippet || dispRow.content || "";
+
     const title = `FieldPress: ${row.title}${row.location ? ` [${row.location}]` : ""}`;
     const descParts = [];
     if (row.category) descParts.push(row.category.toUpperCase());
-    descParts.push(row.content_snippet);
+    if (rawSnippet) descParts.push(String(rawSnippet).slice(0, 220));
     if (row.author) descParts.push(`— ${row.author}${row.callsign ? ` (@${row.callsign})` : ""}`);
     const description = descParts.join(" • ").slice(0, 300);
 
@@ -193,7 +196,8 @@ export default async function handler(req, res) {
       renderPage({
         title,
         description,
-        image: row.image_url || FALLBACK_IMAGE,
+        image: row.image_url || dispRow.image_url || embedData.thumbnail_url || FALLBACK_IMAGE,
+        videoUrl,
         spaUrl,
         canonicalUrl,
         redirectForHumans: !bot
