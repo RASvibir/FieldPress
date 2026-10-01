@@ -6197,6 +6197,40 @@ export const FieldPressMaster: React.FC = () => {
                   </button>
                 </div>
               )}
+              {/* Load More (#201) - feed/search now come a page at a time via
+                  cursor pagination instead of one flat LIMIT-200 request. */}
+              {!wireSearchActive && dispatchesHasMore && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreDispatches}
+                    disabled={loadingMoreDispatches}
+                    className={`px-4 py-2 rounded-lg border font-mono text-xs font-semibold transition ${
+                      loadingMoreDispatches
+                        ? "opacity-60 cursor-wait"
+                        : "hover:border-amber-500/50 hover:text-amber-500 cursor-pointer"
+                    } ${cardThemeClass}`}
+                  >
+                    {loadingMoreDispatches ? "Loading..." : "Load More Dispatches"}
+                  </button>
+                </div>
+              )}
+              {wireSearchActive && wireSearchCursor && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreSearchResults}
+                    disabled={loadingMoreSearch}
+                    className={`px-4 py-2 rounded-lg border font-mono text-xs font-semibold transition ${
+                      loadingMoreSearch
+                        ? "opacity-60 cursor-wait"
+                        : "hover:border-amber-500/50 hover:text-amber-500 cursor-pointer"
+                    } ${cardThemeClass}`}
+                  >
+                    {loadingMoreSearch ? "Loading..." : "Load More Results"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
