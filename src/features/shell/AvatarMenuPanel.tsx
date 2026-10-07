@@ -39,7 +39,7 @@ export const AvatarMenuPanel: React.FC<Props> = ({
       {signedIn ? (
         <>
           <button type="button" className="w-full text-left px-3 py-2 hover:bg-amber-500/10" onClick={onProfile}>
-            Profile
+            Press Pass / Profile
           </button>
           <button type="button" className="w-full text-left px-3 py-2 hover:bg-amber-500/10" onClick={onDrafts}>
             Drafts

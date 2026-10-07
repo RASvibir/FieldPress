@@ -70,7 +70,10 @@ import {
   Lock,
   Mail,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  Home,
+  Compass,
+  Plus
 } from "lucide-react";
 import {
   AUTHOR_DEFAULT_FILING,
@@ -87,6 +90,15 @@ import {
   suggestImagePromptFromPost,
 } from "./lib/composeLinks";
 import { PostAiTray, type LeadItem } from "./components/PostAiTray";
+import { PostComposer } from "./features/post/PostComposer";
+import { MainNav } from "./features/shell/MainNav";
+import { AvatarMenuPanel } from "./features/shell/AvatarMenuPanel";
+import { HomeChrome } from "./features/shell/HomeChrome";
+import { ExploreChrome, type ExploreTab } from "./features/shell/ExploreChrome";
+import { TOPIC_OPTIONS } from "./features/post/looks";
+import { loadComposerAutosave } from "./features/post/composerAutosave";
+import { formatByline } from "./lib/byline";
+
 import { pickDispatchImageUrl, isDisplayableImageUrl } from "./lib/dispatchMedia";
 import { dispatchBodyDisplay } from "./lib/dispatchContent";
 import { SafeExternalImage } from "./components/SafeExternalImage";
@@ -1069,7 +1081,8 @@ export async function generatePressieCardBlob(disp: Dispatch): Promise<Blob | nu
 
 export const FieldPressMaster: React.FC = () => {
   // Pressy'o AI Newsroom Copilot State (3-Tier LLM Cascade: Ollama -> Groq -> Gemini)
-  const PRESSYO_GREETING = "Hi — I'm Pressy'o, your journalism desk assistant (Ollama → Groq → Gemini). I help draft and edit dispatches: headlines, ledes, structure, tightening copy, attribution checks, and light AP-style polish. For photos, use imbrgr and paste the image URL into your dispatch.";
+  const PRESSYO_GREETING =
+    "Hi — I'm Pressy'o, your journalism desk assistant. I help draft and edit posts: headlines, ledes, structure, tightening copy, attribution checks, and light style polish.";
   type PressyoEdition = "newspaper" | "comic" | "arcade" | "tactical" | "magazine" | "fieldnote" | "almanac" | "curio";
   type PressyoMessage = {
     sender: "user" | "pressyo";
@@ -1153,8 +1166,28 @@ export const FieldPressMaster: React.FC = () => {
   const [watermarkVisible, setWatermarkVisible] = useState(true);
 
   // Main Navigation Tabs: "edition" | "wire" | "map" | "classifieds"
+  const [mainSection, setMainSection] = useState<"home" | "explore">("home");
+  const [homeViewMode, setHomeViewMode] = useState<"cards" | "list">("cards");
+  const [exploreTab, setExploreTab] = useState<ExploreTab>("discover");
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [homeTopicFilter, setHomeTopicFilter] = useState<string>("ALL");
+  const [composerDraftLabel, setComposerDraftLabel] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"edition" | "wire" | "map" | "classifieds" | "discover">("edition");
   const [showNavMoreMenu, setShowNavMoreMenu] = useState(false);
+
+  // Sync home/explore chrome to legacy tab routes
+  useEffect(() => {
+    if (mainSection === "home") {
+      setActiveTab(homeViewMode === "cards" ? "edition" : "wire");
+    }
+  }, [mainSection, homeViewMode]);
+  useEffect(() => {
+    if (mainSection !== "explore") return;
+    if (exploreTab === "discover") setActiveTab("discover");
+    else if (exploreTab === "map") setActiveTab("map");
+    else if (exploreTab === "classifieds") setActiveTab("classifieds");
+    else if (exploreTab === "search") setActiveTab("wire");
+  }, [mainSection, exploreTab]);
 
   // =========================================================================
   // STRICTLY SEPARATED MODAL ENDPOINTS:
@@ -1200,6 +1233,7 @@ export const FieldPressMaster: React.FC = () => {
       localStorage.setItem("fieldpress_gen_quota", JSON.stringify({ date: today, count: next }));
     } catch {}
   };
+  const [imbrgrHandoffBusy, setImbrgrHandoffBusy] = useState(false);
   const [showPressieBuilderModal, setShowPressieBuilderModal] = useState(false);
   const [showPressPassModal, setShowPressPassModal] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
@@ -1551,7 +1585,9 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   // Settings Sub-tab
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"quicklinks" | "profile" | "drafts" | "bookmarks" | "archives" | "appearance" | "system" | "admin" | "moderation">("quicklinks");
+  const [settingsActiveTab, setSettingsActiveTab] = useState<
+    "profile" | "advanced" | "drafts" | "bookmarks" | "appearance" | "admin" | "moderation"
+  >("profile");
 
   // Press Pass State
   const [pressPass, setPressPass] = useState<PressPassData>(() => {
@@ -1617,6 +1653,25 @@ export const FieldPressMaster: React.FC = () => {
       return JSON.parse(raw);
     } catch { return null; }
   };
+  const attachImbrgrImageToComposer = (url: string) => {
+    if (!isDisplayableImageUrl(url)) return;
+    setEvidenceGallery((prev) => {
+      if (prev.some((p) => p.url === url)) return prev;
+      const item = {
+        id: `imbrgr-${Date.now()}`,
+        url,
+        source: "url" as const,
+        caption: "",
+        timestamp: "Linked",
+      };
+      if (prev.length === 0) {
+        setNewImageUrl(url);
+        return [item];
+      }
+      return [...prev, item];
+    });
+  };
+
   const applyComposeReturn = async (
     draftId: string | null,
     imageUrl: string | null,
@@ -1627,10 +1682,13 @@ export const FieldPressMaster: React.FC = () => {
         const res = await fetch(`/api/dispatches?id=${encodeURIComponent(draftId)}`);
         if (res.ok) {
           const data = await res.json();
-          openCreatePressie(data.dispatch as Dispatch, { attachImageUrl: imageUrl, preferTitle: title });
+          openCreatePressie(data.dispatch as Dispatch, { preferTitle: title });
           if (imageUrl) {
-            setSavedSuccessToast("Image added");
-            setTimeout(() => setSavedSuccessToast(""), 2500);
+            requestAnimationFrame(() => {
+              attachImbrgrImageToComposer(imageUrl);
+              setSavedSuccessToast("Image added");
+              setTimeout(() => setSavedSuccessToast(""), 2500);
+            });
           }
           return;
         }
@@ -1645,8 +1703,8 @@ export const FieldPressMaster: React.FC = () => {
     if (title) setNewTitle(title);
     if (imageUrl) {
       setNewImageUrl(imageUrl);
-      setNewImageCaption("Image from imbrgr");
-      setEvidenceGallery([{ id: `imbrgr-${Date.now()}`, url: imageUrl, source: "url", caption: "Image from imbrgr", timestamp: "Linked" }]);
+      setNewImageCaption("");
+      setEvidenceGallery([{ id: `imbrgr-${Date.now()}`, url: imageUrl, source: "url", caption: "", timestamp: "Linked" }]);
     }
     setShowPressieBuilderModal(true);
     setShowPressPassModal(false);
@@ -1669,7 +1727,7 @@ export const FieldPressMaster: React.FC = () => {
     if (!signedIn) {
       storePendingCompose(pending);
       setAuthModalMode("signin");
-      setSavedSuccessToast("Sign in to finish your dispatch from imbrgr.");
+      setSavedSuccessToast("Sign in to finish your post.");
       setTimeout(() => setSavedSuccessToast(""), 3500);
       return;
     }
@@ -1694,7 +1752,7 @@ export const FieldPressMaster: React.FC = () => {
   useEffect(() => {
     if (!authSessionChecked) return;
     if (!authAccount?.canAccessAdminConsole && (settingsActiveTab === "admin" || settingsActiveTab === "moderation")) {
-      setSettingsActiveTab("quicklinks");
+      setSettingsActiveTab("profile");
     }
     if (!authAccount) setAdminUsers([]);
     resumeComposeIfPending(Boolean(authAccount));
@@ -2134,6 +2192,14 @@ export const FieldPressMaster: React.FC = () => {
       setTimeout(() => setSavedSuccessToast(""), 2500);
     }
     setCohortActionPendingId(null);
+  };
+
+  const submitAuthSignOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
+    setAuthAccount(null);
+    setPressPass(DEFAULT_PRESS_PASS);
   };
 
   const submitAuthForm = async (e: React.FormEvent) => {
@@ -3905,10 +3971,15 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   const handleCreateImageHandoff = async () => {
-    const draftId = await ensureDraftSavedForImbrgr();
-    if (!draftId) return;
-    const prompt = suggestImagePromptFromPost(newTitle, newContent);
-    window.location.href = buildImbrgrCreateImageUrl({ draftId, prompt });
+    setImbrgrHandoffBusy(true);
+    try {
+      const draftId = await ensureDraftSavedForImbrgr();
+      if (!draftId) return;
+      const prompt = suggestImagePromptFromPost(newTitle, newContent);
+      window.location.href = buildImbrgrCreateImageUrl({ draftId, prompt });
+    } finally {
+      setImbrgrHandoffBusy(false);
+    }
   };
 
   // =========================================================================
@@ -4000,20 +4071,38 @@ export const FieldPressMaster: React.FC = () => {
       setManualImageUrl("");
       setNewCoordinates(formatCoordinatesPair(AUTHOR_DEFAULT_FILING.coordinates));
       setNewSharingOption("fork");
+      const autosaved = loadComposerAutosave();
+      if (autosaved) {
+        setNewTitle(autosaved.title || "");
+        setNewContent(autosaved.content || "");
+        setNewCategory(autosaved.category || "Field Dispatch");
+        setNewLocation(autosaved.location || AUTHOR_DEFAULT_FILING.label);
+        setNewCoordinates(autosaved.coordinates || formatCoordinatesPair(AUTHOR_DEFAULT_FILING.coordinates));
+        setNewSourceUrl(autosaved.sourceUrl || "");
+        setNewImageUrl(autosaved.imageUrl || "");
+        setNewImageCaption(autosaved.imageCaption || "");
+        if (autosaved.editionStyle) setNewEditionStyle(autosaved.editionStyle as PressyoEdition);
+        if (autosaved.sharingOption === "fork" || autosaved.sharingOption === "colab" || autosaved.sharingOption === "none") {
+          setNewSharingOption(autosaved.sharingOption);
+        }
+        setNewIsAnonymous(Boolean(autosaved.isAnonymous));
+        setNewDecoupleLocationPin(Boolean(autosaved.decoupleLocationPin));
+        setBuilderUseThemePhotoFilter(Boolean(autosaved.builderUseThemePhotoFilter));
+        if (Array.isArray(autosaved.evidenceGallery) && autosaved.evidenceGallery.length > 0) {
+          setEvidenceGallery(
+            autosaved.evidenceGallery.map((g, idx) => ({
+              id: g.id || `auto-${idx}`,
+              url: g.url,
+              source: (g.source as "ai" | "upload" | "url") || "upload",
+              caption: g.caption || "",
+              timestamp: g.timestamp || "Saved",
+            }))
+          );
+        }
+      }
     }
     if (options?.preferTitle?.trim()) {
       setNewTitle(options.preferTitle.replace(/^Draft:\s*/i, ""));
-    }
-    if (options?.attachImageUrl && isDisplayableImageUrl(options.attachImageUrl)) {
-      const url = options.attachImageUrl;
-      setEvidenceGallery((prev) => {
-        const hasCover = Boolean(newImageUrl || prev[0]?.url);
-        if (!hasCover) {
-          setNewImageUrl(url);
-          return [{ id: `imbrgr-${Date.now()}`, url, source: "url", caption: "", timestamp: "Linked" }];
-        }
-        return [...prev, { id: `imbrgr-${Date.now()}`, url, source: "url", caption: "", timestamp: "Linked" }];
-      });
     }
     setFormValidationError(null);
     setShowPressPassModal(false); // ENSURE PRESS PASS IS NOT OPEN
@@ -4122,7 +4211,7 @@ export const FieldPressMaster: React.FC = () => {
 
       setShowPressieBuilderModal(false);
       setFormValidationError(null);
-      setSavedSuccessToast("Dispatch staged to Press Roll with privacy & vicinity settings.");
+      setSavedSuccessToast("Draft saved.");
       setTimeout(() => setSavedSuccessToast(""), 3500);
     } catch {
       setFormValidationError("Couldn't save the draft — check your connection and try again.");
@@ -4237,7 +4326,7 @@ export const FieldPressMaster: React.FC = () => {
           if (delRes.ok) {
             setPressRoll((prev) => prev.filter((p) => p.id !== editingDraftId));
           } else {
-            setSavedSuccessToast("Published, but couldn't clear the draft copy — check your Press Roll.");
+            setSavedSuccessToast("Published, but couldn't clear the draft copy — check Drafts.");
             setTimeout(() => setSavedSuccessToast(""), 4000);
           }
         } catch {
@@ -4270,7 +4359,7 @@ export const FieldPressMaster: React.FC = () => {
   const deleteDraft = async (id: string) => {
     const previous = pressRoll;
     setPressRoll((prev) => prev.filter((p) => p.id !== id));
-    setSavedSuccessToast("Draft removed from Press Roll.");
+    setSavedSuccessToast("Draft deleted.");
     setTimeout(() => setSavedSuccessToast(""), 2500);
     try {
       const res = await fetch(`/api/dispatches/${id}`, { method: "DELETE" });
@@ -4394,7 +4483,7 @@ export const FieldPressMaster: React.FC = () => {
     setTimeout(() => {
       setIsSyncing(false);
       setLastSyncTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      setSavedSuccessToast("Feeds synchronized with regional edge node.");
+      setSavedSuccessToast("Feeds refreshed.");
       setTimeout(() => setSavedSuccessToast(""), 2500);
     }, 800);
   };
@@ -4468,15 +4557,26 @@ export const FieldPressMaster: React.FC = () => {
   // top of that. With no query, fall back to filtering the base feed
   // client-side exactly as before.
   const wireSearchActive = wireSearchQuery.trim().length > 0;
+  const homeTopicFiltered =
+    homeTopicFilter === "ALL"
+      ? dispatches
+      : dispatches.filter((d) => d.category.toLowerCase() === homeTopicFilter.toLowerCase());
   const filteredDispatches = (wireSearchActive ? (wireSearchResults ?? []) : dispatches).filter((d) => {
-    const matchesCategory = wireCategoryFilter === "ALL" || d.category.toLowerCase() === wireCategoryFilter.toLowerCase();
-    if (wireSearchActive) return matchesCategory;
+    const homeTopicOk =
+      mainSection !== "home" ||
+      homeTopicFilter === "ALL" ||
+      d.category.toLowerCase() === homeTopicFilter.toLowerCase();
+    const categoryFilter =
+      mainSection === "home" ? homeTopicFilter : wireCategoryFilter;
+    const matchesCategory =
+      categoryFilter === "ALL" || d.category.toLowerCase() === categoryFilter.toLowerCase();
+    if (wireSearchActive) return matchesCategory && homeTopicOk;
     const matchesSearch = !wireSearchQuery.trim() ||
       d.title.toLowerCase().includes(wireSearchQuery.toLowerCase()) ||
       d.content.toLowerCase().includes(wireSearchQuery.toLowerCase()) ||
       d.location.toLowerCase().includes(wireSearchQuery.toLowerCase()) ||
       d.author.toLowerCase().includes(wireSearchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesSearch && homeTopicOk;
   });
 
   return (
@@ -4519,363 +4619,99 @@ export const FieldPressMaster: React.FC = () => {
         </div>
       )}
 
-      {/* 3. MAIN HEADER BAR */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 sm:px-6 py-3 transition ${
-        isDark ? "bg-zinc-950/90 border-zinc-800/80" : "bg-white/90 border-zinc-200"
-      }`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
-          
-          <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
-            <button
-              onClick={() => setActiveTab("edition")}
-              className="flex items-center gap-1.5 font-mono text-base font-bold tracking-tight hover:opacity-80 transition cursor-pointer min-w-0"
-            >
-              <span className="text-amber-500 font-black">Fp_</span>
-              <img src="/pressie.svg" alt="" className="h-5 w-5 flex-shrink-0" />
-              <span className={`font-bold tracking-wide truncate ${isDark ? "text-zinc-100" : "text-zinc-900"}`}>FieldPress</span>
-            </button>
-            <span className={`hidden lg:inline font-mono text-[10px] truncate ${subTextThemeClass}`}>{HOME_BUREAU.name}</span>
-          </div>
-
-          <nav className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs overflow-x-auto py-1">
-            <div className="hidden sm:flex items-center gap-1">
-              <button type="button" onClick={() => setActiveTab("edition")} className={`px-2.5 py-1.5 rounded transition cursor-pointer ${activeTab === "edition" ? (isDark ? "bg-zinc-800 text-amber-400 font-bold" : "bg-zinc-200 text-amber-700 font-bold") : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"}`}>Dispatches</button>
-              <button type="button" onClick={() => setActiveTab("wire")} className={`px-2.5 py-1.5 rounded transition cursor-pointer ${activeTab === "wire" ? (isDark ? "bg-zinc-800 text-amber-400 font-bold" : "bg-zinc-200 text-amber-700 font-bold") : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"}`}>Wire</button>
-              <button type="button" onClick={() => openCreatePressie()} className={`px-2.5 py-1.5 rounded font-bold transition cursor-pointer ${currentAccent.btn}`}>Write</button>
-              <div className="relative">
-                <button type="button" onClick={() => setShowNavMoreMenu((v) => !v)} className={`px-2.5 py-1.5 rounded border transition cursor-pointer flex items-center gap-1 ${isDark ? "border-zinc-800 text-zinc-400 hover:bg-zinc-800" : "border-zinc-300 text-zinc-600 hover:bg-zinc-200"}`}>
-                  <Menu className="h-3.5 w-3.5" /> More
-                </button>
-                {showNavMoreMenu && (
-                  <div className={`absolute right-0 mt-1 w-44 rounded-lg border shadow-xl z-50 py-1 ${isDark ? "bg-zinc-900 border-zinc-700" : "bg-white border-zinc-200"}`}>
-                    {(["map", "classifieds", "discover"] as const).map((tab) => (
-                      <button key={tab} type="button" onClick={() => { setActiveTab(tab); setShowNavMoreMenu(false); }} className={`w-full text-left px-3 py-2 hover:bg-amber-500/10 capitalize ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
-                        {tab}{tab === "discover" && suggestedCohorts.length > 0 ? ` (${suggestedCohorts.length})` : ""}
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => { setShowNavMoreMenu(false); setShowSettingsDrawer(true); }} className={`w-full text-left px-3 py-2 hover:bg-amber-500/10 ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Settings</button>
-                    {authAccount?.canAccessAdminConsole && (
-                      <button type="button" onClick={() => { setShowNavMoreMenu(false); setShowSettingsDrawer(true); setSettingsActiveTab("admin"); loadAdminUsers(); }} className="w-full text-left px-3 py-2 hover:bg-amber-500/10 text-amber-500 font-bold">Admin</button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <a href={IMBRGR_URL} target="_blank" rel="noopener noreferrer" className={`flex-shrink-0 px-2.5 py-1.5 rounded border font-bold transition ${isDark ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-600/40 text-amber-700 hover:bg-amber-50"}`} title="Open imbrgr">Images</a>
-            <button type="button" onClick={() => setShowPressyoModal(true)} className="w-8 h-8 flex-shrink-0 rounded-full overflow-hidden border border-amber-500/50 bg-white" title="Pressy'O — Journalism assistant">
-              <img src="/pressyo-icon.jpg" alt="Pressy'O" className="w-full h-full object-cover" />
-            </button>
-            <button type="button" onClick={() => setShowMessengerModal(true)} className={`w-8 h-8 flex-shrink-0 rounded-full border flex items-center justify-center ${isDark ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400" : "border-zinc-300 hover:bg-zinc-200 text-zinc-600"}`} title="Messages">
-              <MessageCircle className="h-4 w-4" />
-            </button>
-          </nav>
-
-          {/* Action Tools: Header Press Pass Trigger, Settings, Theme */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Global Search: searches all dispatches regardless of active tab */}
-            <div className="relative">
-              {showGlobalSearch ? (
-                <div className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
-                  isDark ? "border-zinc-800 bg-zinc-900" : "border-zinc-300 bg-white"
-                }`}>
-                  <Search className={`h-3.5 w-3.5 flex-shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`} />
-                  <input
-                    autoFocus
-                    type="text"
-                    value={globalSearchQuery}
-                    onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setShowGlobalSearch(false);
-                        setGlobalSearchQuery("");
-                      }
-                    }}
-                    placeholder="Search all dispatches..."
-                    className={`w-36 sm:w-48 bg-transparent outline-none font-mono text-xs ${isDark ? "text-zinc-200 placeholder:text-zinc-600" : "text-zinc-900 placeholder:text-zinc-400"}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowGlobalSearch(false);
-                      setGlobalSearchQuery("");
-                    }}
-                    className={`flex-shrink-0 ${isDark ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-400 hover:text-zinc-700"}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowGlobalSearch(true)}
-                  className={`p-1.5 rounded border transition cursor-pointer ${
-                    isDark
-                      ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                      : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
-                  }`}
-                  title="Search all dispatches"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              )}
-
-              {showGlobalSearch && globalSearchQuery.trim() && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowGlobalSearch(false)} />
-                  <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto rounded-lg border shadow-xl z-50 ${
-                    isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
-                  }`}>
-                    {globalSearchResults.length === 0 ? (
-                      <div className={`px-3 py-6 text-center font-mono text-xs ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
-                        No dispatches match "{globalSearchQuery}".
-                      </div>
-                    ) : (
-                      globalSearchResults.map((d) => (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedStory(d);
-                            setShowGlobalSearch(false);
-                            setGlobalSearchQuery("");
-                          }}
-                          className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
-                            isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
-                          }`}
-                        >
-                          <p className="font-mono text-xs font-bold truncate">{d.title}</p>
-                          <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
-                            {d.location} • {d.author}
-                          </p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Notifications Bell: comments on the user's own dispatches */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  const opening = !showNotifPanel;
-                  setShowNotifPanel(opening);
-                  if (opening) markNotificationsSeen();
-                }}
-                className={`relative p-1.5 rounded border transition cursor-pointer ${
-                  isDark
-                    ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                    : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
-                }`}
-                title="Notifications"
-              >
-<Bell className="h-4 w-4" />
-                {(unseenNotifications.length + serverUnreadCount) > 0 && (
-                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold font-mono">
-                    {(unseenNotifications.length + serverUnreadCount) > 9 ? "9+" : unseenNotifications.length + serverUnreadCount}
-                  </span>
-                )}
-              </button>
-
-              {showNotifPanel && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)} />
-                  <div className={`absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border shadow-xl z-50 ${
-                    isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
-                  }`}>
-                    <div className={`px-3 py-2 border-b font-mono text-xs font-bold ${isDark ? "border-zinc-800 text-zinc-300" : "border-zinc-200 text-zinc-700"}`}>
-                      Notifications
-                    </div>
-{(serverNotifications.length === 0 && notificationItems.length === 0) ? (
-                      <div className={`px-3 py-6 text-center font-mono text-xs ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
-                        No activity yet.
-                      </div>
-                    ) : (
-                      <>
-                        {serverNotifications.slice(0, 30).map((n) => (
-                          <button
-                            key={n.id}
-                            type="button"
-                            onClick={() => {
-                              setShowNotifPanel(false);
-                              setActiveTab("discover");
-                            }}
-                            className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
-                              isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
-                            } ${!n.read ? (isDark ? "bg-cyan-500/5" : "bg-cyan-50") : ""}`}
-                          >
-                            <p className="font-mono text-xs">
-                              <span className="font-bold">@{n.actor.callsign}</span>
-                              <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>
-                                {n.type === "cohort_request" ? " sent you a cohort request" : " accepted your cohort request"}
-                              </span>
-                            </p>
-                          </button>
-                        ))}
-                        {notificationItems.slice(0, 30).map((n) => {
-                          const disp = dispatches.find((d) => d.id === n.dispatchId);
-                          return (
-                            <button
-                              key={n.id}
-                              type="button"
-                              onClick={() => {
-                                setShowNotifPanel(false);
-                                if (disp) setSelectedStory(disp);
-                              }}
-                              className={`w-full text-left px-3 py-2.5 border-b last:border-b-0 transition cursor-pointer ${
-                                isDark ? "border-zinc-800/60 hover:bg-zinc-800/60" : "border-zinc-100 hover:bg-zinc-50"
-                              }`}
-                            >
-                              <p className="font-mono text-xs">
-                                <span className="font-bold">@{n.callsign}</span>
-                                <span className={isDark ? "text-zinc-400" : "text-zinc-500"}> commented on </span>
-                                <span className="font-bold">{disp ? disp.title : "your dispatch"}</span>
-                              </p>
-                              <p className={`font-mono text-[11px] mt-0.5 truncate ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
-                                {n.text}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Account: Sign In trigger (signed out) or account badge + sign out (signed in) */}
-            {authAccount ? (
-              <button
-                onClick={logOutAccount}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono transition cursor-pointer ${
-                  isDark
-                    ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                    : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
-                }`}
-                title="Sign out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Sign out</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => { setAuthModalMode("signin"); setAuthError(""); }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono transition cursor-pointer ${
-                  isDark
-                    ? "border-cyan-500/40 hover:bg-cyan-500/10 text-cyan-400"
-                    : "border-cyan-600/30 hover:bg-cyan-50 text-cyan-700"
-                }`}
-                title="Sign in to sync your account across devices"
-              >
-                <LogIn className="h-3.5 w-3.5" />
-                <span>Sign in</span>
-              </button>
-            )}
-
-            {/* Header Press Pass Badge Trigger (DEDICATED TO REPORTER CREDENTIAL/ID EDITOR - IMAGE 1) */}
-            <button
-              onClick={openPressPassEditor}
-              className={`flex items-center gap-2 px-2.5 py-1 rounded border text-xs font-mono transition ${currentAccent.badge} hover:brightness-110 cursor-pointer`}
-              title="Open Press Pass Credential & ID Studio"
-            >
-              {pressPass.avatarUrl ? (
-                <img
-                  src={pressPass.avatarUrl}
-                  alt={pressPass.callsign}
-                  className="w-5 h-5 rounded-full object-cover border border-amber-400/60"
-                />
-              ) : (
-                <ShieldCheck className="h-3.5 w-3.5" />
-              )}
-              <span className="hidden md:inline font-bold">PRESS PASS:</span>
-              <span>{pressPass.callsign}</span>
-            </button>
-
-            {/* Workstation Settings Drawer */}
-            <button
-              onClick={() => setShowSettingsDrawer(true)}
-              className={`p-1.5 rounded border transition cursor-pointer ${
-                isDark
-                  ? "border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                  : "border-zinc-300 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-900"
-              }`}
-              title="Workstation Settings"
-            >
-              <Sliders className="h-4 w-4" />
-            </button>
-
-            {/* Theme Toggle (Dark / Light) */}
-            <button
-              onClick={() => setTheme(isDark ? "light" : "dark")}
-              className={`p-1.5 rounded border transition cursor-pointer ${
-                isDark
-                  ? "border-zinc-800 hover:bg-zinc-800 text-amber-400"
-                  : "border-zinc-300 hover:bg-zinc-200 text-amber-600"
-              }`}
-              title={`Switch to ${isDark ? "Light" : "Dark"} Mode`}
-            >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
-      </header>
+      <MainNav
+        section={mainSection}
+        onSectionChange={(s) => {
+          setMainSection(s);
+          setShowAvatarMenu(false);
+        }}
+        onPost={() => openCreatePressie()}
+        onMessages={() => setShowMessengerModal(true)}
+        onNotifications={() => {
+          setShowNotifPanel(true);
+          markNotificationsSeen();
+        }}
+        onSearch={() => setShowGlobalSearch(true)}
+        onAvatarMenu={() => setShowAvatarMenu((v) => !v)}
+        avatarUrl={authAccount?.avatarUrl || pressPass.avatarUrl}
+        isDark={isDark}
+        notifCount={unseenNotifications.length + serverUnreadCount}
+        showAvatarMenu={showAvatarMenu}
+        avatarMenu={
+          <AvatarMenuPanel
+            isDark={isDark}
+            signedIn={Boolean(authAccount)}
+            canAdmin={Boolean(authAccount?.canAccessAdminConsole)}
+            onClose={() => setShowAvatarMenu(false)}
+            onProfile={() => {
+              setShowAvatarMenu(false);
+              openPressPassEditor();
+            }}
+            onDrafts={() => {
+              setShowAvatarMenu(false);
+              setShowSettingsDrawer(true);
+              setSettingsActiveTab("drafts");
+            }}
+            onSaved={() => {
+              setShowAvatarMenu(false);
+              setShowSettingsDrawer(true);
+              setSettingsActiveTab("bookmarks");
+            }}
+            onAssistant={() => {
+              setShowAvatarMenu(false);
+              setShowPressyoModal(true);
+            }}
+            onSettings={() => {
+              setShowAvatarMenu(false);
+              setShowSettingsDrawer(true);
+              setSettingsActiveTab("profile");
+            }}
+            onAdmin={() => {
+              setShowAvatarMenu(false);
+              setShowSettingsDrawer(true);
+              setSettingsActiveTab("admin");
+              loadAdminUsers();
+            }}
+            onSignIn={() => {
+              setShowAvatarMenu(false);
+              setAuthModalMode("signin");
+            }}
+            onSignOut={() => {
+              setShowAvatarMenu(false);
+              void submitAuthSignOut();
+            }}
+          />
+        }
+      />
 
       {/* 4. MAIN CONTENT AREA */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-24 sm:pb-8 relative z-10">
         
-        {/* Active View Header Bar */}
-        <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b ${borderThemeClass}`}>
-          <div>
-            <h1 className="font-mono text-2xl font-black tracking-tight flex items-center gap-2">
-              <span>
-                {activeTab === "edition" && "Daily Broadsheet Edition"}
-                {activeTab === "wire" && "Live Dispatch Wire"}
-                {activeTab === "map" && "Geospatial Beat Radar"}
-                {activeTab === "classifieds" && "Community Classifieds Wire"}
-              </span>
-              {activeTab === "wire" && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 uppercase font-bold animate-pulse">
-                  <Radio className="h-2.5 w-2.5" /> Live Telemetry
-                </span>
-              )}
-            </h1>
-            <p className={`font-mono text-xs mt-0.5 ${subTextThemeClass}`}>
-              FieldPress • Home Bureau: {HOME_BUREAU.label} • Last synced: {lastSyncTime}
-            </p>
-          </div>
-
-          <div className="mt-3 sm:mt-0 flex items-center gap-3">
-            {/* Quick Action Button in View Header */}
-            <button
-              onClick={() => openCreatePressie()}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md font-mono text-xs font-bold transition shadow-xs cursor-pointer ${currentAccent.btn}`}
-            >
-              <Send className="h-3.5 w-3.5" />
-              <span>Dispatch Pressie</span>
-            </button>
-
-            {/* Interactive Sync Button */}
-            <button
-              onClick={handleSyncFeeds}
-              disabled={isSyncing}
-              className={`flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded border transition cursor-pointer ${
-                isDark ? "border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800" : "border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200"
-              }`}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-amber-500" : ""}`} />
-              <span>{isSyncing ? "Syncing…" : "Sync"}</span>
-            </button>
-          </div>
-        </div>
+        {mainSection === "home" && (
+          <HomeChrome
+            isDark={isDark}
+            viewMode={homeViewMode}
+            onViewModeChange={setHomeViewMode}
+            topicFilter={homeTopicFilter}
+            onTopicFilterChange={setHomeTopicFilter}
+            topics={[...TOPIC_OPTIONS]}
+            subTextClass={subTextThemeClass}
+          />
+        )}
+        {mainSection === "explore" && (
+          <ExploreChrome
+            tab={exploreTab}
+            onTabChange={setExploreTab}
+            isDark={isDark}
+            onOpenSearch={() => setShowGlobalSearch(true)}
+          />
+        )}
 
         {/* TAB 1: DAILY BROADSHEET EDITION */}
-        {activeTab === "edition" && (
+        {mainSection === "home" && homeViewMode === "cards" && activeTab === "edition" && (
           <div className="space-y-8">
-            {dispatches[0] && (() => {
-              const d = dispatches[0];
+            {homeTopicFiltered[0] && (() => {
+              const d = homeTopicFiltered[0];
               const style = d.editionStyle || "newspaper";
               const themeCfg = getEditionThemeConfig(style);
               const filterActive = isThemePhotoFilterActive(d);
@@ -5283,7 +5119,7 @@ export const FieldPressMaster: React.FC = () => {
                       <div className={`pt-2 flex items-center justify-between text-xs font-mono ${isOldTimey ? "text-[#3b2917] border-t border-[#1f160d]/30" : isFieldnote ? "text-[#1f422d]" : "text-zinc-400"}`}>
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold">Byline:</span>
-                          <span>{d.author} (@{d.callsign})</span>
+                          <span>{formatByline(d.author, d.callsign)}</span>
                           <span>•</span>
                           <span>{d.bureau}</span>
                         </div>
@@ -5476,7 +5312,7 @@ export const FieldPressMaster: React.FC = () => {
 
             {/* Grid of Secondary Dispatches with All 8 Edition Themes & Theme Photo Filter Toggles */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {dispatches.slice(1).map((disp, idx) => {
+              {homeTopicFiltered.slice(1).map((disp, idx) => {
                 const fallbackStyles: Array<PressyoEdition> = ["newspaper", "almanac", "curio", "fieldnote", "tactical", "comic", "arcade", "magazine"];
                 const sStyle = (disp.editionStyle || fallbackStyles[idx % fallbackStyles.length]) as PressyoEdition;
                 const sTheme = getEditionThemeConfig(sStyle);
@@ -5793,7 +5629,7 @@ export const FieldPressMaster: React.FC = () => {
         )}
 
         {/* TAB 2: LIVE DISPATCH WIRE */}
-        {activeTab === "wire" && (
+        {mainSection === "home" && homeViewMode === "list" && activeTab === "wire" && (
           <div className="space-y-4">
             {pressRoll.length > 0 && (
               <div className={`p-4 rounded-lg border flex items-center justify-between ${
@@ -5802,14 +5638,14 @@ export const FieldPressMaster: React.FC = () => {
                 <div className="flex items-center gap-2.5 font-mono text-xs">
                   <FolderLock className="h-4 w-4 text-amber-500 flex-shrink-0" />
                   <span>
-                    You have <strong>{pressRoll.length} staged draft(s)</strong> in your Press Roll queue.
+                    You have <strong>{pressRoll.length} draft(s)</strong> ready to finish.
                   </span>
                 </div>
                 <button
                   onClick={() => openCreatePressie(pressRoll[0])}
                   className="px-3 py-1 rounded bg-amber-500 text-zinc-950 font-mono text-xs font-bold hover:bg-amber-400 transition cursor-pointer"
                 >
-                  Resume Draft in Pressie Builder
+                  Resume draft
                 </button>
               </div>
             )}
@@ -5831,6 +5667,7 @@ export const FieldPressMaster: React.FC = () => {
                 />
               </div>
 
+              {mainSection !== "home" && (
               <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
                 {["ALL", "Infrastructure", "Civic Wire", "Transit", "Telecom", "Field Dispatch"].map((cat) => (
                   <button
@@ -5846,6 +5683,7 @@ export const FieldPressMaster: React.FC = () => {
                   </button>
                 ))}
               </div>
+              )}
             </div>
 
             {/* Wire Feed List */}
@@ -6089,7 +5927,7 @@ export const FieldPressMaster: React.FC = () => {
         )}
 
         {/* TAB 3: GEOSPATIAL BEAT RADAR & VICINITY SIGNAL LEDGER */}
-        {activeTab === "map" && (
+        {mainSection === "explore" && exploreTab === "map" && activeTab === "map" && (
           <div className="space-y-4">
             <div className={`p-4 rounded-lg border ${cardThemeClass}`}>
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3 font-mono text-xs">
@@ -6280,7 +6118,7 @@ export const FieldPressMaster: React.FC = () => {
         )}
 
         {/* TAB 4: CLASSIFIEDS */}
-        {activeTab === "classifieds" && (
+        {mainSection === "explore" && exploreTab === "classifieds" && activeTab === "classifieds" && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className={`p-6 rounded-lg border ${cardThemeClass}`}>
               <div className="flex items-center justify-between mb-4">
@@ -6344,7 +6182,7 @@ export const FieldPressMaster: React.FC = () => {
           </div>
         )}
 
-        {activeTab === "discover" && (
+        {mainSection === "explore" && exploreTab === "discover" && activeTab === "discover" && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className={`p-6 rounded-lg border ${cardThemeClass}`}>
               <div className="mb-4">
@@ -6418,678 +6256,100 @@ export const FieldPressMaster: React.FC = () => {
       {/* 5. THE PERFECT PRESSIE BUILDER MODAL (CORRESPONDS DIRECTLY TO IMAGE 2)    */}
       {/*    With Image Generation Prompt Box + Hybrid Preview + Media Tray         */}
       {/* ========================================================================= */}
-      {showPressieBuilderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`w-full max-w-2xl max-h-[92vh] flex flex-col rounded-xl border shadow-2xl overflow-hidden transition ${
-            isDark ? "bg-zinc-900 border-zinc-700 text-zinc-100" : "bg-white border-zinc-300 text-zinc-900"
-          }`}>
-            
-            {/* Modal Header matching Image 2 */}
-            <div className="flex-shrink-0 p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-mono">
-                <Send className="h-5 w-5 text-amber-500" />
-                <h3 className="font-bold text-base">
-                  {editingPublishedId
-                    ? "Editing Published Dispatch"
-                    : editingDraftId
-                    ? "New Field Dispatch or Press Roll • Editing Staged Draft"
-                    : "New Field Dispatch or Press Roll"}
-                </h3>
-              </div>
-              <button 
-                onClick={() => setShowPressieBuilderModal(false)}
-                className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      <PostComposer
+        open={showPressieBuilderModal}
+        isDark={isDark}
+        isSubmitting={isSubmittingPressie}
+        editingPublishedId={editingPublishedId}
+        editingDraftId={editingDraftId}
+        formError={formValidationError}
+        authSignedIn={Boolean(authAccount)}
+        authAvatarUrl={authAccount?.avatarUrl || pressPass.avatarUrl}
+        displayName={authAccount ? pressPass.name : "Sign in to post"}
+        displayHandle={authAccount?.callsign || pressPass.callsign || ""}
+        draftSavedLabel={composerDraftLabel}
+        newTitle={newTitle}
+        newContent={newContent}
+        setNewTitle={setNewTitle}
+        setNewContent={setNewContent}
+        newSourceUrl={newSourceUrl}
+        setNewSourceUrl={setNewSourceUrl}
+        newLocation={newLocation}
+        setNewLocation={setNewLocation}
+        newCoordinates={newCoordinates}
+        setNewCoordinates={setNewCoordinates}
+        newCategory={newCategory}
+        setNewCategory={setNewCategory}
+        newEditionStyle={newEditionStyle}
+        setNewEditionStyle={(v) => setNewEditionStyle(v as PressyoEdition)}
+        newSharingOption={newSharingOption}
+        setNewSharingOption={setNewSharingOption}
+        newIsAnonymous={newIsAnonymous}
+        setNewIsAnonymous={setNewIsAnonymous}
+        newDecoupleLocationPin={newDecoupleLocationPin}
+        setNewDecoupleLocationPin={setNewDecoupleLocationPin}
+        newImageUrl={newImageUrl}
+        setNewImageUrl={setNewImageUrl}
+        newImageCaption={newImageCaption}
+        setNewImageCaption={setNewImageCaption}
+        builderUseThemePhotoFilter={builderUseThemePhotoFilter}
+        setBuilderUseThemePhotoFilter={setBuilderUseThemePhotoFilter}
+        evidenceGallery={evidenceGallery}
+        setEvidenceGallery={setEvidenceGallery}
+        manualImageUrl={manualImageUrl}
+        setManualImageUrl={setManualImageUrl}
+        showUrlInput={showUrlInput}
+        setShowUrlInput={setShowUrlInput}
+        isUnfurling={isUnfurlingTitleUrl}
+        unfurlStatus={unfurlTitleStatus}
+        pressyoBusy={isPressyoEditorBusy}
+        pressyoStatus={pressyoEditorStatus}
+        pressyoLeads={pressyoLeads}
+        pressyoCanUndo={Boolean(pressyoEditorUndo)}
+        onPressyoUndo={handleUndoPressyoEdit}
+        onPressyoWrite={(id) => handlePressyoEditorAction(id as any)}
+        onPressyoFindLeads={() => handlePressyoEditorAction("find_leads")}
+        onOpenImbrgr={() => void handleCreateImageHandoff()}
+        imbrgrHandoffBusy={imbrgrHandoffBusy}
+        onPressyoCustom={(t) => handlePressyoEditorAction("custom_edit", undefined, t)}
+        onPressyoAdvanced={(action, style) =>
+          handlePressyoEditorAction(action, style as PressyoEdition | undefined)
+        }
+        onGuestSignInPrompt={() => setAuthModalMode("signin")}
+        onCloseRequest={() => setShowPressieBuilderModal(false)}
+        onSaveDraft={() => {
+          void handleSaveDraft();
+          setComposerDraftLabel("Draft saved");
+          setTimeout(() => setComposerDraftLabel(null), 2500);
+        }}
+        onPost={() => void handleCreatePressie()}
+        onPastePrepared={() => void handlePastePreparedContent()}
+        onPinMyArea={handlePinMyVicinity}
+        onUploadClick={() => imageFileInputRef.current?.click()}
+        onAddImageUrl={handleAddImageUrl}
+        onUnfurlFromText={(raw) => {
+          const m = raw.match(/https?:\/\/[^\s]+/i);
+          if (m) void handleUnfurlUrlFromTitle(m[0]);
+        }}
+        onUseVideoFrameAsCover={() => {
+          const vid = extractYoutubeVideoId(newSourceUrl);
+          if (!vid) return;
+          const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+          setNewImageUrl(frameUrl);
+          setEvidenceGallery((prev) => [
+            { id: "yt-" + Date.now(), url: frameUrl, source: "url", caption: "Video frame", timestamp: "Linked" },
+            ...prev.filter((p) => p.url !== frameUrl).slice(0, 7),
+          ]);
+        }}
+        hasYoutubeSource={Boolean(extractYoutubeVideoId(newSourceUrl))}
+        imageFileInputRef={imageFileInputRef}
+        onImageFileChange={handleUploadImageFile}
+        extractYoutubeId={extractYoutubeVideoId}
+        inputClass={inputThemeClass}
+        subCardClass={subCardThemeClass}
+        subTextClass={subTextThemeClass}
+      />
 
-            {/* Modal Form Body - Scrollable */}
-            <form id="pressie-builder-form" className="flex-1 p-5 sm:p-6 overflow-y-auto space-y-4 font-mono text-xs">
-              
-              {formValidationError && (
-                <div className="p-3 rounded bg-rose-500/10 border border-rose-500/40 text-rose-500 flex items-center gap-2 font-bold">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  <span>{formValidationError}</span>
-                </div>
-              )}
-
-              {/* 1. Headline / Dispatch Title + Drop-URL-to-Share Studio */}
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className={`font-bold flex items-center gap-1.5 ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
-                    <span>Headline / Dispatch Title <span className="text-amber-500">*</span></span>
-                    <span className="text-[10px] font-normal px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                      🔗 Drop URL in title to share content
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handlePastePreparedContent}
-                    className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
-                    title="Paste a URL or prepared multi-line article from your clipboard to auto-fill Headline, Source Link & Body"
-                  >
-                    <span>📋</span>
-                    <span>Paste Prepared Content / URL</span>
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Drop URL in title to share content (or type your headline here)..."
-                    value={newTitle}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setNewTitle(val);
-                      if (formValidationError) setFormValidationError(null);
-                      const urlMatch = val.match(/^(.*?)(https?:\/\/[^\s]+)\s*$/i);
-                      if (urlMatch && urlMatch[2].length > 10) {
-                        const prefix = (urlMatch[1] || "").trim();
-                        handleUnfurlUrlFromTitle(urlMatch[2], prefix);
-                      }
-                    }}
-                    className={`w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none transition placeholder:text-zinc-500/75 placeholder:italic ${inputThemeClass}`}
-                  />
-                  {isUnfurlingTitleUrl && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-amber-400 font-bold bg-zinc-900/90 px-2 py-0.5 rounded">
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      <span>Importing URL…</span>
-                    </div>
-                  )}
-                </div>
-
-                <p className={`text-[10px] leading-snug ${subTextThemeClass}`}>
-                  💡 <strong>Sharing a source or prepared article?</strong> Paste any link (news site, YouTube, Substack, Reddit, X) right into the title bar above—we'll automatically pull its headline, summary &amp; lead image, while letting you add your own commentary in the body and extra photos in the Media Tray below.
-                </p>
-
-                {unfurlTitleStatus && (
-                  <div className="px-2.5 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] flex items-center justify-between gap-2">
-                    <span>{unfurlTitleStatus}</span>
-                    <button
-                      type="button"
-                      onClick={() => setUnfurlTitleStatus("")}
-                      className="text-zinc-400 hover:text-white text-[10px] cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 🛡️ PRIVACY, METADATA SCRUBBER & VICINITY PINNING STUDIO */}
-              <div className={`p-3.5 rounded-xl border space-y-3 font-mono text-xs ${
-                newIsAnonymous || newDecoupleLocationPin
-                  ? "bg-emerald-950/25 border-emerald-500/50"
-                  : subCardThemeClass
-              }`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{newIsAnonymous ? "🕵️" : "🛡️"}</span>
-                    <div>
-                      <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                        <span>Identity, EXIF Scrubber & Vicinity Pin Shield</span>
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-black">
-                          ~5 KM FUZZY VICINITY ACTIVE
-                        </span>
-                      </div>
-                      <p className={`text-[10px] ${subTextThemeClass}`}>
-                        Pins show the general vicinity where dispatches are sent from (never exact GPS). Strip your identity/metadata or decouple your map pin below.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handlePinMyVicinity}
-                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-bold text-[10px] transition cursor-pointer flex items-center gap-1"
-                    title="Detect current area and automatically quantize to a safe ~5km fuzzy vicinity ring (never exact GPS)"
-                  >
-                    <span>🛰️</span>
-                    <span>Pin My Current Vicinity (~5km Fuzzy)</span>
-                  </button>
-                </div>
-
-                {/* 3 Privacy & Location Toggles */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !newIsAnonymous;
-                      setNewIsAnonymous(next);
-                      if (next) setNewDecoupleLocationPin(true);
-                    }}
-                    className={`p-2.5 rounded-lg border text-left transition cursor-pointer ${
-                      newIsAnonymous
-                        ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400"
-                        : "bg-zinc-900/60 border-zinc-700/80 text-zinc-300 hover:border-zinc-500"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold text-[11px]">
-                      <span>🕵️ Anonymous Mode</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">
-                        {newIsAnonymous ? "ON (STRIPPED)" : "OFF"}
-                      </span>
-                    </div>
-                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
-                      Strips your name, @callsign, bureau &amp; photo EXIF metadata publicly.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setNewDecoupleLocationPin(!newDecoupleLocationPin)}
-                    className={`p-2.5 rounded-lg border text-left transition cursor-pointer ${
-                      newDecoupleLocationPin
-                        ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 ring-1 ring-cyan-400"
-                        : "bg-zinc-900/60 border-zinc-700/80 text-zinc-300 hover:border-zinc-500"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold text-[11px]">
-                      <span>🔀 Decouple Map Pin</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">
-                        {newDecoupleLocationPin ? "DECOUPLED" : "LINKED"}
-                      </span>
-                    </div>
-                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
-                      Pins the area on the global map without tying the location pin to your identity.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
-                      if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-                        setNewCoordinates(`${fuzzVicinityClient(parts[0])}, ${fuzzVicinityClient(parts[1])}`);
-                      }
-                      setNewVicinityPinOnly(true);
-                      setSavedSuccessToast("📍 Vicinity coordinates quantized to ~5km sector (exact GPS stripped).");
-                      setTimeout(() => setSavedSuccessToast(""), 2500);
-                    }}
-                    className="p-2.5 rounded-lg border text-left transition cursor-pointer bg-amber-500/15 border-amber-500/50 text-amber-300"
-                  >
-                    <div className="flex items-center justify-between font-bold text-[11px]">
-                      <span>📍 Fuzzy Vicinity Ring</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40">±5 KM ONLY</span>
-                    </div>
-                    <p className="text-[9px] opacity-80 mt-1 leading-snug">
-                      Quantizes coordinates to a ~5km sector halo. Never pins exact buildings.
-                    </p>
-                  </button>
-                </div>
-
-                {/* Editable Vicinity Sector Name + Fuzzy Coordinates */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <div>
-                    <label className={`block text-[10px] font-bold mb-1 ${subTextThemeClass}`}>
-                      📍 Approximate Area / Vicinity Label
-                    </label>
-                    <input
-                      type="text"
-                      value={newLocation}
-                      onChange={(e) => setNewLocation(e.target.value)}
-                      placeholder="e.g. Lewis County, TN (Vicinity)"
-                      className={`w-full rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-[10px] font-bold mb-1 ${subTextThemeClass}`}>
-                      🧭 Fuzzy Sector Coordinates (Lon, Lat • Rounded ±5km)
-                    </label>
-                    <input
-                      type="text"
-                      value={newCoordinates}
-                      onChange={(e) => setNewCoordinates(e.target.value)}
-                      placeholder="-87.63, 40.12"
-                      className={`w-full rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
-                    />
-                  </div>
-                </div>
-
-                {/* Live Public Attribution vs. Map Pin Preview */}
-                <div className="p-2 rounded bg-black/30 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                  <div>
-                    <span className="text-zinc-400">Public Story Byline: </span>
-                    {newIsAnonymous ? (
-                      <span className="text-emerald-400 font-bold">🕵️ Anonymous Field Source (@anon-signal) • Metadata Stripped</span>
-                    ) : (
-                      <span className="text-amber-400 font-bold">{pressPass.name} (@{pressPass.callsign})</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-zinc-400">Global Radar Pin: </span>
-                    {newIsAnonymous || newDecoupleLocationPin ? (
-                      <span className="text-cyan-400 font-bold">🔀 Unattributed Vicinity Signal in [{newLocation || "Regional Sector"}]</span>
-                    ) : (
-                      <span className="text-amber-300 font-bold">📡 Linked Vicinity Ring in [{newLocation || "Regional Sector"}]</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Edition Style Model Selector */}
-              <div className="space-y-2.5">
-                <label className={`block font-bold mb-1 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Edition Style Model (8 Pressie Archetypes + Signature Photo Filters)
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono">
-                  {[
-                    { id: "tactical", label: "Tactical", icon: "🛰️", desc: "FLIR Night-Vision" },
-                    { id: "newspaper", label: "Broadsheet", icon: "📰", desc: "1910 Halftone B&W" },
-                    { id: "fieldnote", label: "Field Note", icon: "🌿", desc: "Kodachrome 64 Film" },
-                    { id: "almanac", label: "Almanac", icon: "🧭", desc: "1880s Sepia Plate" },
-                    { id: "curio", label: "Curio Zine", icon: "🎪", desc: "Tin-Type Lithograph" },
-                    { id: "comic", label: "Comic Strip", icon: "💥", desc: "Pulp Ben-Day Ink" },
-                    { id: "arcade", label: "8-Bit Arcade", icon: "🕹️", desc: "Green CRT Matrix" },
-                    { id: "magazine", label: "Modern Sleek", icon: "✨", desc: "Cinema Bleach-Bypass" },
-                  ].map((style) => (
-                    <button
-                      key={style.id}
-                      type="button"
-                      onClick={() => setNewEditionStyle(style.id as any)}
-                      className={`p-2 rounded-lg border text-center transition cursor-pointer flex flex-col items-center gap-0.5 ${
-                        newEditionStyle === style.id
-                          ? "bg-amber-500/20 border-amber-500 text-amber-400 ring-1 ring-amber-400 font-bold shadow-sm"
-                          : "bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 border-zinc-700"
-                      }`}
-                    >
-                      <span className="text-sm">{style.icon}</span>
-                      <span className="text-xs font-bold">{style.label}</span>
-                      <span className="text-[9px] text-zinc-400 truncate">{style.desc}</span>
-                    </button>
-                  ))}
-                </div>
-
-              </div>
-
-              {/* Syndication & Forking Rights Selector */}
-              <div>
-                <label className={`block font-bold mb-1.5 ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                  Syndication & Collaboration Rights
-                </label>
-                <div className="grid grid-cols-3 gap-2 font-mono">
-                  {[
-                    { id: "fork", label: "Open Fork", icon: "🔀", desc: "Anyone can branch & follow up" },
-                    { id: "colab", label: "Colab", icon: "🤝", desc: "Fork with author permission" },
-                    { id: "none", label: "Closed Wire", icon: "🔒", desc: "Exclusive reporting only" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setNewSharingOption(opt.id as any)}
-                      className={`p-2 rounded-lg border text-center transition cursor-pointer flex flex-col items-center gap-0.5 ${
-                        newSharingOption === opt.id
-                          ? "bg-amber-500/20 border-amber-500 text-amber-400 ring-1 ring-amber-400 font-bold shadow-sm"
-                          : "bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 border-zinc-700"
-                      }`}
-                    >
-                      <span className="text-sm">{opt.icon}</span>
-                      <span className="text-xs font-bold">{opt.label}</span>
-                      <span className="text-[9px] text-zinc-400 leading-tight">{opt.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 4. ENHANCEMENT: Hybrid Generated Image Preview & Local/Capture Image Tray */}
-              <div className={`p-3.5 rounded-lg border space-y-3 ${subCardThemeClass}`}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5 font-bold text-amber-500">
-                    <ImageIcon className="h-4 w-4" />
-                    <span>Photo (optional)</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                      {evidenceGallery.length} {evidenceGallery.length === 1 ? "photo" : "photos"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <a
-                      href={buildImbrgrStudioUrl(newTitle || newContent.slice(0, 280))}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-bold border border-amber-500/40 flex items-center gap-1"
-                    >
-                      Open imbrgr to make a photo <ExternalLink className="h-3 w-3" />
-                    </a>
-                    <input
-                      type="file"
-                      ref={imageFileInputRef}
-                      onChange={handleUploadImageFile}
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => imageFileInputRef.current?.click()}
-                      className="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs flex items-center gap-1 border border-amber-500/30 transition cursor-pointer"
-                      title="Upload one or multiple photos from device (EXIF & GPS automatically stripped)"
-                    >
-                      <Upload className="h-3 w-3" />
-                      <span>Upload Photo(s)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowUrlInput(!showUrlInput)}
-                      className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
-                        showUrlInput ? "bg-amber-500/20 text-amber-300 border-amber-500/60" : "bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border-zinc-700"
-                      }`}
-                      title="Paste a direct image URL from Wikimedia, NASA, NPS, Unsplash, or news archives"
-                    >
-                      🔗 Paste Real Photo URL
-                    </button>
-                  </div>
-                </div>
-
-                {showUrlInput && (
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="url"
-                      placeholder="Paste real web photo URL (Wikimedia, NASA, Unsplash, https://...)..."
-                      value={manualImageUrl}
-                      onChange={(e) => setManualImageUrl(e.target.value)}
-                      className={`flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddImageUrl}
-                      className="px-3 py-1.5 rounded bg-amber-500 text-zinc-950 font-bold text-xs hover:bg-amber-400 transition cursor-pointer"
-                    >
-                      Attach Real Photo
-                    </button>
-                  </div>
-                )}
-
-                {/* Evidence Grid / Thumbnails */}
-                {evidenceGallery.length > 0 ? (
-                  <div className="space-y-2.5">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {evidenceGallery.map((item, idx) => {
-                        const isActive = item.url === newImageUrl;
-                        const builderThemeCfg = getEditionThemeConfig(newEditionStyle);
-                        return (
-                          <div
-                            key={item.id || idx}
-                            className={`group relative rounded-lg overflow-hidden border transition bg-black/40 flex flex-col ${
-                              isActive ? "border-amber-500 ring-2 ring-amber-500/30" : "border-zinc-700/80"
-                            }`}
-                          >
-                            <div
-                              onClick={() => {
-                                setNewImageUrl(item.url);
-                                if (item.caption) setNewImageCaption(item.caption);
-                              }}
-                              className="relative aspect-video w-full cursor-pointer bg-zinc-900 overflow-hidden"
-                              title="Click to set as active cover visual"
-                            >
-                              <img
-                                src={item.url}
-                                alt={item.caption || "Evidence visual"}
-                                className={`w-full h-full object-cover transition ${
-                                  builderUseThemePhotoFilter ? builderThemeCfg.imgFilterClass : "filter-none"
-                                }`}
-                              />
-                              {renderThemePhotoOverlay(newEditionStyle, builderUseThemePhotoFilter)}
-                              {isActive ? (
-                                <div className="absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[9px] font-black flex items-center gap-1 shadow-md ring-1 ring-amber-400">
-                                  <Check className="h-3 w-3 stroke-[3]" />
-                                  <span>Headline Image</span>
-                                </div>
-                              ) : (
-                                <div className="absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded bg-black/80 text-zinc-200 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition">
-                                  Select for Headline
-                                </div>
-                              )}
-                              <div className="absolute top-1 right-1 z-20 px-1 py-0.5 rounded bg-black/70 text-zinc-400 text-[8px]">
-                                {item.source === "ai" ? "AI Gen" : "Upload"}
-                              </div>
-                            </div>
-
-                            <div className="p-1 bg-zinc-900/80 flex items-center justify-between text-[10px]">
-                              <span className="truncate flex-1 text-zinc-400">{item.caption || item.timestamp}</span>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadImage(item.url, `fieldpress-visual-${idx + 1}`)}
-                                  className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-amber-400"
-                                  title="Download"
-                                >
-                                  <Download className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveGalleryImage(item.id)}
-                                  className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-rose-400"
-                                  title="Remove"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {newImageUrl && (
-                      <div className="pt-1 flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="Photo caption & verification note..."
-                          value={newImageCaption}
-                          onChange={(e) => setNewImageCaption(e.target.value)}
-                          className={`flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none ${inputThemeClass}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewImageUrl("");
-                            setNewImageCaption("");
-                          }}
-                          className="text-rose-400 hover:underline text-[10px] cursor-pointer flex-shrink-0"
-                        >
-                          Detach Cover
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => imageFileInputRef.current?.click()}
-                    className="p-4 rounded-lg border border-dashed border-zinc-700/80 hover:border-amber-500/50 transition text-center cursor-pointer space-y-1 bg-zinc-900/20"
-                  >
-                    <div className="flex justify-center text-zinc-400">
-                      <ImageIcon className="h-5 w-5 opacity-60" />
-                    </div>
-                    <p className={`text-xs font-medium ${subTextThemeClass}`}>
-                      No media attached yet
-                    </p>
-                    <p className="text-[10px] text-zinc-500">
-                      Generate documentary photography above, or click "Upload / Capture Photo" to attach evidence stills.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Link (optional) -- resolved server-side into a YouTube/Reddit/X
-                  embed or a generic link card on save. See WireEmbed. */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className={`font-bold block ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                    🎥 Real Video Footage / Source Link <span className="font-normal text-[10px] normal-case tracking-normal text-zinc-500">(YouTube, Reddit, X, or official source URL)</span>
-                  </label>
-                  {extractYoutubeVideoId(newSourceUrl) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const vid = extractYoutubeVideoId(newSourceUrl);
-                        if (!vid) return;
-                        const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-                        setNewImageUrl(frameUrl);
-                        if (!newImageCaption.trim()) {
-                          setNewImageCaption("[🎥 Real Video Footage Frame] Verified Broadcast Still");
-                        }
-                        setEvidenceGallery((prev) => [
-                          {
-                            id: "yt-" + Date.now(),
-                            url: frameUrl,
-                            source: "upload" as const,
-                            caption: "[🎥 Real Video Footage Frame]",
-                            timestamp: "Footage"
-                          },
-                          ...prev.filter((p) => p.url !== frameUrl).slice(0, 7)
-                        ]);
-                        setSavedSuccessToast("HD frame captured from YouTube footage as cover photo!");
-                        setTimeout(() => setSavedSuccessToast(""), 3000);
-                      }}
-                      className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 text-[10px] font-bold transition cursor-pointer"
-                    >
-                      📸 Use Video Frame as Cover Photo
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="url"
-                  placeholder="Paste YouTube video URL (https://www.youtube.com/watch?v=...) or source article link..."
-                  value={newSourceUrl}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewSourceUrl(val);
-                    const vid = extractYoutubeVideoId(val);
-                    if (vid && !newImageUrl.trim()) {
-                      const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-                      setNewImageUrl(frameUrl);
-                      setNewImageCaption("[🎥 Real Video Footage Frame] Verified Broadcast Still");
-                      setEvidenceGallery((prev) => [
-                        {
-                          id: "yt-auto-" + Date.now(),
-                          url: frameUrl,
-                          source: "upload" as const,
-                          caption: "[🎥 Real Video Footage Frame]",
-                          timestamp: "Footage"
-                        },
-                        ...prev.slice(0, 7)
-                      ]);
-                    }
-                  }}
-                  className={`w-full rounded-lg px-3 py-2 text-xs focus:outline-none transition ${inputThemeClass}`}
-                />
-                {extractYoutubeVideoId(newSourceUrl) && (
-                  <div className="rounded-xl overflow-hidden border border-red-500/40 bg-black aspect-video max-h-56 w-full">
-                    <iframe
-                      src={`https://www.youtube.com/embed/${extractYoutubeVideoId(newSourceUrl)}`}
-                      title="Real Footage Preview"
-                      className="w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-              </div>
-
-              <PostAiTray
-                isDark={isDark}
-                busy={isPressyoEditorBusy}
-                status={pressyoEditorStatus}
-                leads={pressyoLeads}
-                canUndo={Boolean(pressyoEditorUndo)}
-                onUndo={handleUndoPressyoEdit}
-                onWriteAction={(id) => {
-                  if (id === "rewrite_voice") {
-                    handlePressyoEditorAction("rewrite_voice", newEditionStyle);
-                    return;
-                  }
-                  handlePressyoEditorAction(id as Parameters<typeof handlePressyoEditorAction>[0]);
-                }}
-                onFindLeads={() => handlePressyoEditorAction("find_leads")}
-                onCreateImage={() => void handleCreateImageHandoff()}
-                onCustomAsk={(text) => handlePressyoEditorAction("custom_edit", undefined, text)}
-              />
-
-              {/* 5. Dispatch Body (matching Image 2) */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className={`font-bold ${isDark ? "text-zinc-400" : "text-zinc-700"}`}>
-                    Dispatch Body <span className="text-amber-500">*</span>
-                  </label>
-                  <span className={`text-[10px] ${subTextThemeClass}`}>
-                    {newContent.length} chars • {newContent.trim() ? newContent.trim().split(/\s+/).length : 0} words
-                  </span>
-                </div>
-                <textarea
-                  rows={5}
-                  placeholder="Write dispatch copy..."
-                  value={newContent}
-                  onChange={(e) => {
-                    setNewContent(e.target.value);
-                    if (formValidationError) setFormValidationError(null);
-                  }}
-                  className={`w-full rounded p-3 text-sm focus:outline-none leading-relaxed font-sans transition ${inputThemeClass}`}
-                />
-              </div>
-
-              {/* Byline attribution */}
-              <div className={`p-2.5 rounded border text-[11px] flex flex-wrap items-center justify-between gap-2 ${subCardThemeClass} ${subTextThemeClass}`}>
-                <div>
-                  <span className="font-bold text-amber-500">Byline:</span>{" "}
-                  {newIsAnonymous ? (
-                    <span className="text-emerald-400 font-bold">Anonymous Field Source (@anon-signal) • Metadata Stripped</span>
-                  ) : (
-                    <span>
-                      {pressPass.name} (@{pressPass.callsign}) • {pressPass.role}
-                      {newDecoupleLocationPin ? " • Pin Decoupled" : ""}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] text-emerald-400 font-semibold">
-                  📍 ~5 km Fuzzy Vicinity Pin ({newCoordinates || "39.46, -87.41"})
-                </span>
-              </div>
-            </form>
-
-            {/* Footer matching Image 2 */}
-            <div className={`flex-shrink-0 p-4 border-t flex items-center justify-between font-mono text-xs ${borderThemeClass} ${
-              isDark ? "bg-zinc-950/80" : "bg-zinc-50"
-            }`}>
-              {/* Stage to Press Roll */}
-              <button
-                type="button"
-                onClick={() => handleSaveDraft()}
-                className="px-4 py-2 rounded border border-zinc-700 bg-zinc-800 text-amber-400 hover:bg-zinc-700 hover:border-amber-500/50 transition font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Save this dispatch to your staged Press Roll"
-              >
-                <FolderLock className="h-4 w-4" />
-                <span>Stage to Press Roll</span>
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPressieBuilderModal(false)}
-                  className={`px-4 py-2 rounded border transition cursor-pointer ${
-                    isDark ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800" : "border-zinc-300 text-zinc-700 hover:bg-zinc-200"
-                  }`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCreatePressie()}
-                  disabled={isSubmittingPressie}
-                  className="px-5 py-2 rounded bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  title={editingPublishedId ? "Save changes to this dispatch" : "Publish dispatch to Live Feed"}
-                >
-                  {editingPublishedId ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                  <span>{isSubmittingPressie ? "Saving..." : editingPublishedId ? "Save Changes" : "Publish to Live Feed"}</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* 6. DEDICATED PRESS PASS CREDENTIAL & ID MODAL (EXACTLY AS IN IMAGE 1)     */}
       {/*    Opened ONLY when clicking "PRESS PASS: ras.ip" or Settings Profile      */}
       {/* ========================================================================= */}
@@ -8072,7 +7332,7 @@ export const FieldPressMaster: React.FC = () => {
                         🔀 VICINITY PIN DECOUPLED FROM IDENTITY
                       </span>
                     )}
-                    <span>{selectedStory.author} (@{selectedStory.callsign})</span>
+                    <span>{formatByline(selectedStory.author, selectedStory.callsign)}</span>
                     <span>•</span>
                     <span>{selectedStory.bureau}</span>
                     {Array.isArray(selectedStory.coordinates) && selectedStory.coordinates.length === 2 && (
@@ -9120,8 +8380,9 @@ ${shareUrl}`;
                 <div className="flex items-center gap-2 truncate">
                   <img src={pressPass.avatarUrl || "/pressyo-icon.jpg"} alt={pressPass.callsign || "Guest"} className="w-5 h-5 rounded-full object-cover border border-amber-500/50" />
                   <span className="truncate">
-                    @{pressPass.callsign || "guest"}
-                    {authAccount?.canAccessAdminConsole && " (Bureau Chief)"}
+                    {authAccount
+                      ? `@${pressPass.callsign || authAccount.callsign || "you"}`
+                      : "Sign in to post"}
                   </span>
                 </div>
                 {authAccount?.role === "super_admin" && (
@@ -9886,7 +9147,7 @@ ${shareUrl}`;
             <div className={`p-4 border-b flex items-center justify-between font-mono ${borderThemeClass}`}>
               <div className="flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-amber-500" />
-                <h3 className="font-bold text-sm">Workstation Configuration</h3>
+                <h3 className="font-bold text-sm">Settings</h3>
               </div>
               <button
                 onClick={() => setShowSettingsDrawer(false)}
@@ -9899,8 +9160,8 @@ ${shareUrl}`;
             {/* Drawer Tabs */}
             <div className="flex border-b border-zinc-800 font-mono text-xs overflow-x-auto">
               {([
-                "quicklinks", "profile", "drafts", "bookmarks", "archives", "appearance", "system",
-                ...(authAccount?.role === "super_admin" ? ["admin" as const, "moderation" as const] : [])
+                "profile", "drafts", "bookmarks", "appearance", "advanced",
+                ...(authAccount?.canAccessAdminConsole ? ["admin" as const, "moderation" as const] : [])
               ] as const).map((tab) => (
                 <button
                   key={tab}
@@ -9915,112 +9176,13 @@ ${shareUrl}`;
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  {tab === "quicklinks" ? "Quick Links" : tab}
+                  {tab}
                 </button>
               ))}
             </div>
 
             {/* Drawer Body */}
             <div className="flex-1 p-5 overflow-y-auto space-y-4 font-mono text-xs">
-              
-              {/* TAB: QUICK LINKS — one-click access to everything */}
-              {settingsActiveTab === "quicklinks" && (
-                <div className="space-y-4">
-                  <div>
-                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Sections</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: "Daily Edition", icon: Newspaper, action: () => setActiveTab("edition") },
-                        { label: "Live Wire", icon: Radio, action: () => setActiveTab("wire") },
-                        { label: "Map Radar", icon: MapPin, action: () => setActiveTab("map") },
-                        { label: "Classifieds", icon: Tag, action: () => setActiveTab("classifieds") },
-                        { label: "Discover", icon: Users, action: () => setActiveTab("discover") }
-                      ].map(({ label, icon: Icon, action }) => (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => { setShowSettingsDrawer(false); action(); }}
-                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                        >
-                          <Icon className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                          <span className="font-bold">{label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Tools</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setShowSettingsDrawer(false); setShowPressyoModal(true); }}
-                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                      >
-                        <img src="/pressyo-icon.jpg" alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
-                        <span className="font-bold">Pressy'O</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowSettingsDrawer(false); setShowMessengerModal(true); }}
-                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                      >
-                        <MessageCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                        <span className="font-bold">Messages</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowSettingsDrawer(false); openCreatePressie(); }}
-                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                      >
-                        <Send className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                        <span className="font-bold">New Dispatch</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowSettingsDrawer(false); openPressPassEditor(); }}
-                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                      >
-                        <ShieldCheck className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                        <span className="font-bold">Press Pass</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className={`font-bold uppercase text-[10px] mb-2 ${subTextThemeClass}`}>Account</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {authAccount ? (
-                        <button
-                          type="button"
-                          onClick={() => { setShowSettingsDrawer(false); logOutAccount(); }}
-                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                        >
-                          <LogOut className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                          <span className="font-bold">Sign Out</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => { setShowSettingsDrawer(false); setAuthModalMode("signin"); setAuthError(""); }}
-                          className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                        >
-                          <LogIn className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                          <span className="font-bold">Sign In</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setTheme(isDark ? "light" : "dark")}
-                        className={`p-3 rounded-lg border flex items-center gap-2 text-left transition cursor-pointer ${subCardThemeClass} hover:border-amber-500/50`}
-                      >
-                        {isDark ? <Sun className="h-4 w-4 text-amber-500 flex-shrink-0" /> : <Moon className="h-4 w-4 text-amber-500 flex-shrink-0" />}
-                        <span className="font-bold">{isDark ? "Light Mode" : "Dark Mode"}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* TAB A: PROFILE */}
               {settingsActiveTab === "profile" && (
@@ -10061,7 +9223,7 @@ ${shareUrl}`;
               {settingsActiveTab === "drafts" && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold">Staged Press Roll ({pressRoll.length})</span>
+                    <span className="font-bold">Drafts ({pressRoll.length})</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -10093,7 +9255,7 @@ ${shareUrl}`;
                             }}
                             className="text-amber-400 hover:underline font-bold"
                           >
-                            Edit in Builder →
+                            Open draft →
                           </button>
                           <button
                             type="button"
@@ -10155,13 +9317,13 @@ ${shareUrl}`;
                 </div>
               )}
 
-              {/* TAB D: ARCHIVES */}
-              {settingsActiveTab === "archives" && (
+              {/* TAB: ADVANCED (archives, sync, system) */}
+              {settingsActiveTab === "advanced" && (
                 <div className="space-y-4">
                   <div className={`p-4 rounded-lg border space-y-2 ${subCardThemeClass}`}>
-                    <h5 className="font-bold">Export Reporter Dossier</h5>
+                    <h5 className="font-bold">Download your data</h5>
                     <p className={`text-xs ${subTextThemeClass}`}>
-                      Download all verified dispatches, credentials, and staged drafts formatted as offline JSON backup.
+                      Export your posts, drafts, and saved items as a JSON backup.
                     </p>
                     <button
                       type="button"
@@ -10172,8 +9334,65 @@ ${shareUrl}`;
                     </button>
                   </div>
 
+                  <div className={`p-4 rounded-lg border space-y-3 ${subCardThemeClass}`}>
+                    <h5 className="font-bold">Sync</h5>
+                    <p className={`text-xs ${subTextThemeClass}`}>
+                      Last refresh: {lastSyncTime}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSyncFeeds}
+                      disabled={isSyncing}
+                      className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold disabled:opacity-50"
+                    >
+                      {isSyncing ? "Refreshing…" : "Refresh feeds now"}
+                    </button>
+                  </div>
+
+                  <div className={`p-4 rounded-lg border space-y-3 ${subCardThemeClass}`}>
+                    <h5 className="font-bold">Feed &amp; offline</h5>
+                    <div>
+                      <label className="block font-bold mb-1">Auto-refresh</label>
+                      <select
+                        value={autoRefreshInterval}
+                        onChange={(e) => setAutoRefreshInterval(e.target.value)}
+                        className={`w-full rounded px-2.5 py-1.5 ${inputThemeClass}`}
+                      >
+                        <option value="15s">Every 15 seconds</option>
+                        <option value="30s">Every 30 seconds</option>
+                        <option value="60s">Every minute</option>
+                        <option value="manual">Manual only</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">Default filing location</label>
+                      <input
+                        type="text"
+                        value={defaultBeat}
+                        onChange={(e) => setDefaultBeat(e.target.value)}
+                        className={`w-full rounded px-2.5 py-1.5 ${inputThemeClass}`}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded border border-zinc-800">
+                      <span>Offline reading cache</span>
+                      <button
+                        type="button"
+                        onClick={() => setOfflineCacheEnabled(!offlineCacheEnabled)}
+                        className={`px-3 py-1 rounded ${
+                          offlineCacheEnabled
+                            ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500"
+                            : isDark
+                            ? "bg-zinc-800 text-zinc-400"
+                            : "bg-zinc-200 text-zinc-700 border border-zinc-400"
+                        }`}
+                      >
+                        {offlineCacheEnabled ? "On" : "Off"}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className={`p-4 rounded-lg border space-y-2 border-rose-900/40 bg-rose-950/10`}>
-                    <h5 className="font-bold text-rose-400">Reset Local Cache</h5>
+                    <h5 className="font-bold text-rose-400">Reset local cache</h5>
                     <p className={`text-xs ${subTextThemeClass}`}>
                       Clear local device preferences and re-sync dispatches from the server (your published content and drafts are unaffected — they live in your account, not this browser).
                     </p>
@@ -10220,52 +9439,8 @@ ${shareUrl}`;
                 </div>
               )}
 
-              {/* TAB F: SYSTEM */}
-              {settingsActiveTab === "system" && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block font-bold mb-1">Auto-refresh Frequency</label>
-                    <select
-                      value={autoRefreshInterval}
-                      onChange={(e) => setAutoRefreshInterval(e.target.value)}
-                      className={`w-full rounded px-2.5 py-1.5 ${inputThemeClass}`}
-                    >
-                      <option value="15s">15 seconds (Tactical)</option>
-                      <option value="30s">30 seconds (Standard)</option>
-                      <option value="60s">1 minute</option>
-                      <option value="manual">Manual Sync Only</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1">Primary Beat Node</label>
-                    <input
-                      type="text"
-                      value={defaultBeat}
-                      onChange={(e) => setDefaultBeat(e.target.value)}
-                      className={`w-full rounded px-2.5 py-1.5 ${inputThemeClass}`}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded border border-zinc-800">
-                    <span>Offline PWA Telemetry Cache</span>
-                    <button
-                      type="button"
-                      onClick={() => setOfflineCacheEnabled(!offlineCacheEnabled)}
-                      className={`px-3 py-1 rounded ${offlineCacheEnabled ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-400"}`}
-                    >
-                      {offlineCacheEnabled ? "Enabled" : "Disabled"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: ADMIN — role management, super_admin only. The tab itself
-                  is only rendered into the tab bar when authAccount.role is
-                  super_admin (see tab list above), and every mutation is
-                  re-checked server-side in /api/admin/*, so this panel being
-                  hidden client-side is a UX nicety, not the security boundary. */}
-              {settingsActiveTab === "admin" && authAccount?.role === "super_admin" && (
+              {/* TAB: ADMIN — owner / super-admin only (server-enforced). */}
+              {settingsActiveTab === "admin" && authAccount?.canAccessAdminConsole && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Correspondent Accounts</p>
@@ -10358,7 +9533,7 @@ ${shareUrl}`;
               {/* TAB: MODERATION — reports queue + disputed dispatches,
                   super_admin only. Both signals are server-backed and
                   re-checked server-side, same trust boundary as ADMIN. */}
-              {settingsActiveTab === "moderation" && authAccount?.role === "super_admin" && (
+              {settingsActiveTab === "moderation" && authAccount?.canAccessAdminConsole && (
                 <div className="space-y-5">
                   <div className="flex items-center justify-between">
                     <p className={`font-bold uppercase text-[10px] ${subTextThemeClass}`}>Moderation Queue</p>
@@ -10480,8 +9655,6 @@ ${shareUrl}`;
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Rail — thumb-zone tab bar for small screens.
-          Mirrors the four primary content tabs hidden from the top nav above. */}
       <nav
         className={`sm:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-md ${
           isDark ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"
@@ -10490,18 +9663,20 @@ ${shareUrl}`;
       >
         <div className="grid grid-cols-4">
           {([
-            { tab: "edition" as const, label: "Edition", Icon: Newspaper },
-            { tab: "wire" as const, label: "Wire", Icon: Radio },
-            { tab: "map" as const, label: "Map", Icon: MapPin },
-            { tab: "classifieds" as const, label: "Classifieds", Icon: Tag }
-          ]).map(({ tab, label, Icon }) => {
-            const isActive = activeTab === tab;
+            { id: "home" as const, label: "Home", Icon: Home, action: () => setMainSection("home") },
+            { id: "explore" as const, label: "Explore", Icon: Compass, action: () => setMainSection("explore") },
+            { id: "post" as const, label: "Post", Icon: Plus, action: () => openCreatePressie() },
+            { id: "messages" as const, label: "Messages", Icon: MessageCircle, action: () => setShowMessengerModal(true) },
+          ]).map(({ id, label, Icon, action }) => {
+            const isActive =
+              (id === "home" && mainSection === "home") ||
+              (id === "explore" && mainSection === "explore");
             return (
               <button
-                key={tab}
+                key={id}
                 type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`flex flex-col items-center justify-center gap-0.5 py-2.5 font-mono text-[10px] transition cursor-pointer ${
+                onClick={action}
+                className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] transition cursor-pointer ${
                   isActive
                     ? isDark ? "text-amber-400" : "text-amber-700"
                     : isDark ? "text-zinc-500" : "text-zinc-500"

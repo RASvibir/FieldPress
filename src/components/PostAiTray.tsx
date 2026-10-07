@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ExternalLink, RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 
 export type LeadItem = { angle: string; sourceUrl: string; sourceTitle: string };
 
@@ -29,7 +29,6 @@ type Props = {
   leads: LeadItem[];
   onWriteAction: (actionId: string) => void;
   onFindLeads: () => void;
-  onCreateImage: () => void;
   onCustomAsk: (text: string) => void;
   onUndo?: () => void;
   canUndo: boolean;
@@ -42,7 +41,6 @@ export const PostAiTray: React.FC<Props> = ({
   leads,
   onWriteAction,
   onFindLeads,
-  onCreateImage,
   onCustomAsk,
   onUndo,
   canUndo,
@@ -71,14 +69,6 @@ export const PostAiTray: React.FC<Props> = ({
             className="px-3 py-2 rounded-lg border text-xs font-bold hover:bg-zinc-800/30"
           >
             Find leads
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onCreateImage}
-            className="px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1 hover:bg-zinc-800/30"
-          >
-            Create image <ExternalLink className="h-3 w-3" />
           </button>
           {canUndo && onUndo && (
             <button type="button" onClick={onUndo} className="px-2 py-2 text-[10px] font-bold text-zinc-500">

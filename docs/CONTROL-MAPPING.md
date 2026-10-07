@@ -14,7 +14,7 @@
 | 4 | Edition Style Model (8) | **More** — Look |
 | 5 | Theme photo filter ON/OFF | **Advanced** (single toggle) |
 | 6 | Syndication Open Fork / Colab / Closed | **More** — Who can remix (Anyone / Ask me / No one) |
-| 7 | AI image prompt, Pressy'o Prompt, Gen Visual, quota | **AI** tray — Create image (+ credits); imbrgr handoff |
+| 7 | AI image prompt, Pressy'o Prompt, Gen Visual, quota | Compose toolbar — **Photo** + imbrgr icon (tooltip: “Make or edit on imbrgr”); autosave draft → studio handoff; return toast “Image added” |
 | 8a | Upload Photo(s) | **Photo** toolbar |
 | 8b | Paste Real Photo URL | **Photo** toolbar → link field |
 | 8c | Thumbnail grid, set cover, remove | **Post** inline previews (click = cover) |
@@ -34,3 +34,8 @@
 | — | Pressy'O Send Full Package | Assistant chat → apply to open Post |
 | — | Category (hidden) | **More** — Topic |
 | — | Share modal | Unchanged |
+| — | Quick Links drawer tab | Removed (use **Home** / **Explore** / nav) |
+| — | Wire category chip strip on Home | **Home** topic chips only |
+| — | System / Archives / Sync tabs | **Settings → Advanced** |
+| — | Auto-refresh, default bureau, offline cache | **Settings → Advanced** |
+| — | Admin / Moderation | **Settings → Advanced** tab bar (owner only) + avatar menu |
