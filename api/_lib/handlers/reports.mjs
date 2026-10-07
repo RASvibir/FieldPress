@@ -24,6 +24,7 @@
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../auth.mjs";
 import { suspendAccount, removeDispatch } from "./admin.mjs";
+import { isSuperAdminAccount } from "../superAdmin.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -78,7 +79,7 @@ async function handleQueue(req, res, me) {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
-  if (me.role !== "super_admin") {
+  if (!isSuperAdminAccount(me)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }
@@ -108,7 +109,7 @@ async function handleDisputed(req, res, me) {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
-  if (me.role !== "super_admin") {
+  if (!isSuperAdminAccount(me)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }
@@ -132,7 +133,7 @@ async function handleResolve(req, res, me) {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
-  if (me.role !== "super_admin") {
+  if (!isSuperAdminAccount(me)) {
     res.status(403).json({ error: "Forbidden." });
     return;
   }

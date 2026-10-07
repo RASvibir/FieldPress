@@ -36,30 +36,34 @@ function fuzzVicinityCoord(val, seedStr = "fp") {
   return Number((quantized + offset).toFixed(2));
 }
 
-function sanitizeGallery(rawGallery, primaryImageUrl, primaryCaption) {
+function sanitizeGallery(rawGallery, primaryImageUrl, primaryCaption, primaryAltText) {
   const out = [];
   const seen = new Set();
-  const pushItem = (url, caption, source, timestamp, id) => {
+  const pushItem = (url, caption, source, timestamp, id, altText) => {
     if (typeof url !== "string" || !url.trim()) return;
     const cleanUrl = url.trim().slice(0, 400000);
     if (seen.has(cleanUrl)) return;
     seen.add(cleanUrl);
-    out.push({
+    const item = {
       id: typeof id === "string" && id ? id.slice(0, 64) : `img-${out.length + 1}`,
       url: cleanUrl,
       caption: typeof caption === "string" ? caption.trim().slice(0, 500) : "",
       source: typeof source === "string" ? source.trim().slice(0, 40) : "upload",
       timestamp: typeof timestamp === "string" ? timestamp.trim().slice(0, 60) : "Verified Still"
-    });
+    };
+    if (typeof altText === "string" && altText.trim()) {
+      item.altText = altText.trim().slice(0, 500);
+    }
+    out.push(item);
   };
 
   if (primaryImageUrl) {
-    pushItem(primaryImageUrl, primaryCaption || "", "lead", "Lead Frame", "img-lead");
+    pushItem(primaryImageUrl, primaryCaption || "", "lead", "Lead Frame", "img-lead", primaryAltText);
   }
   if (Array.isArray(rawGallery)) {
     for (const item of rawGallery.slice(0, 12)) {
       if (item && typeof item === "object") {
-        pushItem(item.url, item.caption, item.source, item.timestamp, item.id);
+        pushItem(item.url, item.caption, item.source, item.timestamp, item.id, item.altText);
       } else if (typeof item === "string") {
         pushItem(item, "", "gallery", "Field Still");
       }
@@ -83,7 +87,7 @@ function toClientShape(row, callerId = null) {
   const safeLng = row.longitude != null ? fuzzVicinityCoord(Number(row.longitude), row.id + "lng") : null;
 
   const embedObj = row.embed_data && typeof row.embed_data === "object" ? row.embed_data : {};
-  const gallery = sanitizeGallery(embedObj.gallery, row.image_url, row.image_caption);
+  const gallery = sanitizeGallery(embedObj.gallery, row.image_url, row.image_caption, row.image_alt_text);
 
   return {
     id: row.id,
@@ -101,6 +105,7 @@ function toClientShape(row, callerId = null) {
     content: row.content,
     imageUrl: row.image_url || (gallery[0]?.url ?? undefined),
     imageCaption: row.image_caption || (gallery[0]?.caption ?? undefined),
+    imageAltText: row.image_alt_text || (gallery[0]?.altText ?? undefined),
     gallery: gallery.length > 0 ? gallery : undefined,
     isLead: row.is_lead,
     isPressRoll: row.is_press_roll,
@@ -269,7 +274,7 @@ async function create(req, res) {
 
     const {
       title, category, content, location, coordinates,
-      imageUrl, imageCaption, gallery, isLead, isPressRoll, editionStyle,
+      imageUrl, imageCaption, imageAltText, gallery, isLead, isPressRoll, editionStyle,
       sharingOption, parentDispatchId, id: clientId, sourceUrl,
       isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
@@ -291,7 +296,9 @@ async function create(req, res) {
     if (cleanSourceUrl) {
       embed = await resolveEmbed(cleanSourceUrl);
     }
-    const cleanGallery = sanitizeGallery(gallery, imageUrl, imageCaption);
+    const cleanAlt =
+      typeof imageAltText === "string" && imageAltText.trim() ? imageAltText.trim().slice(0, 500) : null;
+    const cleanGallery = sanitizeGallery(gallery, imageUrl, imageCaption, cleanAlt);
     const mergedCreateEmbedData =
       embed?.embed_data || cleanGallery.length > 0
         ? JSON.stringify({ ...(embed?.embed_data || {}), ...(cleanGallery.length > 0 ? { gallery: cleanGallery } : {}) })
@@ -320,13 +327,14 @@ async function create(req, res) {
     const [row] = await sql`
       INSERT INTO fieldpress_dispatches (
         id, account_id, title, category, author, callsign, bureau, location,
-        latitude, longitude, content, image_url, image_caption, is_lead,
+        latitude, longitude, content, image_url, image_caption, image_alt_text, is_lead,
         is_press_roll, edition_style, sharing_option, parent_dispatch_id,
         source_url, embed_type, embed_data
       ) VALUES (
         ${id}, ${caller.id}, ${title.trim().slice(0, 500)}, ${cleanCategory},
         ${effectiveAuthor}, ${effectiveCallsign}, ${effectiveBureau}, ${effectiveLocation},
         ${lat}, ${lng}, ${content.trim()}, ${imageUrl || (cleanGallery[0]?.url ?? null)}, ${imageCaption || (cleanGallery[0]?.caption ?? null)},
+        ${cleanAlt},
         ${!!isLead}, ${!!isPressRoll}, ${editionStyle || null}, ${cleanSharing},
         ${parentDispatchId || null}, ${cleanSourceUrl}, ${embed?.embed_type || null},
         ${mergedCreateEmbedData}
@@ -343,6 +351,7 @@ async function create(req, res) {
         content = EXCLUDED.content,
         image_url = EXCLUDED.image_url,
         image_caption = EXCLUDED.image_caption,
+        image_alt_text = EXCLUDED.image_alt_text,
         is_lead = EXCLUDED.is_lead,
         is_press_roll = EXCLUDED.is_press_roll,
         edition_style = EXCLUDED.edition_style,
@@ -376,7 +385,7 @@ async function update(req, res, id) {
     }
     const {
       title, category, content, location, coordinates,
-      imageUrl, imageCaption, gallery, isLead, isPressRoll, editionStyle, sharingOption,
+      imageUrl, imageCaption, imageAltText, gallery, isLead, isPressRoll, editionStyle, sharingOption,
       sourceUrl, isAnonymous, decoupleLocationPin, vicinityPinOnly
     } = req.body || {};
 
@@ -421,7 +430,14 @@ async function update(req, res, id) {
         baseEmbedObj = embed?.embed_data ? { ...embed.embed_data } : {};
       }
     }
-    const cleanUpdateGallery = sanitizeGallery(gallery ?? baseEmbedObj.gallery, imageUrl, imageCaption);
+    const cleanUpdateAlt =
+      typeof imageAltText === "string" && imageAltText.trim() ? imageAltText.trim().slice(0, 500) : null;
+    const cleanUpdateGallery = sanitizeGallery(
+      gallery ?? baseEmbedObj.gallery,
+      imageUrl,
+      imageCaption,
+      cleanUpdateAlt
+    );
     if (cleanUpdateGallery.length > 0) {
       baseEmbedObj.gallery = cleanUpdateGallery;
     }
@@ -440,6 +456,7 @@ async function update(req, res, id) {
         content = COALESCE(${typeof content === "string" ? content.trim() : null}, content),
         image_url = ${imageUrl ?? null},
         image_caption = ${imageCaption ?? null},
+        image_alt_text = ${cleanUpdateAlt},
         is_lead = COALESCE(${typeof isLead === "boolean" ? isLead : null}, is_lead),
         is_press_roll = COALESCE(${typeof isPressRoll === "boolean" ? isPressRoll : null}, is_press_roll),
         edition_style = ${editionStyle ?? null},
