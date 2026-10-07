@@ -18,6 +18,7 @@
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "./_lib/auth.mjs";
 import { fetchLeadSourceArticles } from "./_lib/leadSearch.mjs";
+import { buildCaptionAltSystemPrompt, parseCaptionAltReply } from "./_lib/pressyoCaptionAlt.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -505,6 +506,41 @@ ${catalog}`;
       const parsedLeads = parseLeadsReply(text, allowedUrls);
       res.status(200).json({
         ...parsedLeads,
+        remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
+      });
+      return;
+    }
+
+    if (editorAction === "suggest_image_accessibility") {
+      const captionAltSystem = buildCaptionAltSystemPrompt(draftContext || {});
+      let text;
+      try {
+        const r1 = await tryOllama(captionAltSystem, prompt, history);
+        text = r1.text;
+      } catch {
+        try {
+          const r2 = await tryGroq(captionAltSystem, prompt, history);
+          text = r2.text;
+        } catch {
+          const r3 = await tryGemini(captionAltSystem, prompt, history);
+          text = r3.text;
+        }
+      }
+      const usedToday = await incrementUsage(me.id);
+      const parsed = parseCaptionAltReply(text);
+      if (!parsed.ok) {
+        res.status(502).json({
+          error: "Could not parse caption and alt text suggestion.",
+          type: "caption_alt",
+          raw: text?.slice(0, 800),
+          remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
+        });
+        return;
+      }
+      res.status(200).json({
+        type: "caption_alt",
+        caption: parsed.caption,
+        altText: parsed.altText,
         remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
       });
       return;

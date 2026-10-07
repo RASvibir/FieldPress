@@ -65,6 +65,11 @@ export type PostComposerProps = {
   setNewImageUrl: (v: string) => void;
   newImageCaption: string;
   setNewImageCaption: (v: string) => void;
+  newImageAltText: string;
+  setNewImageAltText: (v: string) => void;
+  onSuggestCaptionAlt: () => void;
+  captionAltBusy: boolean;
+  captionAltStatus: string | null;
   builderUseThemePhotoFilter: boolean;
   setBuilderUseThemePhotoFilter: (v: boolean) => void;
   evidenceGallery: EvidenceItem[];

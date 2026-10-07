@@ -10,6 +10,7 @@ export type ComposerAutosavePayload = {
   sourceUrl: string;
   imageUrl: string;
   imageCaption: string;
+  imageAltText: string;
   editionStyle: string;
   sharingOption: string;
   isAnonymous: boolean;

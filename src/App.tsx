@@ -98,6 +98,7 @@ import { ExploreChrome, type ExploreTab } from "./features/shell/ExploreChrome";
 import { TOPIC_OPTIONS } from "./features/post/looks";
 import { loadComposerAutosave } from "./features/post/composerAutosave";
 import { formatByline } from "./lib/byline";
+import { resolveImageAlt } from "./lib/imageAlt";
 
 import { pickDispatchImageUrl, isDisplayableImageUrl } from "./lib/dispatchMedia";
 import { dispatchBodyDisplay } from "./lib/dispatchContent";
@@ -190,6 +191,7 @@ export interface Dispatch {
   content: string;
   imageUrl?: string;
   imageCaption?: string;
+  imageAltText?: string;
   gallery?: Array<{
     id: string;
     url: string;
@@ -3106,6 +3108,9 @@ export const FieldPressMaster: React.FC = () => {
   // into embedType/embedData on save; see api/_lib/resolveEmbed.mjs.
   const [newSourceUrl, setNewSourceUrl] = useState<string>("");
   const [newImageCaption, setNewImageCaption] = useState<string>("");
+  const [newImageAltText, setNewImageAltText] = useState<string>("");
+  const [captionAltBusy, setCaptionAltBusy] = useState(false);
+  const [captionAltStatus, setCaptionAltStatus] = useState<string | null>(null);
   const [visualPrompt, setVisualPrompt] = useState<string>("");
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
@@ -3934,6 +3939,7 @@ export const FieldPressMaster: React.FC = () => {
       coordinates: parsedCoords,
       imageUrl: newImageUrl || evidenceGallery[0]?.url,
       imageCaption: newImageCaption,
+      imageAltText: newImageAltText || undefined,
       gallery: evidenceGallery,
       embedData: { gallery: evidenceGallery, useThemePhotoFilter: builderUseThemePhotoFilter, sharingOption: newSharingOption },
       sharingOption: newSharingOption,
@@ -3982,6 +3988,67 @@ export const FieldPressMaster: React.FC = () => {
     }
   };
 
+  const handleSuggestImageCaptionAlt = async () => {
+    if (captionAltBusy) return;
+    if (!newImageUrl && evidenceGallery.length === 0) {
+      setCaptionAltStatus("Add a photo first.");
+      return;
+    }
+    if (!authAccount) {
+      setAuthModalMode("signin");
+      setCaptionAltStatus("Sign in to use Pressy'o suggestions.");
+      return;
+    }
+    const coverUrl = newImageUrl || evidenceGallery[0]?.url;
+    const coverItem = evidenceGallery.find((g) => g.url === coverUrl) || evidenceGallery[0];
+    const imageContext =
+      visualPrompt.trim() ||
+      coverItem?.caption?.trim() ||
+      suggestImagePromptFromPost(newTitle, newContent);
+
+    setCaptionAltBusy(true);
+    setCaptionAltStatus(null);
+    try {
+      const resp = await fetch("/api/pressyo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt:
+            "Suggest a short photo caption and accessibility alt text for the cover image of this post.",
+          editionStyle: newEditionStyle,
+          editorAction: "suggest_image_accessibility",
+          draftContext: {
+            title: newTitle,
+            content: newContent,
+            editionStyle: newEditionStyle,
+            location: newLocation,
+            imagePrompt: imageContext,
+          },
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setCaptionAltStatus(data.error || "Could not get a suggestion right now.");
+        return;
+      }
+      if (data.type === "caption_alt") {
+        if (typeof data.caption === "string" && data.caption.trim()) {
+          setNewImageCaption(data.caption.trim());
+        }
+        if (typeof data.altText === "string" && data.altText.trim()) {
+          setNewImageAltText(data.altText.trim());
+        }
+        setCaptionAltStatus("Suggestions added — edit or clear before you post.");
+      } else {
+        setCaptionAltStatus("No suggestion returned. Try again in a moment.");
+      }
+    } catch {
+      setCaptionAltStatus("Could not reach Pressy'o. Check your connection.");
+    } finally {
+      setCaptionAltBusy(false);
+    }
+  };
+
   // =========================================================================
   // CREATE PRESSIE HANDLER (OPENS THE PRESSIE BUILDER MODAL - IMAGE 2)
   // CRITICAL: NEVER opens the Press Pass Credential Editor!
@@ -4020,6 +4087,7 @@ export const FieldPressMaster: React.FC = () => {
         (isDisplayableImageUrl(draftToEdit.imageUrl) ? draftToEdit.imageUrl!.trim() : "");
       setNewImageUrl(safeImg || "");
       setNewImageCaption(draftToEdit.imageCaption || "");
+      setNewImageAltText(draftToEdit.imageAltText || "");
       setNewSourceUrl(draftToEdit.sourceUrl || "");
       const savedSharing = draftToEdit.sharingOption || (draftToEdit.embedData as { sharingOption?: string } | undefined)?.sharingOption;
       if (savedSharing === "fork" || savedSharing === "colab" || savedSharing === "none") {
@@ -4064,6 +4132,7 @@ export const FieldPressMaster: React.FC = () => {
       setNewVicinityPinOnly(true);
       setNewImageUrl("");
       setNewImageCaption("");
+      setNewImageAltText("");
       setNewSourceUrl("");
       setVisualPrompt("");
       setEvidenceGallery([]);
@@ -4081,6 +4150,7 @@ export const FieldPressMaster: React.FC = () => {
         setNewSourceUrl(autosaved.sourceUrl || "");
         setNewImageUrl(autosaved.imageUrl || "");
         setNewImageCaption(autosaved.imageCaption || "");
+        setNewImageAltText(autosaved.imageAltText || "");
         if (autosaved.editionStyle) setNewEditionStyle(autosaved.editionStyle as PressyoEdition);
         if (autosaved.sharingOption === "fork" || autosaved.sharingOption === "colab" || autosaved.sharingOption === "none") {
           setNewSharingOption(autosaved.sharingOption);
@@ -4170,6 +4240,7 @@ export const FieldPressMaster: React.FC = () => {
       content: newContent.trim(),
       imageUrl: newImageUrl || (evidenceGallery[0]?.url ?? undefined),
       imageCaption: newImageCaption || (evidenceGallery[0]?.caption ?? undefined),
+      imageAltText: newImageAltText.trim() || undefined,
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       embedData: {
         gallery: evidenceGallery,
@@ -4252,6 +4323,7 @@ export const FieldPressMaster: React.FC = () => {
 
     const chosenImage = newImageUrl || (evidenceGallery.length > 0 ? evidenceGallery[0].url : undefined);
     const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
+    const chosenAlt = newImageAltText.trim() || undefined;
     const rawLoc = newLocation.trim() || pressPass.location || pressPass.bureau || "Midwest Corridor";
     const finalLocation = newVicinityPinOnly && !rawLoc.toLowerCase().includes("vicinity")
       ? `${rawLoc} (Vicinity)`
@@ -4273,6 +4345,7 @@ export const FieldPressMaster: React.FC = () => {
       content: fallbackContent,
       imageUrl: chosenImage,
       imageCaption: chosenCaption,
+      imageAltText: chosenAlt,
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       embedData: {
         gallery: evidenceGallery,
@@ -4862,7 +4935,7 @@ export const FieldPressMaster: React.FC = () => {
                         >
                           <img
                             src={d.imageUrl}
-                            alt={d.title}
+                            alt={resolveImageAlt(d.imageAltText, d.imageCaption, d.title)}
                             onError={(e) => handleImgFallbackError(e)}
                             className={`w-full h-full object-cover transition duration-300 group-hover:scale-103 ${
                               filterActive ? themeCfg.imgFilterClass : "filter-none"
@@ -5711,7 +5784,7 @@ export const FieldPressMaster: React.FC = () => {
                         <div className="relative w-full aspect-video sm:h-24 rounded-md overflow-hidden bg-black/50 border border-zinc-800">
                           <img
                             src={d.imageUrl || cardGallery[0]?.url}
-                            alt={d.title}
+                            alt={resolveImageAlt(d.imageAltText, d.imageCaption, d.title)}
                             onError={(e) => handleImgFallbackError(e)}
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                           />
@@ -6292,6 +6365,11 @@ export const FieldPressMaster: React.FC = () => {
         setNewImageUrl={setNewImageUrl}
         newImageCaption={newImageCaption}
         setNewImageCaption={setNewImageCaption}
+        newImageAltText={newImageAltText}
+        setNewImageAltText={setNewImageAltText}
+        onSuggestCaptionAlt={() => void handleSuggestImageCaptionAlt()}
+        captionAltBusy={captionAltBusy}
+        captionAltStatus={captionAltStatus}
         builderUseThemePhotoFilter={builderUseThemePhotoFilter}
         setBuilderUseThemePhotoFilter={setBuilderUseThemePhotoFilter}
         evidenceGallery={evidenceGallery}
@@ -7197,7 +7275,13 @@ export const FieldPressMaster: React.FC = () => {
                   }`}>
                     <img
                       src={activeFrame.url}
-                      alt={decodeEntitiesClient(activeFrame.caption || selectedStory.title)}
+                      alt={decodeEntitiesClient(
+                        resolveImageAlt(
+                          selectedStory.imageAltText,
+                          activeFrame.caption || selectedStory.imageCaption,
+                          selectedStory.title
+                        )
+                      )}
                       onError={(e) => handleImgFallbackError(e)}
                       onClick={() => setReaderLightboxUrl(activeFrame.url)}
                       className={`w-full h-full object-cover cursor-zoom-in transition ${

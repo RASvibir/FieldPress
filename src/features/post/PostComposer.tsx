@@ -4,6 +4,7 @@ import { PostAiTray } from "../../components/PostAiTray";
 import { LOOK_OPTIONS, TOPIC_OPTIONS } from "./looks";
 import { saveComposerAutosave, clearComposerAutosave } from "./composerAutosave";
 import type { PostComposerProps, SharingOption } from "./types";
+import { ImageCaptionAltFields } from "./ImageCaptionAltFields";
 const ADVANCED_KEY = "fp-composer-advanced-open";
 
 type TrayId = "photo" | "link" | "ai" | "location" | "more" | "advanced" | null;
@@ -52,6 +53,11 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
     setNewImageUrl,
     newImageCaption,
     setNewImageCaption,
+    newImageAltText,
+    setNewImageAltText,
+    onSuggestCaptionAlt,
+    captionAltBusy,
+    captionAltStatus,
     builderUseThemePhotoFilter,
     setBuilderUseThemePhotoFilter,
     evidenceGallery,
@@ -120,6 +126,7 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
         sourceUrl: newSourceUrl,
         imageUrl: newImageUrl,
         imageCaption: newImageCaption,
+        imageAltText: newImageAltText,
         editionStyle: newEditionStyle,
         sharingOption: newSharingOption,
         isAnonymous: newIsAnonymous,
@@ -139,6 +146,7 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
     newSourceUrl,
     newImageUrl,
     newImageCaption,
+    newImageAltText,
     newEditionStyle,
     newSharingOption,
     newIsAnonymous,
@@ -301,6 +309,23 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                 </button>
               ))}
             </div>
+          )}
+
+          {(newImageUrl || evidenceGallery.length > 0) && (
+            <ImageCaptionAltFields
+              isDark={isDark}
+              hasImage={Boolean(newImageUrl || evidenceGallery.length)}
+              caption={newImageCaption}
+              altText={newImageAltText}
+              onCaptionChange={setNewImageCaption}
+              onAltTextChange={setNewImageAltText}
+              onSuggest={onSuggestCaptionAlt}
+              suggestBusy={captionAltBusy}
+              suggestStatus={captionAltStatus}
+              inputClass={inputClass}
+              subCardClass={subCardClass}
+              subTextClass={subTextClass}
+            />
           )}
 
           <div className="flex flex-wrap gap-1.5 items-center">
@@ -471,14 +496,6 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <span className="text-xs font-bold">Caption</span>
-                <input
-                  value={newImageCaption}
-                  onChange={(e) => setNewImageCaption(e.target.value)}
-                  className={`mt-1 w-full rounded-lg px-2 py-1.5 text-xs ${inputClass}`}
-                />
               </div>
               <button
                 type="button"

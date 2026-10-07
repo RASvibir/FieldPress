@@ -40,6 +40,7 @@ Notes on a naming/endpoint fix so it doesn't regress:
 2. **Media tray** — native upload/camera capture, image URL linking, multi-image evidence tray with thumbnails, cover selection, download, removal.
 3. **Core dispatch controls** — headline, filing location (default from `AUTHOR_DEFAULT_FILING` in `src/config/site.ts`), category, story copy, stage to Press Roll / publish to live feed.
 4. **Pressy'O** — journalism assistant (draft, headline, lede, tighten, structure, attribution, AP polish). No in-app image prompts.
+5. **Photo caption & alt text (optional)** — After you add a cover photo (upload or return from imbrgr), use **Suggest caption & alt text** under the thumbnails. Pressy'o proposes a caption and accessibility alt text from your headline, body, and any image context; nothing is applied until you tap suggest, and you can edit or leave both fields blank before posting. Alt text is stored on the dispatch (`image_alt_text`, migration `0018_dispatch_image_alt_text.sql`) and used as the published `<img alt>`, falling back to caption then headline.
 
 ## imbrgr ↔ FieldPress link contract
 

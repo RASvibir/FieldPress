@@ -18,7 +18,7 @@
 | 8a | Upload Photo(s) | **Photo** toolbar |
 | 8b | Paste Real Photo URL | **Photo** toolbar → link field |
 | 8c | Thumbnail grid, set cover, remove | **Post** inline previews (click = cover) |
-| 8d | Caption / verification note | **More** — Captions |
+| 8d | Caption / verification note | Under photo previews — **Caption** + **Alt text**; optional **Suggest caption & alt text** (Pressy'o) |
 | 8e | Detach Cover | **Post** preview context menu / clear cover |
 | 9 | Source link + YouTube preview | **Link** toolbar + inline preview card |
 | 9b | Use Video Frame as Cover | **Advanced** |
