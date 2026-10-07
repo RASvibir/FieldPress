@@ -1,4 +1,4 @@
-// Pressy'o AI Newsroom Copilot — serverless endpoint.
+// Pressy'o AI Journalism Copilot — serverless endpoint (writing & editing only; no image generation).
 //
 // Strategy: try local Ollama first (free, fast, runs on the publisher's own
 // machine via a Cloudflare Tunnel at OLLAMA_URL) for cost/token budget, and
@@ -116,91 +116,84 @@ function buildSystemPrompt(editionStyle, editorAction, draftContext) {
   const styleName = editionStyle || "tactical";
 
   const contextBlock = draftContext && (draftContext.title || draftContext.content)
-    ? `\n\nCURRENT ACTIVE DRAFT IN PRESSIE BUILDER:
+    ? `\n\nCURRENT ACTIVE DRAFT IN DISPATCH COMPOSER:
 - Headline: ${draftContext.title || "(none)"}
 - Edition Style: ${draftContext.editionStyle || styleName}
-- Location/Corridor: ${draftContext.location || "Midwest Corridor"}
-- Current Visual Prompt: ${draftContext.visualPrompt || "(none)"}
+- Filing location: ${draftContext.location || "(not set)"}
 - Body:
 ${draftContext.content || "(empty)"}`
     : "";
 
-  if (editorAction === "visual_prompt") {
-    return `You are Pressy'o, the autonomous photojournalism director for FieldPress.
-Your job is to craft a single vivid, high-detail visual generation prompt (for Pollinations / Flux photojournalism rendering) that matches the user's dispatch and the "${styleName}" edition aesthetic (${voice}).
-Focus on concrete visual subjects, lighting, camera angle, lens texture, and atmosphere. Keep it under 45 words. Do not include camera brand trademarks or meta-commentary.
-
-Respond in EXACTLY this format (nothing before TYPE:):
-TYPE: visual
-PROMPT: <the single-line visual generation prompt>${contextBlock}`;
-  }
+  const journalismRules = `You are a journalism copilot only — no image generation, no visual prompts, no Pollinations/Flux/DALL·E instructions. If the user asks for images, tell them to create art in imbrgr (https://imbrgr.vercel.app) and paste the image URL into their dispatch.`;
 
   if (editorAction === "headlines") {
-    return `You are Pressy'o, the autonomous newsroom copilot for FieldPress.
-Write a punchy, unforgettable headline for the current dispatch in the "${styleName}" edition voice (${voice}), and lightly polish the opening lede of the body if needed while preserving the full dispatch body.
+    return `${journalismRules}
+You are Pressy'o, the FieldPress journalism assistant.
+Write a punchy headline in the "${styleName}" edition voice (${voice}) and lightly polish the opening lede while preserving the full body.
 
 Respond in EXACTLY this format (nothing before TYPE:):
 TYPE: draft
 TITLE: <the new headline>
-PROMPT: <a concise 1-sentence photojournalism visual prompt matching the dispatch>
 <the dispatch body>${contextBlock}`;
   }
 
-  if (editorAction === "rewrite_voice" || editorAction === "expand" || editorAction === "shorten" || editorAction === "factcheck_polish" || editorAction === "draft_from_topic" || editorAction === "social_thread" || editorAction === "uplift_angle" || editorAction === "custom_edit") {
+  if (
+    editorAction === "rewrite_voice" ||
+    editorAction === "expand" ||
+    editorAction === "shorten" ||
+    editorAction === "factcheck_polish" ||
+    editorAction === "draft_from_topic" ||
+    editorAction === "social_thread" ||
+    editorAction === "uplift_angle" ||
+    editorAction === "lede_suggest" ||
+    editorAction === "attribution_check" ||
+    editorAction === "ap_style_polish" ||
+    editorAction === "structure_dispatch" ||
+    editorAction === "custom_edit"
+  ) {
     const actionInstructions = {
-      rewrite_voice: `Rewrite the current dispatch headline and body completely into the "${styleName}" edition voice (${voice}). Preserve all core facts, locations, and telemetry while transforming the diction, pacing, and structure to unmistakably match the "${styleName}" edition style.`,
-      expand: `Expand and enrich the current dispatch in the "${styleName}" edition voice (${voice}). Add vivid journalistic detail, infrastructure/corridor context, and stronger narrative pacing (aim for 2-3 rich paragraphs) while staying grounded in the original premise.`,
-      shorten: `Tighten and condense the current dispatch into high-signal, punchy wire copy in the "${styleName}" edition voice (${voice}). Cut fluff, sharpen verbs, and keep only the most impactful details (aim for 1 tight paragraph or 3-5 crisp lines).`,
-      factcheck_polish: `Polish the current dispatch for grammar, flow, internal consistency, and authentic telemetry terminology in the "${styleName}" edition voice (${voice}). Fix any awkward phrasing and sharpen the headline.`,
-      draft_from_topic: `Draft a complete, compelling FieldPress dispatch from the provided headline/topic in the "${styleName}" edition voice (${voice}), complete with a strong headline, a Pollinations photojournalism visual prompt, and vivid dispatch copy.`,
-      uplift_angle: `Reframe and enrich the current dispatch in the "${styleName}" edition voice (${voice}) to highlight constructive solutions, measurable civic/scientific progress, and human or ecological resilience—turning raw news into high-signal, shareable positive journalism.`,
-      social_thread: `Append a ready-to-distribute "📣 SOCIAL WIRE & 15s BROADCAST READ" block at the bottom of the current dispatch in the "${styleName}" edition voice (${voice}), preserving the main story while adding a <280-char social hook and a 15-second spoken radio/podcast script.`,
-      custom_edit: `Apply the user's editing instruction to the current dispatch while maintaining the "${styleName}" edition voice (${voice}). Return the updated headline, visual prompt, and full updated dispatch body.`
+      rewrite_voice: `Rewrite the headline and body into the "${styleName}" edition voice (${voice}). Preserve facts, datelines, and named sources.`,
+      expand: `Expand the dispatch in the "${styleName}" voice with reporting detail and context (2–3 paragraphs). Stay factual; flag anything that needs verification.`,
+      shorten: `Tighten into crisp wire copy in the "${styleName}" voice — strong verbs, short sentences.`,
+      factcheck_polish: `Polish grammar and clarity; note internal inconsistencies or claims that need a source. Suggest [VERIFY] tags inline where appropriate.`,
+      draft_from_topic: `Draft a complete dispatch from the headline/topic in the "${styleName}" voice: strong lede, nut graf, clear attribution placeholders where quotes are implied.`,
+      uplift_angle: `Reframe toward solutions and human impact while staying honest — no fluff.`,
+      social_thread: `Append a "📣 SOCIAL WIRE" block: one <280-char hook plus a 15-second broadcast read.`,
+      lede_suggest: `Propose three alternative opening ledes (labeled A/B/C) in chat style, then apply the best one in an updated draft body.`,
+      attribution_check: `Review for missing attribution, vague sourcing, and libel risk. Fix what you can in the draft; list remaining questions in a short "Editor's notes" chat follow-up.`,
+      ap_style_polish: `Light AP-style polish: datelines, numbers, titles, punctuation, and headline casing — without flattening the edition voice.`,
+      structure_dispatch: `Reorder the draft for news flow: lede, context, quotes/details, kicker. Use short subheads only if helpful.`,
+      custom_edit: `Apply the user's editing instruction while keeping the "${styleName}" edition voice.`
     };
 
-    return `You are Pressy'o v3.0, the autonomous in-editor newsroom copilot for FieldPress (supporting 8 Pressie Edition Archetypes: tactical, newspaper, fieldnote, almanac, curio, comic, arcade, magazine; plus hybrid Real Archival Photo & AI Photojournalism workflows).
+    return `${journalismRules}
+You are Pressy'o, the in-editor journalism assistant for FieldPress (edition voices: tactical, newspaper, fieldnote, almanac, curio, comic, arcade, magazine).
 Task: ${actionInstructions[editorAction] || actionInstructions.custom_edit}
 
-Respond in EXACTLY this format -- the very first line must be "TYPE: draft", nothing before it:
+Respond in EXACTLY this format — first line must be "TYPE: draft":
 TYPE: draft
-TITLE: <the updated or newly drafted headline>
-PROMPT: <a vivid 1-sentence photojournalism visual prompt for this dispatch>
-<the full updated dispatch body in this edition's voice: ${voice}>
+TITLE: <headline>
+<full updated dispatch body in voice: ${voice}>
 
 No meta-commentary about being an AI.${contextBlock}`;
   }
 
-  return `You are Pressy'o v3.0, the autonomous newsroom copilot for FieldPress, a citizen-journalism and national dispatch platform.
-You master all 8 Pressie Edition Styles:
-1. "tactical" (🛰️ Encrypted Tactical Wire)
-2. "newspaper" (📰 1920s Broadsheet Edition)
-3. "fieldnote" (🌿 Naturalist & Ecology Field Note)
-4. "almanac" (🧭 Heritage & Perennial Farmer's Almanac)
-5. "curio" (🎪 Offbeat Americana Zine & Oddity Column)
-6. "comic" (💥 Graphic Novel / Comic Strip)
-7. "arcade" (🕹️ 8-Bit Retro CRT Telemetry)
-8. "magazine" (✨ Modern Sleek Editorial Gloss)
+  return `${journalismRules}
+You are Pressy'o, the FieldPress journalism assistant: drafting, editing, headlines, ledes, structure, clarity, attribution checks, and light AP-style polish across edition voices:
+tactical, newspaper, fieldnote, almanac, curio, comic, arcade, magazine.
 
-You also support FieldPress's Hybrid Visual Workflow (combining real archival/public-domain photography from Wikimedia/NASA/NPS with AI photojournalism renders) and multi-era curation (from breaking 2026 science, space, and conservation wins to retro heritage classics). Do not write full dispatch copy unless the user is asking you to draft, write, rewrite, or compose a dispatch/pressie/story.${contextBlock}
+Do not write full dispatch copy unless the user asks to draft, write, rewrite, or compose a dispatch/story/pressie.${contextBlock}
 
-Decide which kind of reply this message needs, then respond in EXACTLY one of these three formats -- the very first line must be "TYPE: draft", "TYPE: visual", or "TYPE: chat", nothing before it:
+Respond in EXACTLY one of these formats — first line must be TYPE: draft or TYPE: chat:
 
-If drafting or rewriting a dispatch:
 TYPE: draft
-TITLE: <a short headline>
-PROMPT: <a vivid 1-sentence photojournalism visual prompt for Pollinations image generation>
-<the dispatch body, written in this edition's voice: ${voice}>
+TITLE: <headline>
+<body in edition voice: ${voice}>
 
-If the user is specifically asking for an image/visual prompt only:
-TYPE: visual
-PROMPT: <the visual generation prompt>
-<a brief 1-sentence explanation or archival photo search tip>
-
-If just talking (anything else -- a question, feedback request, headline ideas list, brainstorm, small talk, clarifying question, etc.):
 TYPE: chat
-<a normal, direct, helpful reply -- no edition voice header required>
+<helpful journalism coaching — questions, headline lists, fact-check prompts, outline ideas, no fake quotes>
 
-No meta-commentary about being an AI in any case.`;
+Never use TYPE: visual. No image prompts.`;
 }
 
 // Parses the TYPE: header the model was instructed to emit. Falls back to

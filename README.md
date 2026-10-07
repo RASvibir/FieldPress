@@ -36,7 +36,30 @@ Notes on a naming/endpoint fix so it doesn't regress:
   - **Press Pass** (`openPressPassEditor()`) → opened only via the **PRESS PASS: [callsign]** badge button (top-right utility bar) or Settings → Profile. Labeled **"Press Pass Credential & ID Studio"**, button **"Save Press Pass Credentials"**.
 
 ### Pressie Builder (Dispatch Composer) features
-1. **Image Generation Prompt Box** — visual framing brief input, "Gen Visual" button with live rendering spinner, "Prompt from Title" shortcut, thematic preset tags (Rail Corridor, Power Grid, Dark Fiber, River Basin).
-2. **Hybrid Generated Image Preview** — live cover preview with source tag (`AI Gen` vs `Field Upload`), "Active Cover" badge, "Detach Cover" button, verification caption input.
-3. **Add Local / Capture Image Tray** — native upload/camera capture, image URL linking, multi-image evidence tray with thumbnails, cover selection, download, removal.
-4. **Core Dispatch Controls** — headline + Beat Location with regional quick-snap (Danville, Lafayette, Covington, Catlin, Champaign-Urbana), category selector (Field Dispatch, Breaking Wire, Infrastructure, Civic Wire, Transit, Telecom, Editorial), story copy textarea with live counters, "Stage to Press Roll" (draft) / "Publish to Live Feed" (live).
+1. **Photos via imbrgr** — FieldPress does not generate or filter images in-app. Use **imbrgr** for visuals, then paste a direct HTTPS image URL or return via the compose deep link below.
+2. **Media tray** — native upload/camera capture, image URL linking, multi-image evidence tray with thumbnails, cover selection, download, removal.
+3. **Core dispatch controls** — headline, filing location (default from `AUTHOR_DEFAULT_FILING` in `src/config/site.ts`), category, story copy, stage to Press Roll / publish to live feed.
+4. **Pressy'O** — journalism assistant (draft, headline, lede, tighten, structure, attribution, AP polish). No in-app image prompts.
+
+## imbrgr ↔ FieldPress link contract
+
+Config: `IMBRGR_URL` in `src/config/site.ts` (default `https://imbrgr.vercel.app`).
+
+**FieldPress → imbrgr** (prefill generate tab from dispatch copy):
+
+```
+https://imbrgr.vercel.app/studio?tab=generate&prompt=<url-encoded text>
+```
+
+Built in-app via `buildImbrgrStudioUrl()` (`src/lib/composeLinks.ts`).
+
+**imbrgr → FieldPress** (resume compose with image by URL — no re-upload, render with `<img>` only):
+
+```
+https://fieldpress.studio/?compose=1&image=<url-encoded https URL>&title=<url-encoded title>
+```
+
+- `image` must be HTTPS on allowed hosts (e.g. `imbrgr.vercel.app`, or imbrgr `/api/media/file/...` URLs).
+- FieldPress does **not** fetch the image into canvas (avoids CORS/taint). If the user is signed out, params are stored in `sessionStorage` and applied after login.
+
+Parsed by `parseComposeImageParam()` / `parseComposeTitleParam()` in `src/lib/composeLinks.ts`.
