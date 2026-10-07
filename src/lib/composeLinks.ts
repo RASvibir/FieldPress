@@ -5,6 +5,21 @@ const IMBRGR_HOST = new URL(IMBRGR_URL).hostname.toLowerCase();
 /** Allowed https image hosts for ?compose=1&image= deep links (reference by URL only). */
 const COMPOSE_IMAGE_HOSTS = new Set([IMBRGR_HOST, "imbrgr.vercel.app"]);
 
+/** Dispatch / press-roll ids from API (client or server generated). */
+export const COMPOSE_DRAFT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/;
+
+export function parseComposeDraftParam(raw: string | null | undefined): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  let decoded = raw.trim();
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return null;
+  }
+  if (!COMPOSE_DRAFT_ID_RE.test(decoded)) return null;
+  return decoded;
+}
+
 /**
  * Validates an incoming compose `image` query param.
  * Accepts direct file URLs (e.g. /api/media/file/...) — not /api/media/<id> JSON metadata.
@@ -31,7 +46,6 @@ export function parseComposeImageParam(raw: string | null | undefined): string |
   if (!COMPOSE_IMAGE_HOSTS.has(host)) return null;
 
   const path = url.pathname.toLowerCase();
-  // imbrgr JSON metadata endpoint — not a renderable image
   if (/^\/api\/media\/[^/]+$/.test(path) && !path.includes("/file/")) {
     return null;
   }
@@ -49,7 +63,14 @@ export function parseComposeTitleParam(raw: string | null | undefined): string {
   }
 }
 
-/** Consumer-friendly imbrgr studio link with optional prompt from dispatch copy. */
+export function suggestImagePromptFromPost(title?: string, content?: string): string {
+  const head = (title || "").trim();
+  const body = (content || "").trim().split(/\n/).slice(0, 3).join(" ").slice(0, 240);
+  const combined = head && body ? `${head} — ${body}` : head || body;
+  return combined.slice(0, 400);
+}
+
+/** Simple studio link (nav, no draft). */
 export function buildImbrgrStudioUrl(prompt?: string | null): string {
   const base = `${IMBRGR_URL.replace(/\/+$/, "")}/studio?tab=generate`;
   const text = (prompt || "").trim();
@@ -58,11 +79,35 @@ export function buildImbrgrStudioUrl(prompt?: string | null): string {
   return `${base}&prompt=${encodeURIComponent(clipped)}`;
 }
 
-export function buildComposeDeepLink(imageUrl: string, title?: string): string {
+/** After autosaving a draft, open imbrgr with return context. */
+export function buildImbrgrCreateImageUrl(opts: {
+  prompt?: string | null;
+  draftId: string;
+}): string {
+  const params = new URLSearchParams();
+  params.set("tab", "generate");
+  const prompt = (opts.prompt || "").trim();
+  if (prompt) {
+    const clipped = prompt.length > 400 ? `${prompt.slice(0, 397)}…` : prompt;
+    params.set("prompt", clipped);
+  }
+  params.set("from", "fieldpress");
+  params.set("draft", opts.draftId);
+  return `${IMBRGR_URL.replace(/\/+$/, "")}/studio?${params.toString()}`;
+}
+
+export function buildComposeDeepLink(opts: {
+  imageUrl: string;
+  title?: string;
+  draftId?: string | null;
+}): string {
   const origin = "https://fieldpress.studio";
   const params = new URLSearchParams();
   params.set("compose", "1");
-  params.set("image", imageUrl);
-  if (title?.trim()) params.set("title", title.trim().slice(0, 500));
+  params.set("image", opts.imageUrl);
+  if (opts.title?.trim()) params.set("title", opts.title.trim().slice(0, 500));
+  if (opts.draftId && COMPOSE_DRAFT_ID_RE.test(opts.draftId)) {
+    params.set("draft", opts.draftId);
+  }
   return `${origin}/?${params.toString()}`;
 }

@@ -17,6 +17,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "./_lib/auth.mjs";
+import { fetchLeadSourceArticles } from "./_lib/leadSearch.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -149,6 +150,8 @@ TITLE: <the new headline>
     editorAction === "attribution_check" ||
     editorAction === "ap_style_polish" ||
     editorAction === "structure_dispatch" ||
+    editorAction === "punchier" ||
+    editorAction === "grammar_polish" ||
     editorAction === "custom_edit"
   ) {
     const actionInstructions = {
@@ -163,6 +166,8 @@ TITLE: <the new headline>
       attribution_check: `Review for missing attribution, vague sourcing, and libel risk. Fix what you can in the draft; list remaining questions in a short "Editor's notes" chat follow-up.`,
       ap_style_polish: `Light AP-style polish: datelines, numbers, titles, punctuation, and headline casing — without flattening the edition voice.`,
       structure_dispatch: `Reorder the draft for news flow: lede, context, quotes/details, kicker. Use short subheads only if helpful.`,
+      punchier: `Make the copy more vivid and punchy while staying accurate — stronger verbs, tighter sentences, no hype.`,
+      grammar_polish: `Fix grammar, punctuation, and awkward phrasing. Preserve meaning and voice.`,
       custom_edit: `Apply the user's editing instruction while keeping the "${styleName}" edition voice.`
     };
 
@@ -256,6 +261,32 @@ function parsePressyoReply(raw) {
   // No recognized header at all -- model ignored the format. Return the
   // raw text as plain chat rather than guessing it's a draft.
   return { type: "chat", text: cleaned };
+}
+
+function parseLeadsReply(raw, allowedUrls) {
+  const cleaned = (raw || "").trim();
+  const allowed = new Set(allowedUrls);
+  let jsonPart = cleaned;
+  const leadsHeader = cleaned.match(/^TYPE:\s*leads\s*\n/i);
+  if (leadsHeader) {
+    jsonPart = cleaned.slice(leadsHeader[0].length).trim();
+  }
+  try {
+    const parsed = JSON.parse(jsonPart);
+    const list = Array.isArray(parsed) ? parsed : parsed?.leads;
+    if (!Array.isArray(list)) return { type: "leads", leads: [] };
+    const leads = list
+      .map((item) => ({
+        angle: String(item.angle || item.title || "").trim(),
+        sourceUrl: String(item.sourceUrl || item.url || "").trim(),
+        sourceTitle: String(item.sourceTitle || item.source || "").trim(),
+      }))
+      .filter((l) => l.angle && l.sourceUrl && allowed.has(l.sourceUrl))
+      .slice(0, 8);
+    return { type: "leads", leads };
+  } catch {
+    return { type: "leads", leads: [] };
+  }
 }
 
 function normalizeHistory(history) {
@@ -412,6 +443,73 @@ export default async function handler(req, res) {
     }
 
     const targetStyle = editionStyle || draftContext?.editionStyle || "tactical";
+
+    if (editorAction === "find_leads") {
+      const currentUsage = await getUsageToday(me.id);
+      if (currentUsage >= DAILY_LIMIT) {
+        res.status(429).json({
+          error: `Daily assistant limit reached (${DAILY_LIMIT}/day). Resets at midnight Central time.`,
+        });
+        return;
+      }
+
+      const homeBureauLabel = draftContext?.homeBureauLabel || "Danville, IL";
+      const filingLabel = draftContext?.location || draftContext?.filingLabel || homeBureauLabel;
+      const articles = await fetchLeadSourceArticles({
+        homeBureauLabel,
+        filingLabel,
+      });
+
+      if (articles.length === 0) {
+        res.status(200).json({
+          type: "leads",
+          leads: [],
+          text: "No verified headlines were available right now. Try again later or search Explore for local sources.",
+          remainingQuota: Math.max(0, DAILY_LIMIT - currentUsage),
+        });
+        return;
+      }
+
+      const catalog = articles
+        .map((a, i) => `[${i + 1}] TITLE: ${a.title}\nURL: ${a.url}\nSNIPPET: ${a.snippet || ""}`)
+        .join("\n\n");
+      const allowedUrls = articles.map((a) => a.url);
+
+      const leadsSystem = `You are Pressy'o, a literary journalism mentor. Suggest story angles for a local reporter.
+RULES:
+- Use ONLY the SOURCE URLs listed below. Copy each URL exactly. Never invent links, quotes, or facts.
+- Each lead must include: angle (1-2 sentences), sourceUrl (exact match from catalog), sourceTitle.
+- Respond with first line TYPE: leads then a JSON array: [{"angle":"...","sourceUrl":"https://...","sourceTitle":"..."}]
+- If nothing is a good fit, return TYPE: leads and [].
+
+HOME BUREAU: ${homeBureauLabel}
+FILING FROM: ${filingLabel}
+
+VERIFIED SOURCES:
+${catalog}`;
+
+      let text;
+      try {
+        const r1 = await tryOllama(leadsSystem, prompt, history);
+        text = r1.text;
+      } catch {
+        try {
+          const r2 = await tryGroq(leadsSystem, prompt, history);
+          text = r2.text;
+        } catch {
+          const r3 = await tryGemini(leadsSystem, prompt, history);
+          text = r3.text;
+        }
+      }
+      const usedToday = await incrementUsage(me.id);
+      const parsedLeads = parseLeadsReply(text, allowedUrls);
+      res.status(200).json({
+        ...parsedLeads,
+        remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
+      });
+      return;
+    }
+
     const systemPrompt = buildSystemPrompt(targetStyle, editorAction, draftContext);
 
     // 3-Tier LLM Failover Cascade:

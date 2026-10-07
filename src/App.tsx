@@ -78,8 +78,16 @@ import {
   IMBRGR_URL,
   formatCoordinatesPair,
 } from "./config/site";
-import { buildImbrgrStudioUrl, parseComposeImageParam, parseComposeTitleParam } from "./lib/composeLinks";
-import { pickDispatchImageUrl } from "./lib/dispatchMedia";
+import {
+  buildImbrgrCreateImageUrl,
+  buildImbrgrStudioUrl,
+  parseComposeDraftParam,
+  parseComposeImageParam,
+  parseComposeTitleParam,
+  suggestImagePromptFromPost,
+} from "./lib/composeLinks";
+import { PostAiTray, type LeadItem } from "./components/PostAiTray";
+import { pickDispatchImageUrl, isDisplayableImageUrl } from "./lib/dispatchMedia";
 import { dispatchBodyDisplay } from "./lib/dispatchContent";
 import { SafeExternalImage } from "./components/SafeExternalImage";
 
@@ -203,6 +211,7 @@ export interface Dispatch {
       timestamp?: string;
     }>;
     useThemePhotoFilter?: boolean;
+    sharingOption?: "fork" | "colab" | "none";
   };
   createdAt?: string;
   updatedAt?: string;
@@ -1084,6 +1093,7 @@ export const FieldPressMaster: React.FC = () => {
 
   // In-Editor Pressy'o Copilot State (inside Pressie Builder Modal)
   const [isPressyoEditorBusy, setIsPressyoEditorBusy] = useState(false);
+  const [pressyoLeads, setPressyoLeads] = useState<LeadItem[]>([]);
   const [pressyoEditorActionLabel, setPressyoEditorActionLabel] = useState<string>("");
   const [pressyoCustomInstruction, setPressyoCustomInstruction] = useState("");
   const [pressyoEditorStatus, setPressyoEditorStatus] = useState<string | null>(null);
@@ -1596,10 +1606,10 @@ export const FieldPressMaster: React.FC = () => {
     }
   }, []);
 
-  const storePendingCompose = (payload: { imageUrl: string | null; title: string }) => {
+  const storePendingCompose = (payload: { imageUrl: string | null; title: string; draftId?: string | null }) => {
     try { sessionStorage.setItem(PENDING_COMPOSE_KEY, JSON.stringify(payload)); } catch {}
   };
-  const consumePendingCompose = (): { imageUrl: string | null; title: string } | null => {
+  const consumePendingCompose = (): { imageUrl: string | null; title: string; draftId?: string | null } | null => {
     try {
       const raw = sessionStorage.getItem(PENDING_COMPOSE_KEY);
       if (!raw) return null;
@@ -1607,6 +1617,30 @@ export const FieldPressMaster: React.FC = () => {
       return JSON.parse(raw);
     } catch { return null; }
   };
+  const applyComposeReturn = async (
+    draftId: string | null,
+    imageUrl: string | null,
+    title: string
+  ) => {
+    if (draftId && authAccount) {
+      try {
+        const res = await fetch(`/api/dispatches?id=${encodeURIComponent(draftId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          openCreatePressie(data.dispatch as Dispatch, { attachImageUrl: imageUrl, preferTitle: title });
+          if (imageUrl) {
+            setSavedSuccessToast("Image added");
+            setTimeout(() => setSavedSuccessToast(""), 2500);
+          }
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    openFreshComposeWithPrefill(imageUrl, title);
+  };
+
   const applyComposePrefill = (imageUrl: string | null, title: string) => {
     if (title) setNewTitle(title);
     if (imageUrl) {
@@ -1631,7 +1665,7 @@ export const FieldPressMaster: React.FC = () => {
   };
   const resumeComposeIfPending = (signedIn: boolean) => {
     const pending = consumePendingCompose();
-    if (!pending || (!pending.imageUrl && !pending.title)) return;
+    if (!pending || (!pending.imageUrl && !pending.title && !pending.draftId)) return;
     if (!signedIn) {
       storePendingCompose(pending);
       setAuthModalMode("signin");
@@ -1639,7 +1673,7 @@ export const FieldPressMaster: React.FC = () => {
       setTimeout(() => setSavedSuccessToast(""), 3500);
       return;
     }
-    openFreshComposeWithPrefill(pending.imageUrl, pending.title);
+    void applyComposeReturn(pending.draftId || null, pending.imageUrl, pending.title);
   };
 
   useEffect(() => {
@@ -1647,12 +1681,14 @@ export const FieldPressMaster: React.FC = () => {
     if (params.get("compose") !== "1") return;
     const imageUrl = parseComposeImageParam(params.get("image"));
     const title = parseComposeTitleParam(params.get("title"));
+    const draftId = parseComposeDraftParam(params.get("draft"));
     params.delete("compose");
     params.delete("image");
     params.delete("title");
+    params.delete("draft");
     const rest = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
-    if (imageUrl || title) storePendingCompose({ imageUrl, title });
+    if (imageUrl || title || draftId) storePendingCompose({ imageUrl, title, draftId });
   }, []);
 
   useEffect(() => {
@@ -3035,7 +3071,23 @@ export const FieldPressMaster: React.FC = () => {
   };
 
   const handlePressyoEditorAction = async (
-    action: "rewrite_voice" | "expand" | "shorten" | "headlines" | "factcheck_polish" | "visual_prompt" | "draft_from_topic" | "uplift_angle" | "social_thread" | "custom_edit",
+    action:
+      | "rewrite_voice"
+      | "expand"
+      | "shorten"
+      | "headlines"
+      | "factcheck_polish"
+      | "draft_from_topic"
+      | "uplift_angle"
+      | "social_thread"
+      | "custom_edit"
+      | "find_leads"
+      | "lede_suggest"
+      | "attribution_check"
+      | "ap_style_polish"
+      | "structure_dispatch"
+      | "punchier"
+      | "grammar_polish",
     targetStyle?: PressyoEdition,
     customInstructionText?: string
   ) => {
@@ -3044,8 +3096,16 @@ export const FieldPressMaster: React.FC = () => {
     const effectiveStyle: PressyoEdition = targetStyle || newEditionStyle || "tactical";
     const hasDraftText = Boolean(newTitle.trim() || newContent.trim());
 
-    if (!hasDraftText && action !== "draft_from_topic" && action !== "custom_edit") {
-      setPressyoEditorStatus("⚠️ Enter a headline, topic, or rough notes first so Pressy'o has material to work with.");
+    if (action === "find_leads") {
+      if (!authAccount) {
+        setAuthModalMode("signin");
+        return;
+      }
+      setPressyoLeads([]);
+    }
+
+    if (!hasDraftText && action !== "draft_from_topic" && action !== "custom_edit" && action !== "find_leads") {
+      setPressyoEditorStatus("Add a headline or a few notes first.");
       return;
     }
 
@@ -3057,35 +3117,48 @@ export const FieldPressMaster: React.FC = () => {
       factcheck_polish: `Polish the active dispatch for flow, grammar, and authentic telemetry phrasing in the ${effectiveStyle.toUpperCase()} edition voice.`,
       uplift_angle: `Reframe and enrich the active dispatch in the ${effectiveStyle.toUpperCase()} edition voice to foreground constructive human ingenuity, community resilience, and verified real-world impact without losing journalistic rigor.`,
       social_thread: `Keep the core dispatch intact and append a punchy [SYNDICATION & 15s BROADCAST READ] footer block with a 15-second radio script and a 3-bullet social distribution thread.`,
-      visual_prompt: `Generate a vivid, photojournalistic Pollinations visual framing prompt for this dispatch (${newTitle || newContent.slice(0, 120) || "Midwest Corridor infrastructure"}).`,
-      draft_from_topic: `Draft a full dispatch in the ${effectiveStyle.toUpperCase()} edition voice about: ${customInstructionText || newTitle || newContent || "Midwest Corridor field telemetry"}.`,
-      custom_edit: customInstructionText || pressyoCustomInstruction.trim() || "Refine and improve this dispatch."
+      draft_from_topic: `Draft a full dispatch in the ${effectiveStyle.toUpperCase()} edition voice about: ${customInstructionText || newTitle || newContent || "local story"}.`,
+      custom_edit: customInstructionText || pressyoCustomInstruction.trim() || "Refine and improve this dispatch.",
+      find_leads: `Suggest timely story angles for my beat. Interests in draft: ${newTitle || newContent.slice(0, 200) || "general local coverage"}.`,
+      lede_suggest: "Propose stronger opening ledes for this draft.",
+      attribution_check: "Review attribution and sourcing in this draft.",
+      ap_style_polish: "Light AP-style polish without losing voice.",
+      structure_dispatch: "Improve structure and flow for news reading.",
+      punchier: "Make the copy punchier while staying accurate.",
+      grammar_polish: "Fix grammar and awkward phrasing.",
     };
 
     const actionLabels: Record<string, string> = {
-      rewrite_voice: `Switching voice to ${effectiveStyle}…`,
-      expand: "Expanding field dispatch…",
-      shorten: "Condensing wire copy…",
-      headlines: "Sharpening headline & lede…",
-      factcheck_polish: "Polishing prose & telemetry…",
-      uplift_angle: "Amplifying constructive human angle…",
-      social_thread: "Generating 15s read & syndication thread…",
-      visual_prompt: "Crafting visual prompt…",
-      draft_from_topic: "Drafting full dispatch…",
-      custom_edit: "Applying custom edit…"
+      rewrite_voice: "Adjusting voice…",
+      expand: "Expanding…",
+      shorten: "Shortening…",
+      headlines: "Working on headline…",
+      factcheck_polish: "Checking clarity…",
+      uplift_angle: "Finding a stronger angle…",
+      social_thread: "Drafting social copy…",
+      draft_from_topic: "Drafting…",
+      custom_edit: "Applying your edit…",
+      find_leads: "Finding leads…",
+      lede_suggest: "Suggesting ledes…",
+      attribution_check: "Checking attribution…",
+      ap_style_polish: "Polishing…",
+      structure_dispatch: "Restructuring…",
+      punchier: "Sharpening…",
+      grammar_polish: "Fixing grammar…",
     };
 
     setIsPressyoEditorBusy(true);
-    setPressyoEditorActionLabel(actionLabels[action] || "Pressy'o working…");
+    setPressyoEditorActionLabel(actionLabels[action] || "Working…");
     setPressyoEditorStatus(null);
 
-    // Save undo snapshot before mutating builder state
-    setPressyoEditorUndo({
-      title: newTitle,
-      content: newContent,
-      editionStyle: newEditionStyle,
-      visualPrompt
-    });
+    if (action !== "find_leads") {
+      setPressyoEditorUndo({
+        title: newTitle,
+        content: newContent,
+        editionStyle: newEditionStyle,
+        visualPrompt,
+      });
+    }
 
     try {
       const resp = await fetch("/api/pressyo", {
@@ -3101,7 +3174,9 @@ export const FieldPressMaster: React.FC = () => {
             editionStyle: effectiveStyle,
             visualPrompt,
             location: newLocation,
-            category: newCategory
+            category: newCategory,
+            homeBureauLabel: HOME_BUREAU.label,
+            filingLabel: newLocation || AUTHOR_DEFAULT_FILING.label,
           },
           history: pressyoChat.slice(-6)
         })
@@ -3112,24 +3187,21 @@ export const FieldPressMaster: React.FC = () => {
         throw new Error(data?.error || `Request failed (${resp.status})`);
       }
 
-      if (data.source) setPressyoLastSource(data.source);
-      if (data.model) setPressyoLastModel(data.model);
       if (typeof data.remainingQuota === "number") setPressyoRemainingQuota(data.remainingQuota);
 
-      if (action === "visual_prompt" || data.type === "visual") {
-        const nextVisual = data.visualPrompt || data.text || "";
-        if (nextVisual) setVisualPrompt(nextVisual);
-        setPressyoEditorStatus(`✓ Visual prompt crafted via ${formatSourceLabel(data.source, data.model)}`);
+      if (action === "find_leads" || data.type === "leads") {
+        const leads = Array.isArray(data.leads) ? data.leads : [];
+        setPressyoLeads(leads);
+        setPressyoEditorStatus(
+          leads.length ? `Found ${leads.length} lead${leads.length === 1 ? "" : "s"} with sources.` : "No sourced leads right now — try again later."
+        );
       } else {
         if (targetStyle) setNewEditionStyle(targetStyle);
         if (data.title && data.title !== "Untitled Dispatch") setNewTitle(data.title);
         if (data.text) setNewContent(data.text);
-        if (data.visualPrompt && (!visualPrompt.trim() || action === "draft_from_topic")) {
-          setVisualPrompt(data.visualPrompt);
-        }
         if (action === "custom_edit") setPressyoCustomInstruction("");
         if (formValidationError) setFormValidationError(null);
-        setPressyoEditorStatus(`✓ Updated (${effectiveStyle.toUpperCase()}) via ${formatSourceLabel(data.source, data.model)}`);
+        setPressyoEditorStatus("Updated.");
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Pressy'o couldn't complete the edit.";
@@ -3570,9 +3642,8 @@ export const FieldPressMaster: React.FC = () => {
           }
           // Exporting from canvas produces a pure RGB stream with ZERO EXIF/GPS/Camera metadata
           const scrubbedDataUrl = ctx ? canvas.toDataURL("image/jpeg", 0.9) : rawDataUrl;
-          const cleanCaption = newIsAnonymous
-            ? `[🛡️ EXIF & GPS Metadata Stripped] Field Evidence Frame #${idx + 1}`
-            : `[🛡️ EXIF Scrubbed] ${file.name.replace(/\.[^/.]+$/, "")}`;
+          const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ");
+          const cleanCaption = baseName || `Photo ${idx + 1}`;
           const item = {
             id: `upload-${Date.now()}-${idx}`,
             url: scrubbedDataUrl,
@@ -3764,11 +3835,90 @@ export const FieldPressMaster: React.FC = () => {
     });
   };
 
+
+  const ensureDraftSavedForImbrgr = async (): Promise<string | null> => {
+    if (!authAccount) {
+      setAuthModalMode("signin");
+      setSavedSuccessToast("Sign in to save your draft before creating an image.");
+      setTimeout(() => setSavedSuccessToast(""), 3500);
+      return null;
+    }
+    if (!newTitle.trim() && !newContent.trim()) {
+      setFormValidationError("Add a few words to your post before creating an image.");
+      return null;
+    }
+    const titleText = newTitle.trim() || "Untitled draft";
+    const finalTitle = titleText.toLowerCase().startsWith("draft:") ? titleText : `Draft: ${titleText}`;
+    const body = newContent.trim() || "(Continue writing in FieldPress.)";
+    let parsedCoords: [number, number] | undefined;
+    if (newCoordinates.includes(",")) {
+      const parts = newCoordinates.split(",").map((p) => parseFloat(p.trim()));
+      if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+        parsedCoords = newVicinityPinOnly
+          ? [fuzzVicinityClient(parts[0]), fuzzVicinityClient(parts[1])]
+          : [parts[0], parts[1]];
+      }
+    }
+    const draftItem = {
+      id: editingDraftId || generateDispatchId(),
+      title: finalTitle,
+      category: newCategory || "Field Dispatch",
+      content: body,
+      location: newLocation.trim() || AUTHOR_DEFAULT_FILING.label,
+      coordinates: parsedCoords,
+      imageUrl: newImageUrl || evidenceGallery[0]?.url,
+      imageCaption: newImageCaption,
+      gallery: evidenceGallery,
+      embedData: { gallery: evidenceGallery, useThemePhotoFilter: builderUseThemePhotoFilter, sharingOption: newSharingOption },
+      sharingOption: newSharingOption,
+      sourceUrl: newSourceUrl.trim() || undefined,
+      editionStyle: newEditionStyle,
+      isPressRoll: true,
+      isAnonymous: newIsAnonymous,
+      decoupleLocationPin: newDecoupleLocationPin,
+      vicinityPinOnly: newVicinityPinOnly,
+    };
+    try {
+      const res = editingDraftId
+        ? await fetch(`/api/dispatches?id=${encodeURIComponent(editingDraftId)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...draftItem, isPressRoll: true }),
+          })
+        : await fetch("/api/dispatches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(draftItem),
+          });
+      if (!res.ok) throw new Error("save failed");
+      const { dispatch: saved } = await res.json();
+      setEditingDraftId(saved.id);
+      const updated = editingDraftId
+        ? pressRoll.map((p) => (p.id === editingDraftId ? saved : p))
+        : [saved, ...pressRoll];
+      setPressRoll(updated);
+      return saved.id as string;
+    } catch {
+      setFormValidationError("Could not save draft — check your connection.");
+      return null;
+    }
+  };
+
+  const handleCreateImageHandoff = async () => {
+    const draftId = await ensureDraftSavedForImbrgr();
+    if (!draftId) return;
+    const prompt = suggestImagePromptFromPost(newTitle, newContent);
+    window.location.href = buildImbrgrCreateImageUrl({ draftId, prompt });
+  };
+
   // =========================================================================
   // CREATE PRESSIE HANDLER (OPENS THE PRESSIE BUILDER MODAL - IMAGE 2)
   // CRITICAL: NEVER opens the Press Pass Credential Editor!
   // =========================================================================
-  const openCreatePressie = (draftToEdit?: Dispatch) => {
+  const openCreatePressie = (
+    draftToEdit?: Dispatch,
+    options?: { attachImageUrl?: string | null; preferTitle?: string }
+  ) => {
     setEditingPublishedId(null);
     if (draftToEdit) {
       setEditingDraftId(draftToEdit.id);
@@ -3794,10 +3944,16 @@ export const FieldPressMaster: React.FC = () => {
         ? draftToEdit.editionStyle
         : "tactical") as PressyoEdition;
       setNewEditionStyle(validEdition);
-      const safeImg = getFallbackImageForDispatch(draftToEdit) || "";
+      const safeImg =
+        pickDispatchImageUrl(draftToEdit.imageUrl, draftToEdit.embedData?.thumbnail_url ?? null) ||
+        (isDisplayableImageUrl(draftToEdit.imageUrl) ? draftToEdit.imageUrl!.trim() : "");
       setNewImageUrl(safeImg || "");
       setNewImageCaption(draftToEdit.imageCaption || "");
       setNewSourceUrl(draftToEdit.sourceUrl || "");
+      const savedSharing = draftToEdit.sharingOption || (draftToEdit.embedData as { sharingOption?: string } | undefined)?.sharingOption;
+      if (savedSharing === "fork" || savedSharing === "colab" || savedSharing === "none") {
+        setNewSharingOption(savedSharing);
+      }
       setVisualPrompt(draftToEdit.title || "");
       const existingFrames = getGalleryForDispatch(draftToEdit);
       if (existingFrames.length > 0) {
@@ -3843,6 +3999,21 @@ export const FieldPressMaster: React.FC = () => {
       setShowUrlInput(false);
       setManualImageUrl("");
       setNewCoordinates(formatCoordinatesPair(AUTHOR_DEFAULT_FILING.coordinates));
+      setNewSharingOption("fork");
+    }
+    if (options?.preferTitle?.trim()) {
+      setNewTitle(options.preferTitle.replace(/^Draft:\s*/i, ""));
+    }
+    if (options?.attachImageUrl && isDisplayableImageUrl(options.attachImageUrl)) {
+      const url = options.attachImageUrl;
+      setEvidenceGallery((prev) => {
+        const hasCover = Boolean(newImageUrl || prev[0]?.url);
+        if (!hasCover) {
+          setNewImageUrl(url);
+          return [{ id: `imbrgr-${Date.now()}`, url, source: "url", caption: "", timestamp: "Linked" }];
+        }
+        return [...prev, { id: `imbrgr-${Date.now()}`, url, source: "url", caption: "", timestamp: "Linked" }];
+      });
     }
     setFormValidationError(null);
     setShowPressPassModal(false); // ENSURE PRESS PASS IS NOT OPEN
@@ -3913,8 +4084,10 @@ export const FieldPressMaster: React.FC = () => {
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       embedData: {
         gallery: evidenceGallery,
-        useThemePhotoFilter: builderUseThemePhotoFilter
+        useThemePhotoFilter: builderUseThemePhotoFilter,
+        sharingOption: newSharingOption
       },
+      sharingOption: newSharingOption,
       sourceUrl: newSourceUrl.trim() || undefined,
       editionStyle: newEditionStyle,
       isPressRoll: true
@@ -3929,8 +4102,10 @@ export const FieldPressMaster: React.FC = () => {
           gallery: evidenceGallery,
           embedData: {
             gallery: evidenceGallery,
-            useThemePhotoFilter: builderUseThemePhotoFilter
+            useThemePhotoFilter: builderUseThemePhotoFilter,
+            sharingOption: newSharingOption
           },
+          sharingOption: newSharingOption,
           isPressRoll: true,
           isAnonymous: newIsAnonymous,
           decoupleLocationPin: newDecoupleLocationPin,
@@ -6812,159 +6987,24 @@ export const FieldPressMaster: React.FC = () => {
                 )}
               </div>
 
-              {/* ================================================================= */}
-              {/* 4B. PRESSY'O IN-EDITOR COPILOT STUDIO (OLLAMA -> GROQ -> GEMINI)  */}
-              {/* ================================================================= */}
-              <div className={`p-3.5 rounded-xl border space-y-3 ${
-                isDark
-                  ? "bg-zinc-950/80 border-amber-500/40 shadow-inner"
-                  : "bg-amber-50/50 border-amber-500/40"
-              }`}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src="/pressyo-icon.jpg"
-                      alt="Pressy'o"
-                      className="w-6 h-6 rounded-lg object-cover border border-amber-500 bg-white"
-                    />
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-amber-500 text-xs">Pressy'o In-Editor Copilot</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
-                          {pressyoLastSource ? formatSourceLabel(pressyoLastSource, pressyoLastModel) : "Ollama → Groq → Gemini"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {pressyoEditorUndo && (
-                      <button
-                        type="button"
-                        onClick={handleUndoPressyoEdit}
-                        className="px-2 py-1 rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[10px] font-bold transition cursor-pointer"
-                        title="Restore draft before last Pressy'o edit"
-                      >
-                        ↩ Undo Edit
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShowPressyoModal(true)}
-                      className={`px-2 py-1 rounded border text-[10px] font-bold transition cursor-pointer ${
-                        isDark
-                          ? "border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
-                          : "border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-700"
-                      }`}
-                    >
-                      💬 Open Copilot Chat
-                    </button>
-                  </div>
-                </div>
-
-                {/* Row 1: 1-Click Draft & Transform Actions */}
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { id: "draft_from_topic", label: "✨ Draft from Headline", tip: "Write a full dispatch + visual prompt from your headline or topic" },
-                    { id: "expand", label: "📐 Expand Copy", tip: "Enrich with deeper field reporting & corridor context" },
-                    { id: "shorten", label: "✂️ Tighten / Shorten", tip: "Condense into crisp, high-signal wire copy" },
-                    { id: "headlines", label: "📰 Sharpen Headline", tip: "Generate a punchy headline and tighten the opening lede" },
-                    { id: "uplift_angle", label: "🌟 Uplift Angle", tip: "Foreground constructive human ingenuity, solutions, and real-world impact" },
-                    { id: "social_thread", label: "📣 Social + 15s Read", tip: "Append a 15-second radio read and 3-bullet social distribution thread" },
-                    { id: "factcheck_polish", label: "🛡️ Polish & Check", tip: "Polish grammar, flow, and telemetry consistency" },
-                    { id: "visual_prompt", label: "🎨 Craft Visual Prompt", tip: "Generate a tailored Pollinations photojournalism prompt" }
-                  ].map((act) => (
-                    <button
-                      key={act.id}
-                      type="button"
-                      disabled={isPressyoEditorBusy}
-                      onClick={() => handlePressyoEditorAction(act.id as any)}
-                      title={act.tip}
-                      className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition cursor-pointer disabled:opacity-40 ${
-                        isDark
-                          ? "bg-zinc-900 border-zinc-800 hover:border-amber-500/50 hover:bg-amber-500/10 text-zinc-200"
-                          : "bg-white border-zinc-200 hover:border-amber-500/50 hover:bg-amber-50 text-zinc-800"
-                      }`}
-                    >
-                      {act.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Row 2: 1-Click Live Voice Switcher (Rewrites Active Draft on the Fly across all 8 Pressie Archetypes) */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className={`text-[10px] font-bold ${subTextThemeClass}`}>Rewrite Voice (8 Models):</span>
-                  {[
-                    { id: "tactical", label: "🛰️ Tactical" },
-                    { id: "newspaper", label: "📰 Broadsheet" },
-                    { id: "fieldnote", label: "🌿 Field Note" },
-                    { id: "almanac", label: "🌾 Almanac" },
-                    { id: "curio", label: "🔮 Curio" },
-                    { id: "comic", label: "💥 Comic" },
-                    { id: "arcade", label: "🕹️ Arcade" },
-                    { id: "magazine", label: "✨ Sleek" }
-                  ].map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      disabled={isPressyoEditorBusy}
-                      onClick={() => handlePressyoEditorAction("rewrite_voice", v.id as PressyoEdition)}
-                      title={`Rewrite headline & body in ${v.label} voice`}
-                      className={`px-2 py-1 rounded border text-[10px] font-bold transition cursor-pointer disabled:opacity-40 ${
-                        newEditionStyle === v.id
-                          ? "border-amber-500/60 bg-amber-500/20 text-amber-400"
-                          : isDark
-                          ? "border-zinc-800 bg-zinc-900/70 hover:border-amber-500/40 text-zinc-400 hover:text-zinc-200"
-                          : "border-zinc-200 bg-white hover:border-amber-400 text-zinc-600"
-                      }`}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Row 3: Custom In-Editor Instruction */}
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={pressyoCustomInstruction}
-                    onChange={(e) => setPressyoCustomInstruction(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && pressyoCustomInstruction.trim()) {
-                        e.preventDefault();
-                        handlePressyoEditorAction("custom_edit", undefined, pressyoCustomInstruction.trim());
-                      }
-                    }}
-                    placeholder="Custom edit instruction (e.g. 'add a quote from the substation lead', 'emphasize winter grid load')..."
-                    disabled={isPressyoEditorBusy}
-                    className={`flex-1 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none ${inputThemeClass}`}
-                  />
-                  <button
-                    type="button"
-                    disabled={isPressyoEditorBusy || !pressyoCustomInstruction.trim()}
-                    onClick={() => handlePressyoEditorAction("custom_edit", undefined, pressyoCustomInstruction.trim())}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 font-bold text-[11px] hover:bg-amber-400 transition cursor-pointer disabled:opacity-40 flex-shrink-0"
-                  >
-                    Apply Edit
-                  </button>
-                </div>
-
-                {(isPressyoEditorBusy || pressyoEditorStatus) && (
-                  <div className="flex items-center justify-between text-[11px] pt-0.5">
-                    {isPressyoEditorBusy ? (
-                      <span className="text-amber-400 font-bold flex items-center gap-1.5">
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                        <span>{pressyoEditorActionLabel || "Pressy'o editing draft…"}</span>
-                      </span>
-                    ) : (
-                      <span className="text-emerald-400 font-medium">{pressyoEditorStatus}</span>
-                    )}
-                    {typeof pressyoRemainingQuota === "number" && (
-                      <span className="text-[10px] text-zinc-500">{pressyoRemainingQuota} copilot credits left today</span>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PostAiTray
+                isDark={isDark}
+                busy={isPressyoEditorBusy}
+                status={pressyoEditorStatus}
+                leads={pressyoLeads}
+                canUndo={Boolean(pressyoEditorUndo)}
+                onUndo={handleUndoPressyoEdit}
+                onWriteAction={(id) => {
+                  if (id === "rewrite_voice") {
+                    handlePressyoEditorAction("rewrite_voice", newEditionStyle);
+                    return;
+                  }
+                  handlePressyoEditorAction(id as Parameters<typeof handlePressyoEditorAction>[0]);
+                }}
+                onFindLeads={() => handlePressyoEditorAction("find_leads")}
+                onCreateImage={() => void handleCreateImageHandoff()}
+                onCustomAsk={(text) => handlePressyoEditorAction("custom_edit", undefined, text)}
+              />
 
               {/* 5. Dispatch Body (matching Image 2) */}
               <div>

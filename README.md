@@ -45,21 +45,35 @@ Notes on a naming/endpoint fix so it doesn't regress:
 
 Config: `IMBRGR_URL` in `src/config/site.ts` (default `https://imbrgr.vercel.app`).
 
-**FieldPress → imbrgr** (prefill generate tab from dispatch copy):
+**FieldPress → imbrgr** (simple link, no draft):
 
 ```
 https://imbrgr.vercel.app/studio?tab=generate&prompt=<url-encoded text>
 ```
 
-Built in-app via `buildImbrgrStudioUrl()` (`src/lib/composeLinks.ts`).
+**FieldPress → imbrgr** (Create image from Post — draft is saved first):
 
-**imbrgr → FieldPress** (resume compose with image by URL — no re-upload, render with `<img>` only):
+```
+https://imbrgr.vercel.app/studio?tab=generate&prompt=<url-encoded>&from=fieldpress&draft=<draftId>
+```
+
+Built via `buildImbrgrCreateImageUrl()` / `buildImbrgrStudioUrl()` in `src/lib/composeLinks.ts`.
+
+**imbrgr → FieldPress** (return to the same draft when possible):
+
+```
+https://fieldpress.studio/?compose=1&draft=<draftId>&image=<url-encoded https URL>&title=<optional>
+```
+
+Legacy (no draft id — opens a new Post prefilled):
 
 ```
 https://fieldpress.studio/?compose=1&image=<url-encoded https URL>&title=<url-encoded title>
 ```
 
+- `draft` must match `^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$` and belong to the signed-in user; otherwise FieldPress opens a fresh Post with `image` / `title` only.
 - `image` must be HTTPS on allowed hosts (e.g. `imbrgr.vercel.app`, or imbrgr `/api/media/file/...` URLs).
-- FieldPress does **not** fetch the image into canvas (avoids CORS/taint). If the user is signed out, params are stored in `sessionStorage` and applied after login.
+- FieldPress does **not** fetch the image into canvas (avoids CORS/taint). Params are stored in `sessionStorage` through sign-in when needed.
+- On success with a valid draft: reopen that draft, set cover if empty else append photo, toast “Image added”.
 
-Parsed by `parseComposeImageParam()` / `parseComposeTitleParam()` in `src/lib/composeLinks.ts`.
+Parsed by `parseComposeDraftParam()`, `parseComposeImageParam()`, and `parseComposeTitleParam()` in `src/lib/composeLinks.ts`.
