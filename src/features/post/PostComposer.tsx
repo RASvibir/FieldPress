@@ -177,8 +177,6 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
 
   const setCover = (url: string) => {
     setNewImageUrl(url);
-    const item = evidenceGallery.find((g) => g.url === url);
-    if (item?.caption) setNewImageCaption(item.caption);
   };
 
   const remixLabel = (opt: SharingOption) =>
@@ -343,7 +341,13 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                   isDark ? "border-zinc-700 hover:bg-zinc-800" : "border-zinc-200 hover:bg-zinc-100"
                 } ${isDark ? "ring-offset-zinc-900" : "ring-offset-white"}`}
               >
-                <img src="/brand/imbrgr-icon.png" alt="" width={20} height={20} className="w-5 h-5 block" />
+                <img
+                  src="/brand/imbrgr-icon.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="w-5 h-5 block object-contain"
+                />
               </button>
             </div>
             <button type="button" className={trayBtn} onClick={() => setTray(tray === "link" ? null : "link")}>

@@ -99,6 +99,10 @@ import { TOPIC_OPTIONS } from "./features/post/looks";
 import { loadComposerAutosave } from "./features/post/composerAutosave";
 import { formatByline } from "./lib/byline";
 import { resolveImageAlt } from "./lib/imageAlt";
+import {
+  captionForPublish,
+  shouldShowPublicImageCaption,
+} from "./lib/composerImageCaption";
 
 import { pickDispatchImageUrl, isDisplayableImageUrl } from "./lib/dispatchMedia";
 import { dispatchBodyDisplay } from "./lib/dispatchContent";
@@ -3713,21 +3717,18 @@ export const FieldPressMaster: React.FC = () => {
           }
           // Exporting from canvas produces a pure RGB stream with ZERO EXIF/GPS/Camera metadata
           const scrubbedDataUrl = ctx ? canvas.toDataURL("image/jpeg", 0.9) : rawDataUrl;
-          const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ");
-          const cleanCaption = baseName || `Photo ${idx + 1}`;
           const item = {
             id: `upload-${Date.now()}-${idx}`,
             url: scrubbedDataUrl,
             source: "upload" as const,
-            caption: cleanCaption,
+            caption: "",
             timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           };
           setEvidenceGallery((prev) => [item, ...prev.slice(0, 11)]);
           if (idx === 0) {
             setNewImageUrl((curr) => curr || scrubbedDataUrl);
-            setNewImageCaption((curr) => curr || cleanCaption);
           }
-          setSavedSuccessToast(`🛡️ ${files.length > 1 ? `${files.length} photos` : "Photo"} attached with 100% EXIF, GPS & device metadata stripped.`);
+          setSavedSuccessToast(files.length > 1 ? "Photos added." : "Photo added.");
           setTimeout(() => setSavedSuccessToast(""), 3500);
         };
         img.src = rawDataUrl;
@@ -3758,13 +3759,12 @@ export const FieldPressMaster: React.FC = () => {
     if (ytId) {
       const ytFrame = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
       setNewImageUrl((curr) => curr || ytFrame);
-      setNewImageCaption((curr) => curr || "[🎥 Shared Broadcast Footage] Verified Video Still");
       setEvidenceGallery((prev) => [
         {
           id: `yt-drop-${Date.now()}`,
           url: ytFrame,
           source: "upload" as const,
-          caption: "[🎥 Shared Broadcast Footage] Verified Video Still",
+          caption: "",
           timestamp: "Source URL"
         },
         ...prev.filter((p) => p.url !== ytFrame).slice(0, 10)
@@ -3793,12 +3793,11 @@ export const FieldPressMaster: React.FC = () => {
             id: `unfurl-${Date.now()}`,
             url: data.image,
             source: "upload" as const,
-            caption: `[🔗 Source Photo via ${data.siteName || "Web"}] ${resolvedTitle || ""}`.trim(),
+            caption: "",
             timestamp: "Source URL"
           };
           setEvidenceGallery((prev) => [imgItem, ...prev.filter((p) => p.url !== data.image).slice(0, 10)]);
           setNewImageUrl((curr) => curr || data.image);
-          setNewImageCaption((curr) => curr || imgItem.caption);
         }
 
         const desc = (data.description || "").trim();
@@ -3870,8 +3869,6 @@ export const FieldPressMaster: React.FC = () => {
     if (!raw) return;
     const ytId = extractYoutubeVideoId(raw);
     const resolvedImgUrl = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : raw;
-    const resolvedCaption = ytId ? "[🎥 Real Video Footage Frame] Verified YouTube Broadcast Still" : "[📸 Real Web Photo] Field media link";
-
     if (ytId && !newSourceUrl.trim()) {
       setNewSourceUrl(`https://www.youtube.com/watch?v=${ytId}`);
     }
@@ -3880,15 +3877,14 @@ export const FieldPressMaster: React.FC = () => {
       id: "url-" + Date.now(),
       url: resolvedImgUrl,
       source: "upload" as const,
-      caption: resolvedCaption,
+      caption: "",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
     setEvidenceGallery((prev) => [item, ...prev.slice(0, 8)]);
     setNewImageUrl(resolvedImgUrl);
-    setNewImageCaption(resolvedCaption);
     setManualImageUrl("");
     setShowUrlInput(false);
-    setSavedSuccessToast(ytId ? "YouTube footage linked + HD video frame attached!" : "Real photo URL linked to evidence tray.");
+    setSavedSuccessToast(ytId ? "Video preview image added." : "Photo linked.");
     setTimeout(() => setSavedSuccessToast(""), 3000);
   };
 
@@ -3897,7 +3893,6 @@ export const FieldPressMaster: React.FC = () => {
       const next = prev.filter((it) => it.id !== idToRemove);
       if (next.length > 0) {
         setNewImageUrl(next[0].url);
-        setNewImageCaption(next[0].caption || "");
       } else {
         setNewImageUrl("");
         setNewImageCaption("");
@@ -4239,7 +4234,7 @@ export const FieldPressMaster: React.FC = () => {
       vicinityPinOnly: newVicinityPinOnly,
       content: newContent.trim(),
       imageUrl: newImageUrl || (evidenceGallery[0]?.url ?? undefined),
-      imageCaption: newImageCaption || (evidenceGallery[0]?.caption ?? undefined),
+      imageCaption: captionForPublish(newImageCaption),
       imageAltText: newImageAltText.trim() || undefined,
       gallery: evidenceGallery.length > 0 ? evidenceGallery : undefined,
       embedData: {
@@ -4322,7 +4317,7 @@ export const FieldPressMaster: React.FC = () => {
     }
 
     const chosenImage = newImageUrl || (evidenceGallery.length > 0 ? evidenceGallery[0].url : undefined);
-    const chosenCaption = newImageCaption || (evidenceGallery.length > 0 ? evidenceGallery[0].caption : undefined);
+    const chosenCaption = captionForPublish(newImageCaption);
     const chosenAlt = newImageAltText.trim() || undefined;
     const rawLoc = newLocation.trim() || pressPass.location || pressPass.bureau || "Midwest Corridor";
     const finalLocation = newVicinityPinOnly && !rawLoc.toLowerCase().includes("vicinity")
@@ -4500,7 +4495,11 @@ export const FieldPressMaster: React.FC = () => {
     setNewContent(`\n\n---\n[Forked from @${parent.callsign} (${parent.author}) • Original: "${parent.title}"]`);
     if (parent.imageUrl) {
       setNewImageUrl(parent.imageUrl);
-      setNewImageCaption(parent.imageCaption || "Source visual from parent dispatch");
+      setNewImageCaption(
+        parent.imageCaption && shouldShowPublicImageCaption(parent.imageCaption)
+          ? parent.imageCaption
+          : ""
+      );
       setEvidenceGallery([{
         id: "parent-" + Date.now(),
         url: parent.imageUrl,
@@ -4977,7 +4976,7 @@ export const FieldPressMaster: React.FC = () => {
                             </div>
                           )}
 
-                          {d.imageCaption && (
+                          {shouldShowPublicImageCaption(d.imageCaption) && (
                             <div
                               className={`absolute bottom-0 inset-x-0 p-2 text-xs z-20 ${
                                 isComic
@@ -6415,7 +6414,7 @@ export const FieldPressMaster: React.FC = () => {
           const frameUrl = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
           setNewImageUrl(frameUrl);
           setEvidenceGallery((prev) => [
-            { id: "yt-" + Date.now(), url: frameUrl, source: "url", caption: "Video frame", timestamp: "Linked" },
+            { id: "yt-" + Date.now(), url: frameUrl, source: "url", caption: "", timestamp: "Linked" },
             ...prev.filter((p) => p.url !== frameUrl).slice(0, 7),
           ]);
         }}
@@ -7340,7 +7339,8 @@ export const FieldPressMaster: React.FC = () => {
                       </>
                     )}
 
-                    {(activeFrame.caption || selectedStory.imageCaption) && (
+                    {(shouldShowPublicImageCaption(activeFrame.caption) ||
+                      shouldShowPublicImageCaption(selectedStory.imageCaption)) && (
                       <div className={`absolute bottom-0 inset-x-0 z-20 p-3 text-xs border-t ${
                         isReaderOldTimey
                           ? "bg-[#efe4ce]/95 text-[#18120c] font-serif italic border-[#1f160d]"
@@ -7350,7 +7350,9 @@ export const FieldPressMaster: React.FC = () => {
                           {isReaderOldTimey ? `ENGRAVED PLATE #${safeIdx + 1}:` : `EVIDENCE FRAME #${safeIdx + 1}:`}
                         </span>{" "}
                         {renderTextWithLinks(
-                          activeFrame.caption || selectedStory.imageCaption,
+                          [activeFrame.caption, selectedStory.imageCaption].find((c) =>
+                            shouldShowPublicImageCaption(c)
+                          ) || "",
                           isReaderOldTimey
                             ? "text-[#7c2d12] hover:text-black underline font-bold"
                             : "text-amber-400 hover:text-amber-300 underline font-bold"
@@ -7937,7 +7939,7 @@ ${shareUrl}`;
                         alt={shareModalStory.title}
                         className="w-full h-full object-cover"
                       />
-                      {shareModalStory.imageCaption && (
+                      {shouldShowPublicImageCaption(shareModalStory.imageCaption) && (
                         <div className="absolute bottom-0 inset-x-0 bg-black/80 p-1.5 text-[10px] text-zinc-300">
                           {shareModalStory.imageCaption}
                         </div>
