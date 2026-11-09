@@ -23,6 +23,14 @@ describe("parseImbrgrComposeMessage", () => {
     assert.equal(r, null);
   });
 
+  it("rejects imbrgr Vercel preview origins unless explicitly trusted", () => {
+    const r = parseImbrgrComposeMessage("https://imbrgr-attacker.vercel.app", {
+      type: IMBRGR_COMPOSE_MESSAGE_TYPE,
+      imageUrl: "https://imbrgr.website/api/media/file/x.png",
+    });
+    assert.equal(r, null);
+  });
+
   it("rejects bad image host even from trusted origin", () => {
     const r = parseImbrgrComposeMessage("https://imbrgr.website", {
       type: IMBRGR_COMPOSE_MESSAGE_TYPE,

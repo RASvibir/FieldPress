@@ -15,7 +15,8 @@ describe("composeLinks hosts", () => {
     assert.equal(isAllowedComposeImageHost("imbrgr.website"), true);
     assert.equal(isAllowedComposeImageHost("www.imbrgr.website"), true);
     assert.equal(isAllowedComposeImageHost("imbrgr.vercel.app"), true);
-    assert.equal(isAllowedComposeImageHost("imbrgr-abc123.vercel.app"), true);
+    // Preview hosts require VITE_IMBRGR_TRUST_PREVIEWS=1 (off by default).
+    assert.equal(isAllowedComposeImageHost("imbrgr-abc123.vercel.app"), false);
     assert.equal(isAllowedComposeImageHost("evil.com"), false);
   });
 

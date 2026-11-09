@@ -24,8 +24,19 @@ function imbrgrAllowedOrigins(): Set<string> {
   return origins;
 }
 
+function trustImbrgrVercelPreviews(): boolean {
+  try {
+    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+    return env?.VITE_IMBRGR_TRUST_PREVIEWS === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function isTrustedImbrgrOrigin(origin: string): boolean {
   if (imbrgrAllowedOrigins().has(origin)) return true;
+  // Opt-in only — preview hostnames are guessable / creatable by third parties.
+  if (!trustImbrgrVercelPreviews()) return false;
   try {
     const host = new URL(origin).hostname.toLowerCase();
     return /^imbrgr-[a-z0-9-]+\.vercel\.app$/.test(host);

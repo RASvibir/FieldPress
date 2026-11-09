@@ -1,0 +1,133 @@
+From 93a10bb32ef005d53d4fe64a744b48470ecbceda Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 19:47:00 +0000
+Subject: [PATCH] Harden FieldPress embed framing and share URL allowlist
+
+- Drop broad https://*.vercel.app frame-ancestors; optional env extras
+- isSafeFieldPressImageUrl requires HTTPS imbrgr hosts (defense in depth)
+---
+ docs/FIELDPRESS-EMBED.md     |  2 +-
+ src/lib/fieldpress.test.ts   |  4 +++-
+ src/lib/fieldpress.ts        | 21 ++++++++++++++++++---
+ src/lib/studio-embed.test.ts |  3 ++-
+ src/lib/studio-embed.ts      | 15 ++++++++++++---
+ 5 files changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/docs/FIELDPRESS-EMBED.md b/docs/FIELDPRESS-EMBED.md
+index 057fcff..ff9bc30 100644
+--- a/docs/FIELDPRESS-EMBED.md
++++ b/docs/FIELDPRESS-EMBED.md
+@@ -6,7 +6,7 @@
+ https://imbrgr.website/studio?tab=generate&embed=1&from=fieldpress&draft=<id>&prompt=<text>
+ ```
+ 
+-- `embed=1` — hide site header/footer/mobile nav; CSP `frame-ancestors` allows FieldPress origins.
++- `embed=1` — hide site header/footer/mobile nav; CSP `frame-ancestors` allows FieldPress production + localhost (add preview hosts via `FIELDPRESS_EMBED_FRAME_ANCESTORS`).
+ - `from=fieldpress` + `draft` — session return context for **Share with FieldPress**.
+ - Without `embed`, same params open full studio (FieldPress **Full studio** link).
+ 
+diff --git a/src/lib/fieldpress.test.ts b/src/lib/fieldpress.test.ts
+index 37fd38e..ff0786c 100644
+--- a/src/lib/fieldpress.test.ts
++++ b/src/lib/fieldpress.test.ts
+@@ -45,9 +45,11 @@ describe("fieldpress", () => {
+     expect(showFieldPressStoryInvite(null, null)).toBe(false);
+   });
+ 
+-  it("rejects localhost compose image URLs", () => {
++  it("rejects localhost and non-imbrgr compose image URLs", () => {
+     expect(isSafeFieldPressImageUrl("http://localhost:3000/api/media/file/x.png")).toBe(false);
+     expect(fieldpressComposeUrl("http://localhost:3000/api/media/file/x.png")).toBeNull();
+     expect(isSafeFieldPressImageUrl("https://imbrgr.vercel.app/api/media/file/x.png")).toBe(true);
++    expect(isSafeFieldPressImageUrl("https://evil.com/x.png")).toBe(false);
++    expect(fieldpressComposeUrl("https://evil.com/x.png")).toBeNull();
+   });
+ });
+diff --git a/src/lib/fieldpress.ts b/src/lib/fieldpress.ts
+index 5aae616..32eb34f 100644
+--- a/src/lib/fieldpress.ts
++++ b/src/lib/fieldpress.ts
+@@ -27,11 +27,26 @@ export function mediaDirectFileUrl(storageKey: string, mimeType: string): string
+   return buildShareCodes("media", storageKey, mimeType).directUrl;
+ }
+ 
+-/** Block localhost direct URLs from being sent to FieldPress compose links. */
++/** Direct file URLs that FieldPress will accept (HTTPS imbrgr hosts only). */
+ export function isSafeFieldPressImageUrl(imageDirectUrl: string): boolean {
+   try {
+-    const host = new URL(imageDirectUrl).hostname;
+-    return host !== "localhost" && host !== "127.0.0.1";
++    const url = new URL(imageDirectUrl);
++    if (url.protocol !== "https:") return false;
++    const host = url.hostname.toLowerCase();
++    if (host === "localhost" || host === "127.0.0.1") return false;
++    if (host === "imbrgr.website" || host === "www.imbrgr.website" || host === "imbrgr.vercel.app") {
++      return true;
++    }
++    // Absolute media URLs always come from NEXT_PUBLIC_SITE_URL in production.
++    const site = process.env.NEXT_PUBLIC_SITE_URL;
++    if (site) {
++      try {
++        if (host === new URL(site).hostname.toLowerCase()) return true;
++      } catch {
++        /* ignore */
++      }
++    }
++    return false;
+   } catch {
+     return false;
+   }
+diff --git a/src/lib/studio-embed.test.ts b/src/lib/studio-embed.test.ts
+index b953e24..110b961 100644
+--- a/src/lib/studio-embed.test.ts
++++ b/src/lib/studio-embed.test.ts
+@@ -9,9 +9,10 @@ describe("studio embed", () => {
+     expect(isStudioEmbedParam(null)).toBe(false);
+   });
+ 
+-  it("includes FieldPress in frame-ancestors CSP", () => {
++  it("includes FieldPress in frame-ancestors CSP without broad vercel wildcard", () => {
+     const csp = studioEmbedCspFrameAncestors();
+     expect(csp).toContain("frame-ancestors");
+     expect(csp).toContain("https://fieldpress.studio");
++    expect(csp).not.toContain("https://*.vercel.app");
+   });
+ });
+diff --git a/src/lib/studio-embed.ts b/src/lib/studio-embed.ts
+index e401bad..fddb2e3 100644
+--- a/src/lib/studio-embed.ts
++++ b/src/lib/studio-embed.ts
+@@ -6,12 +6,16 @@ export function isStudioEmbedParam(raw: string | null | undefined): boolean {
+   return v === "1" || v === "true" || v === "yes";
+ }
+ 
+-/** Origins allowed to frame /studio when embed=1 (CSP frame-ancestors). */
++/**
++ * Origins allowed to frame /studio when embed=1 (CSP frame-ancestors).
++ * Intentionally narrow — CSP cannot express `fieldpress-*.vercel.app`, and
++ * `https://*.vercel.app` would let any Vercel app iframe the studio.
++ * Add preview hosts via FIELDPRESS_EMBED_FRAME_ANCESTORS (space-separated).
++ */
+ export const FIELDPRESS_FRAME_ANCESTORS = [
+   "'self'",
+   "https://fieldpress.studio",
+   "https://www.fieldpress.studio",
+-  "https://*.vercel.app",
+   "http://localhost:5173",
+   "http://localhost:3000",
+   "http://127.0.0.1:5173",
+@@ -19,5 +23,10 @@ export const FIELDPRESS_FRAME_ANCESTORS = [
+ ] as const;
+ 
+ export function studioEmbedCspFrameAncestors(): string {
+-  return `frame-ancestors ${FIELDPRESS_FRAME_ANCESTORS.join(" ")}`;
++  const extra = (process.env.FIELDPRESS_EMBED_FRAME_ANCESTORS || "")
++    .split(/\s+/)
++    .map((s) => s.trim())
++    .filter(Boolean);
++  const ancestors = [...FIELDPRESS_FRAME_ANCESTORS, ...extra];
++  return `frame-ancestors ${ancestors.join(" ")}`;
+ }
+-- 
+2.43.0
+

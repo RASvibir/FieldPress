@@ -1,5 +1,14 @@
 import { FIELDPRESS_PUBLIC_URL, IMBRGR_URL } from "../config/site";
 
+function trustImbrgrVercelPreviews(): boolean {
+  try {
+    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+    return env?.VITE_IMBRGR_TRUST_PREVIEWS === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Allowed https image hosts for ?compose=1&image= deep links (reference by URL only). */
 export function isAllowedComposeImageHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -15,8 +24,8 @@ export function isAllowedComposeImageHost(hostname: string): boolean {
   } catch {
     /* ignore */
   }
-  // Preview deployments for the imbrgr Vercel project
-  if (/^imbrgr-[a-z0-9-]+\.vercel\.app$/.test(host)) return true;
+  // Opt-in only: anyone can create an `imbrgr-*` Vercel project name.
+  if (trustImbrgrVercelPreviews() && /^imbrgr-[a-z0-9-]+\.vercel\.app$/.test(host)) return true;
   return false;
 }
 
