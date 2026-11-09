@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { neon } from "@neondatabase/serverless";
+import { isSuperAdminAccount } from "./superAdmin.mjs";
 
 export const SESSION_COOKIE_NAME = "fieldpress_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -84,7 +85,19 @@ export function publicAccount(account) {
   // the raw snake_case avatar_url here instead, which meant every login,
   // signup, and /api/auth/me call silently set pressPass.avatarUrl to
   // undefined, wiping the user's photo on every fresh page load.
-  return { id, email, callsign, name, bureau, avatarUrl: avatar_url, coverPhotoUrl: cover_photo_url || null, role, verifiedLocal: !!verified_local, accentColor: accent_color || "amber" };
+  return {
+    id,
+    email,
+    callsign,
+    name,
+    bureau,
+    avatarUrl: avatar_url,
+    coverPhotoUrl: cover_photo_url || null,
+    role,
+    verifiedLocal: !!verified_local,
+    accentColor: accent_color || "amber",
+    canAccessAdminConsole: isSuperAdminAccount(account)
+  };
 }
 
 export function isValidEmail(email) {

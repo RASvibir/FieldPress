@@ -18,6 +18,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "../auth.mjs";
+import { isSuperAdminAccount, getOwnerEmail } from "../superAdmin.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 const VALID_ROLES = new Set(["super_admin", "correspondent"]);
@@ -28,7 +29,7 @@ async function requireSuperAdmin(req, res) {
     res.status(401).json({ error: "Not authenticated." });
     return null;
   }
-  if (caller.role !== "super_admin") {
+  if (!isSuperAdminAccount(caller)) {
     res.status(403).json({ error: "Super admin access required." });
     return null;
   }
@@ -193,6 +194,17 @@ async function handleUpdateRole(req, res) {
     if (!VALID_ROLES.has(role)) {
       res.status(400).json({ error: "Invalid role. Must be 'super_admin' or 'correspondent'." });
       return;
+    }
+
+    if (role === "super_admin") {
+      const targetRows = await sql`
+        SELECT email FROM fieldpress_accounts WHERE id = ${accountId} LIMIT 1;
+      `;
+      const targetEmail = (targetRows[0]?.email || "").toLowerCase();
+      if (targetEmail !== getOwnerEmail()) {
+        res.status(403).json({ error: "Only the site owner account may hold super admin privileges." });
+        return;
+      }
     }
 
     const targetRows = await sql`

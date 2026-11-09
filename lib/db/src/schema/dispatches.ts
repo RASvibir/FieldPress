@@ -25,6 +25,7 @@ export const fieldpressDispatches = pgTable('fieldpress_dispatches', {
   content: text('content').notNull(),
   imageUrl: text('image_url'),
   imageCaption: text('image_caption'),
+  imageAltText: text('image_alt_text'),
   isLead: boolean('is_lead').notNull().default(false),
   isPressRoll: boolean('is_press_roll').notNull().default(false),
   editionStyle: varchar('edition_style', { length: 32 }),
