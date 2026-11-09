@@ -83,6 +83,7 @@ import {
 } from "./config/site";
 import {
   buildImbrgrCreateImageUrl,
+  buildImbrgrEmbedUrl,
   buildImbrgrStudioUrl,
   parseComposeDraftParam,
   parseComposeImageParam,
@@ -3971,15 +3972,72 @@ export const FieldPressMaster: React.FC = () => {
     }
   };
 
-  const handleCreateImageHandoff = async () => {
+  const [imagePromptBusy, setImagePromptBusy] = useState(false);
+  const [imagePromptStatus, setImagePromptStatus] = useState<string | null>(null);
+
+  const imbrgrPromptForHandoff = () =>
+    visualPrompt.trim() || suggestImagePromptFromPost(newTitle, newContent);
+
+  const resolveImbrgrEmbedUrl = async (): Promise<string | null> => {
+    const draftId = await ensureDraftSavedForImbrgr();
+    if (!draftId) return null;
+    return buildImbrgrEmbedUrl({ draftId, prompt: imbrgrPromptForHandoff() });
+  };
+
+  const handleCreateImageHandoff = async (opts?: { newTab?: boolean }) => {
     setImbrgrHandoffBusy(true);
     try {
       const draftId = await ensureDraftSavedForImbrgr();
       if (!draftId) return;
-      const prompt = suggestImagePromptFromPost(newTitle, newContent);
-      window.location.href = buildImbrgrCreateImageUrl({ draftId, prompt });
+      const url = buildImbrgrCreateImageUrl({ draftId, prompt: imbrgrPromptForHandoff() });
+      if (opts?.newTab) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        window.location.href = url;
+      }
     } finally {
       setImbrgrHandoffBusy(false);
+    }
+  };
+
+  const handleSuggestImagePrompt = async () => {
+    if (imagePromptBusy) return;
+    if (!authAccount) {
+      setAuthModalMode("signin");
+      setImagePromptStatus("Sign in for Pressy'o prompt suggestions.");
+      return;
+    }
+    setImagePromptBusy(true);
+    setImagePromptStatus(null);
+    try {
+      const resp = await fetch("/api/pressyo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Suggest a single image-generation prompt for the cover of this dispatch.",
+          editionStyle: newEditionStyle,
+          editorAction: "suggest_image_prompt",
+          draftContext: {
+            title: newTitle,
+            content: newContent,
+            editionStyle: newEditionStyle,
+            location: newLocation,
+          },
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setImagePromptStatus(data.error || "Could not suggest a prompt.");
+        return;
+      }
+      if (data.prompt) {
+        setVisualPrompt(String(data.prompt));
+        setImagePromptStatus("Prompt ready — edit below or generate in imbrgr.");
+      }
+    } catch {
+      setImagePromptStatus("Network error — try again.");
+    } finally {
+      setImagePromptBusy(false);
     }
   };
 
@@ -6386,7 +6444,13 @@ export const FieldPressMaster: React.FC = () => {
         onPressyoUndo={handleUndoPressyoEdit}
         onPressyoWrite={(id) => handlePressyoEditorAction(id as any)}
         onPressyoFindLeads={() => handlePressyoEditorAction("find_leads")}
-        onOpenImbrgr={() => void handleCreateImageHandoff()}
+        imagePrompt={visualPrompt}
+        setImagePrompt={setVisualPrompt}
+        onSuggestImagePrompt={() => void handleSuggestImagePrompt()}
+        imagePromptBusy={imagePromptBusy}
+        imagePromptStatus={imagePromptStatus}
+        resolveImbrgrEmbedUrl={resolveImbrgrEmbedUrl}
+        onOpenImbrgrFullStudio={() => void handleCreateImageHandoff({ newTab: true })}
         imbrgrHandoffBusy={imbrgrHandoffBusy}
         onPressyoCustom={(t) => handlePressyoEditorAction("custom_edit", undefined, t)}
         onPressyoAdvanced={(action, style) =>

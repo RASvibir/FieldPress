@@ -88,7 +88,13 @@ export type PostComposerProps = {
   onPressyoWrite: (action: string) => void;
   onPressyoFindLeads: () => void;
   onPressyoCustom: (text: string) => void;
-  onOpenImbrgr: () => void;
+  imagePrompt: string;
+  setImagePrompt: (v: string) => void;
+  onSuggestImagePrompt: () => void;
+  imagePromptBusy: boolean;
+  imagePromptStatus: string | null;
+  resolveImbrgrEmbedUrl: () => Promise<string | null>;
+  onOpenImbrgrFullStudio: () => void;
   imbrgrHandoffBusy?: boolean;
   onPressyoAdvanced: (action: PressyoEditorActionId, style?: string) => void;
   onGuestSignInPrompt: () => void;

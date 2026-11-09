@@ -36,7 +36,7 @@ Notes on a naming/endpoint fix so it doesn't regress:
   - **Press Pass** (`openPressPassEditor()`) → opened only via the **PRESS PASS: [callsign]** badge button (top-right utility bar) or Settings → Profile. Labeled **"Press Pass Credential & ID Studio"**, button **"Save Press Pass Credentials"**.
 
 ### Pressie Builder (Dispatch Composer) features
-1. **Photos via imbrgr** — FieldPress does not generate or filter images in-app. Use **imbrgr** for visuals, then paste a direct HTTPS image URL or return via the compose deep link below.
+1. **Visuals via imbrgr** — Open **Visual** in the post composer: Pressy'o **Suggest prompt** (text only), embedded imbrgr studio, or **Full studio** for advanced editing. You can also upload or paste an existing image URL.
 2. **Media tray** — native upload/camera capture, image URL linking, multi-image evidence tray with thumbnails, cover selection, download, removal.
 3. **Core dispatch controls** — headline, filing location (default from `AUTHOR_DEFAULT_FILING` in `src/config/site.ts`), category, story copy, stage to Press Roll / publish to live feed.
 4. **Pressy'O** — journalism assistant (draft, headline, lede, tighten, structure, attribution, AP polish). No in-app image prompts.

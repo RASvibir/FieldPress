@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ChevronDown, ImageIcon, Link2, Sparkles, X } from "lucide-react";
-import { ImbrgrIconButton } from "../../components/ImbrgrIconButton";
+import { suggestImagePromptFromPost } from "../../lib/composeLinks";
 import { ComposerDetailMenu, type ComposerDetailTray } from "./ComposerDetailMenu";
+import { ImbrgrEmbedPanel } from "./ImbrgrEmbedPanel";
 import { PostAiTray } from "../../components/PostAiTray";
 import { LOOK_OPTIONS, TOPIC_OPTIONS } from "./looks";
 import { saveComposerAutosave, clearComposerAutosave } from "./composerAutosave";
@@ -78,7 +79,13 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
     onPressyoWrite,
     onPressyoFindLeads,
     onPressyoCustom,
-    onOpenImbrgr,
+    imagePrompt,
+    setImagePrompt,
+    onSuggestImagePrompt,
+    imagePromptBusy,
+    imagePromptStatus,
+    resolveImbrgrEmbedUrl,
+    onOpenImbrgrFullStudio,
     imbrgrHandoffBusy,
     onPressyoAdvanced,
     onGuestSignInPrompt,
@@ -100,6 +107,7 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
   } = props;
 
   const [tray, setTray] = useState<TrayId>(null);
+  const [photoExtrasOpen, setPhotoExtrasOpen] = useState(false);
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => {
@@ -329,18 +337,11 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
           )}
 
           <div className="flex flex-wrap gap-1.5 items-center">
-            <div className="inline-flex items-center gap-0.5 shrink-0">
-              <button type="button" className={trayBtn} onClick={() => setTray(tray === "photo" ? null : "photo")}>
-                <ImageIcon className="h-3.5 w-3.5 inline mr-1" /> Photo
-              </button>
-              <ImbrgrIconButton
-                isDark={isDark}
-                disabled={imbrgrHandoffBusy}
-                onClick={() => onOpenImbrgr()}
-              />
-            </div>
+            <button type="button" className={trayBtn} onClick={() => setTray(tray === "photo" ? null : "photo")}>
+              <ImageIcon className="h-3.5 w-3.5 inline mr-1" /> Visual
+            </button>
             <button type="button" className={trayBtn} onClick={() => setTray(tray === "ai" ? null : "ai")}>
-              <Sparkles className="h-3.5 w-3.5 inline mr-1" /> AI
+              <Sparkles className="h-3.5 w-3.5 inline mr-1" /> Write
             </button>
             <ComposerDetailMenu
               isDark={isDark}
@@ -360,46 +361,86 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
 
           {tray === "photo" && (
             <div className={`rounded-xl border p-3 space-y-3 ${subCardClass}`}>
-              <p className={`text-[10px] ${subTextClass}`}>
-                Add a photo from your device, a link, or create one in imbrgr (images are not generated inside FieldPress).
-              </p>
-              <ImbrgrIconButton
-                isDark={isDark}
-                label="Create with imbrgr"
-                title="Create with imbrgr"
-                disabled={imbrgrHandoffBusy}
-                onClick={() => onOpenImbrgr()}
-                className="w-full justify-center"
-              />
-              <input
-                type="file"
-                ref={imageFileInputRef as React.RefObject<HTMLInputElement>}
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={onImageFileChange}
-              />
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={onUploadClick} className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Upload photo
-                </button>
-                <button type="button" onClick={() => setShowUrlInput(!showUrlInput)} className="text-xs font-bold">
-                  Paste image URL
-                </button>
-              </div>
-              {showUrlInput && (
-                <div className="flex gap-2 mt-2">
-                  <input
-                    value={manualImageUrl}
-                    onChange={(e) => setManualImageUrl(e.target.value)}
-                    placeholder="https://…"
-                    className={`flex-1 rounded-lg px-2 py-1.5 text-xs ${inputClass}`}
-                  />
-                  <button type="button" onClick={onAddImageUrl} className="px-2 py-1 rounded-lg bg-amber-500 text-zinc-950 text-xs font-bold">
-                    Add
+              <div>
+                <label className="text-xs font-bold block mb-1">Image prompt</label>
+                <textarea
+                  value={imagePrompt}
+                  onChange={(e) => setImagePrompt(e.target.value)}
+                  rows={3}
+                  placeholder="Describe the scene for imbrgr, or use Suggest below."
+                  className={`w-full rounded-lg px-2 py-1.5 text-xs resize-y ${inputClass}`}
+                />
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button
+                    type="button"
+                    disabled={imagePromptBusy}
+                    onClick={onSuggestImagePrompt}
+                    className="px-2 py-1 rounded-lg bg-amber-500 text-zinc-950 text-[10px] font-bold disabled:opacity-50"
+                  >
+                    {imagePromptBusy ? "Suggesting…" : "Suggest prompt"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImagePrompt(suggestImagePromptFromPost(newTitle, newContent))}
+                    className="px-2 py-1 rounded-lg border text-[10px] font-semibold"
+                  >
+                    From headline
                   </button>
                 </div>
-              )}
+                {imagePromptStatus && <p className={`text-[10px] mt-1 ${subTextClass}`}>{imagePromptStatus}</p>}
+              </div>
+
+              <ImbrgrEmbedPanel
+                isDark={isDark}
+                subTextClass={subTextClass}
+                resolveEmbedUrl={resolveImbrgrEmbedUrl}
+                onOpenFullStudio={onOpenImbrgrFullStudio}
+                busy={imbrgrHandoffBusy}
+              />
+
+              <div className="border-t pt-2 border-zinc-200/60 dark:border-zinc-700/60">
+                <button
+                  type="button"
+                  className="text-xs font-bold flex items-center gap-1"
+                  onClick={() => setPhotoExtrasOpen((v) => !v)}
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${photoExtrasOpen ? "rotate-180" : ""}`} />
+                  Already have a photo?
+                </button>
+                {photoExtrasOpen && (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      type="file"
+                      ref={imageFileInputRef as React.RefObject<HTMLInputElement>}
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={onImageFileChange}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={onUploadClick} className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                        Upload
+                      </button>
+                      <button type="button" onClick={() => setShowUrlInput(!showUrlInput)} className="text-xs font-bold">
+                        Paste URL
+                      </button>
+                    </div>
+                    {showUrlInput && (
+                      <div className="flex gap-2">
+                        <input
+                          value={manualImageUrl}
+                          onChange={(e) => setManualImageUrl(e.target.value)}
+                          placeholder="https://…"
+                          className={`flex-1 rounded-lg px-2 py-1.5 text-xs ${inputClass}`}
+                        />
+                        <button type="button" onClick={onAddImageUrl} className="px-2 py-1 rounded-lg bg-amber-500 text-zinc-950 text-xs font-bold">
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

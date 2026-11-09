@@ -26,10 +26,19 @@ Suggested UI on imbrgr (mirror FieldPress header link):
 | Entry | Behavior |
 |-------|----------|
 | Header **imbrgr** link | `IMBRGR_URL` (studio home) |
-| Post toolbar favicon | `ensureDraftSavedForImbrgr()` → `buildImbrgrCreateImageUrl({ draftId, prompt })` |
-| Photo tray **Create with imbrgr** | Same handoff |
+| Compose **Visual** tray | Embedded iframe via `buildImbrgrEmbedUrl({ embed: "1", draftId, prompt })` |
+| **Full studio** / handoff | `buildImbrgrCreateImageUrl({ draftId, prompt })` (new tab or navigate) |
+| Image prompt | FieldPress **Suggest prompt** (Pressy'o text only) → sent as `prompt` query param |
 
 Return URL from imbrgr should include `from=fieldpress&draft=<id>` on studio links (already supported).
+
+### imbrgr embed mode (recommended in imbrgr repo)
+
+When `embed=1` is present on `/studio`:
+
+- Hide global marketing chrome; keep generate + edit controls.
+- Optional `postMessage` to parent on export: `{ type: "imbrgr:compose-image", imageUrl, draftId }` so FieldPress can attach without a full navigation (FieldPress already supports `/?compose=1&image=`).
+- Allow framing from FieldPress origins (`fieldpress.studio`, preview hosts).
 
 ## Env
 

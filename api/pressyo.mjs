@@ -19,6 +19,7 @@ import { neon } from "@neondatabase/serverless";
 import { getAuthenticatedAccount } from "./_lib/auth.mjs";
 import { fetchLeadSourceArticles } from "./_lib/leadSearch.mjs";
 import { buildCaptionAltSystemPrompt, parseCaptionAltReply } from "./_lib/pressyoCaptionAlt.mjs";
+import { buildImagePromptSystemPrompt, parseImagePromptReply } from "./_lib/pressyoImagePrompt.mjs";
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -506,6 +507,40 @@ ${catalog}`;
       const parsedLeads = parseLeadsReply(text, allowedUrls);
       res.status(200).json({
         ...parsedLeads,
+        remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
+      });
+      return;
+    }
+
+    if (editorAction === "suggest_image_prompt") {
+      const imagePromptSystem = buildImagePromptSystemPrompt(draftContext || {});
+      let text;
+      try {
+        const r1 = await tryOllama(imagePromptSystem, prompt, history);
+        text = r1.text;
+      } catch {
+        try {
+          const r2 = await tryGroq(imagePromptSystem, prompt, history);
+          text = r2.text;
+        } catch {
+          const r3 = await tryGemini(imagePromptSystem, prompt, history);
+          text = r3.text;
+        }
+      }
+      const usedToday = await incrementUsage(me.id);
+      const parsed = parseImagePromptReply(text);
+      if (!parsed.ok) {
+        res.status(502).json({
+          error: "Could not parse image prompt suggestion.",
+          type: "image_prompt",
+          raw: text?.slice(0, 800),
+          remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
+        });
+        return;
+      }
+      res.status(200).json({
+        type: "image_prompt",
+        prompt: parsed.prompt,
         remainingQuota: Math.max(0, DAILY_LIMIT - usedToday),
       });
       return;

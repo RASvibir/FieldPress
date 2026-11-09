@@ -79,6 +79,26 @@ export function buildImbrgrStudioUrl(prompt?: string | null): string {
   return `${base}&prompt=${encodeURIComponent(clipped)}`;
 }
 
+/** Embedded studio panel inside FieldPress compose (imbrgr should honor `embed=1` chrome). */
+export function buildImbrgrEmbedUrl(opts: {
+  prompt?: string | null;
+  draftId?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  params.set("tab", "generate");
+  params.set("embed", "1");
+  params.set("from", "fieldpress");
+  const prompt = (opts.prompt || "").trim();
+  if (prompt) {
+    const clipped = prompt.length > 400 ? `${prompt.slice(0, 397)}…` : prompt;
+    params.set("prompt", clipped);
+  }
+  if (opts.draftId && COMPOSE_DRAFT_ID_RE.test(opts.draftId)) {
+    params.set("draft", opts.draftId);
+  }
+  return `${IMBRGR_URL.replace(/\/+$/, "")}/studio?${params.toString()}`;
+}
+
 /** After autosaving a draft, open imbrgr with return context. */
 export function buildImbrgrCreateImageUrl(opts: {
   prompt?: string | null;
