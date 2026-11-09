@@ -1,0 +1,495 @@
+From 194839b9ab8d98dddaff884e534a2113d7b4b86f Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 18:14:48 +0000
+Subject: [PATCH] FieldPress embed mode and Share with FieldPress handoff
+
+- embed=1: hide chrome via data-imbrgr-embed; CSP frame-ancestors for FieldPress
+- Share with FieldPress posts imbrgr:compose-image when framed, else compose URL
+- Align draft id pattern with FieldPress; docs/FIELDPRESS-EMBED.md
+---
+ docs/FIELDPRESS-EMBED.md                      | 20 ++++++++
+ src/app/globals.css                           | 13 ++++++
+ src/app/studio/layout.tsx                     | 13 ++++++
+ .../fieldpress/FieldPressInvite.tsx           | 21 ++++++---
+ .../fieldpress/UseInFieldPressDraftLink.tsx   | 13 +++++-
+ src/components/layout/AnnouncementBanner.tsx  |  5 +-
+ src/components/studio/ImageStudio.tsx         |  5 +-
+ src/components/studio/StudioEmbedMode.tsx     | 22 +++++++++
+ src/lib/fieldpress-draft.test.ts              |  3 +-
+ src/lib/fieldpress-draft.ts                   |  3 +-
+ src/lib/fieldpress-post-message.test.ts       | 40 ++++++++++++++++
+ src/lib/fieldpress-post-message.ts            | 46 +++++++++++++++++++
+ src/lib/studio-embed.test.ts                  | 17 +++++++
+ src/lib/studio-embed.ts                       | 23 ++++++++++
+ src/middleware.ts                             | 22 +++++++++
+ 15 files changed, 253 insertions(+), 13 deletions(-)
+ create mode 100644 docs/FIELDPRESS-EMBED.md
+ create mode 100644 src/app/studio/layout.tsx
+ create mode 100644 src/components/studio/StudioEmbedMode.tsx
+ create mode 100644 src/lib/fieldpress-post-message.test.ts
+ create mode 100644 src/lib/fieldpress-post-message.ts
+ create mode 100644 src/lib/studio-embed.test.ts
+ create mode 100644 src/lib/studio-embed.ts
+ create mode 100644 src/middleware.ts
+
+diff --git a/docs/FIELDPRESS-EMBED.md b/docs/FIELDPRESS-EMBED.md
+new file mode 100644
+index 0000000..057fcff
+--- /dev/null
++++ b/docs/FIELDPRESS-EMBED.md
+@@ -0,0 +1,20 @@
++# FieldPress embed & Share with FieldPress
++
++## FieldPress → imbrgr
++
++```
++https://imbrgr.website/studio?tab=generate&embed=1&from=fieldpress&draft=<id>&prompt=<text>
++```
++
++- `embed=1` — hide site header/footer/mobile nav; CSP `frame-ancestors` allows FieldPress origins.
++- `from=fieldpress` + `draft` — session return context for **Share with FieldPress**.
++- Without `embed`, same params open full studio (FieldPress **Full studio** link).
++
++## imbrgr → FieldPress
++
++1. **Navigation** (top-level): `https://fieldpress.studio/?compose=1&image=<https-direct-file>&draft=<id>&title=…`
++2. **postMessage** (iframe): `{ type: "imbrgr:compose-image", imageUrl, draftId, title }` to `https://fieldpress.studio` origin.
++
++UI label: **Share with FieldPress** (`UseInFieldPressDraftLink` / invite).
++
++Image URLs must be HTTPS direct file URLs (`/api/media/file/...`), not metadata JSON routes.
+diff --git a/src/app/globals.css b/src/app/globals.css
+index cad9f88..0249174 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -229,6 +229,19 @@ textarea {
+   max-width: 100%;
+ }
+ 
++/* FieldPress Visual tray: compact studio when ?embed=1 */
++html[data-imbrgr-embed="1"] header,
++html[data-imbrgr-embed="1"] footer,
++html[data-imbrgr-embed="1"] [data-testid="mobile-bottom-nav"],
++html[data-imbrgr-embed="1"] [data-testid="announcement-banner"] {
++  display: none !important;
++}
++
++html[data-imbrgr-embed="1"] .page-main {
++  padding-top: 0.5rem;
++  padding-bottom: 0.5rem;
++}
++
+ .toast-above-mobile-chrome {
+   position: fixed;
+   left: 1rem;
+diff --git a/src/app/studio/layout.tsx b/src/app/studio/layout.tsx
+new file mode 100644
+index 0000000..ece153a
+--- /dev/null
++++ b/src/app/studio/layout.tsx
+@@ -0,0 +1,13 @@
++import { Suspense } from "react";
++import { StudioEmbedMode } from "@/components/studio/StudioEmbedMode";
++
++export default function StudioLayout({ children }: { children: React.ReactNode }) {
++  return (
++    <>
++      <Suspense fallback={null}>
++        <StudioEmbedMode />
++      </Suspense>
++      {children}
++    </>
++  );
++}
+diff --git a/src/components/fieldpress/FieldPressInvite.tsx b/src/components/fieldpress/FieldPressInvite.tsx
+index 5d557bf..10575c3 100644
+--- a/src/components/fieldpress/FieldPressInvite.tsx
++++ b/src/components/fieldpress/FieldPressInvite.tsx
+@@ -11,6 +11,7 @@ import {
+   readFieldPressInviteDismissed,
+   subscribeFieldPressInviteDismissed,
+ } from "@/lib/fieldpress-invite-dismiss";
++import { tryPostComposeImageToParent } from "@/lib/fieldpress-post-message";
+ 
+ type Props = {
+   /** `share.directUrl` — absolute `/api/media/file/...` URL */
+@@ -38,6 +39,12 @@ export function FieldPressInvite({ imageDirectUrl, visibility, title }: Props) {
+   const composeHref = fieldpressComposeUrl(imageDirectUrl, title);
+   if (!composeHref) return null;
+ 
++  const share = () => {
++    const posted = tryPostComposeImageToParent({ imageUrl: imageDirectUrl, title });
++    if (posted) return;
++    window.open(composeHref, "_blank", "noopener,noreferrer");
++  };
++
+   return (
+     <section
+       className="mt-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 py-3"
+@@ -47,18 +54,18 @@ export function FieldPressInvite({ imageDirectUrl, visibility, title }: Props) {
+         <div className="min-w-0">
+           <p className="text-sm font-medium text-[var(--text-primary)]">Got a story behind this image?</p>
+           <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+-            Keep hosting on imbrgr — open FieldPress to write the dispatch around it.
++            Keep hosting on imbrgr — share into FieldPress to write the dispatch around it.
+           </p>
+         </div>
+         <div className="flex flex-wrap items-center gap-2">
+-          <a
+-            href={composeHref}
+-            target="_blank"
+-            rel="noopener noreferrer"
++          <button
++            type="button"
++            onClick={share}
+             className="tap-target inline-flex min-h-11 items-center rounded-lg border border-[var(--border-strong)] bg-[var(--surface-base)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--surface-hover)]"
++            data-testid="fieldpress-share-button"
+           >
+-            Write the story on FieldPress
+-          </a>
++            Share with FieldPress
++          </button>
+           <button
+             type="button"
+             onClick={dismissFieldPressInvite}
+diff --git a/src/components/fieldpress/UseInFieldPressDraftLink.tsx b/src/components/fieldpress/UseInFieldPressDraftLink.tsx
+index 7cc6f02..ef5d346 100644
+--- a/src/components/fieldpress/UseInFieldPressDraftLink.tsx
++++ b/src/components/fieldpress/UseInFieldPressDraftLink.tsx
+@@ -6,6 +6,7 @@ import {
+   fieldpressDraftComposeWithImageUrl,
+   parseFieldPressDraftId,
+ } from "@/lib/fieldpress-draft";
++import { tryPostComposeImageToParent } from "@/lib/fieldpress-post-message";
+ 
+ type Props = {
+   draftId: string;
+@@ -18,6 +19,8 @@ type Props = {
+   onNavigate?: () => void;
+ };
+ 
++const LABEL = "Share with FieldPress";
++
+ export function UseInFieldPressDraftLink({
+   draftId,
+   imageDirectUrl,
+@@ -34,8 +37,14 @@ export function UseInFieldPressDraftLink({
+   if (!href) return null;
+ 
+   const go = () => {
++    const posted = tryPostComposeImageToParent({
++      imageUrl: imageDirectUrl,
++      draftId: id,
++      title,
++    });
+     clearFieldPressDraftId();
+     onNavigate?.();
++    if (posted) return;
+     window.location.assign(href);
+   };
+ 
+@@ -48,7 +57,7 @@ export function UseInFieldPressDraftLink({
+         data-testid="fieldpress-use-in-draft"
+         onClick={go}
+       >
+-        Use in FieldPress draft
++        {LABEL}
+       </button>
+     );
+   }
+@@ -60,7 +69,7 @@ export function UseInFieldPressDraftLink({
+       data-testid="fieldpress-use-in-draft"
+       onClick={go}
+     >
+-      Use in FieldPress draft
++      {LABEL}
+     </button>
+   );
+ }
+diff --git a/src/components/layout/AnnouncementBanner.tsx b/src/components/layout/AnnouncementBanner.tsx
+index 09b5571..b8b2e6c 100644
+--- a/src/components/layout/AnnouncementBanner.tsx
++++ b/src/components/layout/AnnouncementBanner.tsx
+@@ -4,7 +4,10 @@ export async function AnnouncementBanner() {
+   const settings = await getSiteSettings();
+   if (!settings.announcementBanner?.trim()) return null;
+   return (
+-    <div className="border-b border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/10 px-4 py-2 text-center text-sm text-[var(--text-secondary)]">
++    <div
++      data-testid="announcement-banner"
++      className="border-b border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/10 px-4 py-2 text-center text-sm text-[var(--text-secondary)]"
++    >
+       {settings.announcementBanner}
+     </div>
+   );
+diff --git a/src/components/studio/ImageStudio.tsx b/src/components/studio/ImageStudio.tsx
+index f519bf1..f1fc287 100644
+--- a/src/components/studio/ImageStudio.tsx
++++ b/src/components/studio/ImageStudio.tsx
+@@ -39,6 +39,7 @@ import {
+   readFieldPressDraftId,
+   subscribeFieldPressDraftId,
+ } from "@/lib/fieldpress-draft";
++import { isStudioEmbedParam } from "@/lib/studio-embed";
+ 
+ type StudioAsset = {
+   shortId: string;
+@@ -93,9 +94,11 @@ export function ImageStudio({
+   const router = useRouter();
+   const { data: session } = useSession();
+   const params = useSearchParams();
++  const embedded = isStudioEmbedParam(params.get("embed"));
+   const urlTab = parseStudioTab(defaultTab ?? params.get("tab"));
+   const [tabOverride, setTabOverride] = useState<Tab | null>(null);
+   const tab = tabOverride ?? urlTab;
++  const visibleTabs = embedded ? TABS.filter((t) => t.id !== "media") : TABS;
+   const [asset, setAsset] = useState<StudioAsset | null>(initialAsset ?? null);
+   const [share, setShare] = useState<{
+     pageUrl: string;
+@@ -627,7 +630,7 @@ export function ImageStudio({
+       )}
+ 
+       <nav className="flex gap-1 overflow-x-auto border-b border-[var(--border-subtle)] pb-1" aria-label="Studio steps">
+-        {TABS.map((t) => (
++        {visibleTabs.map((t) => (
+           <button
+             key={t.id}
+             type="button"
+diff --git a/src/components/studio/StudioEmbedMode.tsx b/src/components/studio/StudioEmbedMode.tsx
+new file mode 100644
+index 0000000..29e048d
+--- /dev/null
++++ b/src/components/studio/StudioEmbedMode.tsx
+@@ -0,0 +1,22 @@
++"use client";
++
++import { useEffect } from "react";
++import { useSearchParams } from "next/navigation";
++import { isStudioEmbedParam } from "@/lib/studio-embed";
++
++const ATTR = "data-imbrgr-embed";
++
++/** Marks <html> when FieldPress embeds studio so root chrome can hide via CSS. */
++export function StudioEmbedMode() {
++  const params = useSearchParams();
++  const embed = isStudioEmbedParam(params.get("embed"));
++
++  useEffect(() => {
++    const root = document.documentElement;
++    if (embed) root.setAttribute(ATTR, "1");
++    else root.removeAttribute(ATTR);
++    return () => root.removeAttribute(ATTR);
++  }, [embed]);
++
++  return null;
++}
+diff --git a/src/lib/fieldpress-draft.test.ts b/src/lib/fieldpress-draft.test.ts
+index 6bd2297..199e4b7 100644
+--- a/src/lib/fieldpress-draft.test.ts
++++ b/src/lib/fieldpress-draft.test.ts
+@@ -29,8 +29,9 @@ describe("fieldpress draft context", () => {
+ 
+   it("validates draft ids", () => {
+     expect(parseFieldPressDraftId("abc-123_9")).toBe("abc-123_9");
++    expect(parseFieldPressDraftId("Fp_1730000000000")).toBe("Fp_1730000000000");
+     expect(parseFieldPressDraftId("../evil")).toBeNull();
+-    expect(parseFieldPressDraftId("a".repeat(65))).toBeNull();
++    expect(parseFieldPressDraftId("a".repeat(129))).toBeNull();
+     expect(parseFieldPressDraftId("")).toBeNull();
+   });
+ 
+diff --git a/src/lib/fieldpress-draft.ts b/src/lib/fieldpress-draft.ts
+index b6a1c77..72fe3cc 100644
+--- a/src/lib/fieldpress-draft.ts
++++ b/src/lib/fieldpress-draft.ts
+@@ -1,7 +1,8 @@
+ import { normalizeVisibility, type Visibility } from "@/lib/visibility";
+ import { FIELDPRESS_URL, isSafeFieldPressImageUrl } from "@/lib/fieldpress";
+ 
+-export const FIELDPRESS_DRAFT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
++/** Align with FieldPress compose draft ids (`Fp_<timestamp>`, optional dots). */
++export const FIELDPRESS_DRAFT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+ 
+ export const FIELDPRESS_DRAFT_SESSION_KEY = "imbrgr-fieldpress-draft-id";
+ 
+diff --git a/src/lib/fieldpress-post-message.test.ts b/src/lib/fieldpress-post-message.test.ts
+new file mode 100644
+index 0000000..72b800d
+--- /dev/null
++++ b/src/lib/fieldpress-post-message.test.ts
+@@ -0,0 +1,40 @@
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { IMBRGR_COMPOSE_MESSAGE_TYPE, tryPostComposeImageToParent } from "@/lib/fieldpress-post-message";
++
++describe("fieldpress postMessage", () => {
++  afterEach(() => {
++    vi.unstubAllGlobals();
++  });
++
++  it("posts to parent when framed", () => {
++    const postMessage = vi.fn();
++    const parent = { postMessage } as unknown as Window;
++    vi.stubGlobal("window", {
++      parent,
++      postMessage: vi.fn(),
++    });
++    // re-assign parent !== window
++    (window as unknown as { parent: Window }).parent = parent;
++
++    const ok = tryPostComposeImageToParent({
++      imageUrl: "https://imbrgr.vercel.app/api/media/file/x.png",
++      draftId: "Fp_1730000000000",
++      title: "Hi",
++    });
++    expect(ok).toBe(true);
++    expect(postMessage).toHaveBeenCalledOnce();
++    const [payload, origin] = postMessage.mock.calls[0];
++    expect(payload.type).toBe(IMBRGR_COMPOSE_MESSAGE_TYPE);
++    expect(payload.draftId).toBe("Fp_1730000000000");
++    expect(origin).toBe("https://fieldpress.studio");
++  });
++
++  it("returns false when top-level", () => {
++    const selfWin = { postMessage: vi.fn() } as unknown as Window;
++    vi.stubGlobal("window", Object.assign(selfWin, { parent: selfWin }));
++    const ok = tryPostComposeImageToParent({
++      imageUrl: "https://imbrgr.vercel.app/api/media/file/x.png",
++    });
++    expect(ok).toBe(false);
++  });
++});
+diff --git a/src/lib/fieldpress-post-message.ts b/src/lib/fieldpress-post-message.ts
+new file mode 100644
+index 0000000..f20f5cb
+--- /dev/null
++++ b/src/lib/fieldpress-post-message.ts
+@@ -0,0 +1,46 @@
++import { FIELDPRESS_URL, isSafeFieldPressImageUrl } from "@/lib/fieldpress";
++import { parseFieldPressDraftId } from "@/lib/fieldpress-draft";
++
++/** Must match FieldPress `IMBRGR_COMPOSE_MESSAGE_TYPE`. */
++export const IMBRGR_COMPOSE_MESSAGE_TYPE = "imbrgr:compose-image";
++
++export function fieldPressParentOrigin(): string {
++  try {
++    return new URL(FIELDPRESS_URL).origin;
++  } catch {
++    return "https://fieldpress.studio";
++  }
++}
++
++export function isEmbeddedInFieldPress(): boolean {
++  if (typeof window === "undefined") return false;
++  try {
++    return window.parent !== window;
++  } catch {
++    return true;
++  }
++}
++
++/**
++ * Notify FieldPress parent (iframe embed) that an image is ready.
++ * Returns true when a message was posted (caller should still clear draft / skip navigation).
++ */
++export function tryPostComposeImageToParent(opts: {
++  imageUrl: string;
++  draftId?: string | null;
++  title?: string | null;
++}): boolean {
++  if (!isEmbeddedInFieldPress()) return false;
++  if (!isSafeFieldPressImageUrl(opts.imageUrl)) return false;
++  const draftId = opts.draftId ? parseFieldPressDraftId(opts.draftId) : null;
++  window.parent.postMessage(
++    {
++      type: IMBRGR_COMPOSE_MESSAGE_TYPE,
++      imageUrl: opts.imageUrl,
++      draftId,
++      title: opts.title?.trim() || null,
++    },
++    fieldPressParentOrigin(),
++  );
++  return true;
++}
+diff --git a/src/lib/studio-embed.test.ts b/src/lib/studio-embed.test.ts
+new file mode 100644
+index 0000000..b953e24
+--- /dev/null
++++ b/src/lib/studio-embed.test.ts
+@@ -0,0 +1,17 @@
++import { describe, expect, it } from "vitest";
++import { isStudioEmbedParam, studioEmbedCspFrameAncestors } from "@/lib/studio-embed";
++
++describe("studio embed", () => {
++  it("parses embed flags", () => {
++    expect(isStudioEmbedParam("1")).toBe(true);
++    expect(isStudioEmbedParam("true")).toBe(true);
++    expect(isStudioEmbedParam("0")).toBe(false);
++    expect(isStudioEmbedParam(null)).toBe(false);
++  });
++
++  it("includes FieldPress in frame-ancestors CSP", () => {
++    const csp = studioEmbedCspFrameAncestors();
++    expect(csp).toContain("frame-ancestors");
++    expect(csp).toContain("https://fieldpress.studio");
++  });
++});
+diff --git a/src/lib/studio-embed.ts b/src/lib/studio-embed.ts
+new file mode 100644
+index 0000000..e401bad
+--- /dev/null
++++ b/src/lib/studio-embed.ts
+@@ -0,0 +1,23 @@
++/** FieldPress embeds imbrgr studio with `?embed=1`. */
++
++export function isStudioEmbedParam(raw: string | null | undefined): boolean {
++  if (!raw) return false;
++  const v = raw.trim().toLowerCase();
++  return v === "1" || v === "true" || v === "yes";
++}
++
++/** Origins allowed to frame /studio when embed=1 (CSP frame-ancestors). */
++export const FIELDPRESS_FRAME_ANCESTORS = [
++  "'self'",
++  "https://fieldpress.studio",
++  "https://www.fieldpress.studio",
++  "https://*.vercel.app",
++  "http://localhost:5173",
++  "http://localhost:3000",
++  "http://127.0.0.1:5173",
++  "http://127.0.0.1:3000",
++] as const;
++
++export function studioEmbedCspFrameAncestors(): string {
++  return `frame-ancestors ${FIELDPRESS_FRAME_ANCESTORS.join(" ")}`;
++}
+diff --git a/src/middleware.ts b/src/middleware.ts
+new file mode 100644
+index 0000000..ceaadec
+--- /dev/null
++++ b/src/middleware.ts
+@@ -0,0 +1,22 @@
++import { NextResponse, type NextRequest } from "next/server";
++import { isStudioEmbedParam, studioEmbedCspFrameAncestors } from "@/lib/studio-embed";
++
++/**
++ * Allow FieldPress to iframe /studio when `embed=1`.
++ * Clears legacy DENY framing so the Visual tray embed works.
++ */
++export function middleware(req: NextRequest) {
++  const res = NextResponse.next();
++  const path = req.nextUrl.pathname;
++  if (!path.startsWith("/studio")) return res;
++
++  if (isStudioEmbedParam(req.nextUrl.searchParams.get("embed"))) {
++    res.headers.set("Content-Security-Policy", studioEmbedCspFrameAncestors());
++    res.headers.delete("X-Frame-Options");
++  }
++  return res;
++}
++
++export const config = {
++  matcher: ["/studio", "/studio/:path*"],
++};
+-- 
+2.43.0
+
