@@ -1,6 +1,6 @@
 import React from "react";
 import { Bell, Home, Compass, Plus, MessageCircle, Menu, Search } from "lucide-react";
-import { HOME_BUREAU } from "../../config/site";
+import { HOME_BUREAU, IMBRGR_URL } from "../../config/site";
 
 export type MainSection = "home" | "explore";
 
@@ -86,6 +86,21 @@ export const MainNav: React.FC<Props> = ({
         </nav>
 
         <div className="flex items-center gap-1 shrink-0">
+          <a
+            href={IMBRGR_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition ${
+              isDark
+                ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+            }`}
+            title="Open imbrgr studio"
+          >
+            <img src="/brand/imbrgr-icon.svg" alt="" width={16} height={16} className="w-4 h-4 object-contain" />
+            <span>imbrgr</span>
+            <span className="sr-only">(opens in new tab)</span>
+          </a>
           <button type="button" onClick={onSearch} className="p-2 rounded-lg hover:bg-zinc-800/50" title="Search">
             <Search className="h-4 w-4" />
           </button>

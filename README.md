@@ -42,6 +42,8 @@ Notes on a naming/endpoint fix so it doesn't regress:
 4. **Pressy'O** — journalism assistant (draft, headline, lede, tighten, structure, attribution, AP polish). No in-app image prompts.
 5. **Photo caption & alt text (optional)** — After you add a cover photo (upload or return from imbrgr), use **Suggest caption & alt text** under the thumbnails. Pressy'o proposes a caption and accessibility alt text from your headline, body, and any image context; nothing is applied until you tap suggest, and you can edit or leave both fields blank before posting. Alt text is stored on the dispatch (`image_alt_text`, migration `0018_dispatch_image_alt_text.sql`) and used as the published `<img alt>`, falling back to caption then headline.
 
+Cross-product UI spec: [docs/IMBRGR-FIELDPRESS-LINKS.md](docs/IMBRGR-FIELDPRESS-LINKS.md) (includes **Share with FieldPress** for the imbrgr repo).
+
 ## imbrgr ↔ FieldPress link contract
 
 Config: `IMBRGR_URL` in `src/config/site.ts` (default `https://imbrgr.vercel.app`).

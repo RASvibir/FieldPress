@@ -1,4 +1,4 @@
-import { IMBRGR_URL } from "../config/site";
+import { FIELDPRESS_PUBLIC_URL, IMBRGR_URL } from "../config/site";
 
 const IMBRGR_HOST = new URL(IMBRGR_URL).hostname.toLowerCase();
 
@@ -101,7 +101,7 @@ export function buildComposeDeepLink(opts: {
   title?: string;
   draftId?: string | null;
 }): string {
-  const origin = "https://fieldpress.studio";
+  const origin = String(FIELDPRESS_PUBLIC_URL).replace(/\/+$/, "");
   const params = new URLSearchParams();
   params.set("compose", "1");
   params.set("image", opts.imageUrl);

@@ -14,7 +14,9 @@
 | 4 | Edition Style Model (8) | **More** — Look |
 | 5 | Theme photo filter ON/OFF | **Advanced** (single toggle) |
 | 6 | Syndication Open Fork / Colab / Closed | **More** — Who can remix (Anyone / Ask me / No one) |
-| 7 | AI image prompt, Pressy'o Prompt, Gen Visual, quota | Compose toolbar — **Photo** + imbrgr icon (tooltip: “Make or edit on imbrgr”); autosave draft → studio handoff; return toast “Image added” |
+| 7 | AI image prompt, Pressy'o Prompt, Gen Visual, quota | **Photo** tray + toolbar imbrgr favicon → imbrgr studio only (no in-app image gen) |
+| — | Location / Link / Look / Advanced | **Details** hamburger menu in Post composer |
+| — | Cross-site nav | Header **imbrgr** link; imbrgr **Share with FieldPress** (see `docs/IMBRGR-FIELDPRESS-LINKS.md`) |
 | 8a | Upload Photo(s) | **Photo** toolbar |
 | 8b | Paste Real Photo URL | **Photo** toolbar → link field |
 | 8c | Thumbnail grid, set cover, remove | **Post** inline previews (click = cover) |

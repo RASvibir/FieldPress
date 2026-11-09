@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronDown, ImageIcon, Link2, MapPin, MoreHorizontal, Sparkles, X } from "lucide-react";
+import { AlertCircle, ChevronDown, ImageIcon, Link2, Sparkles, X } from "lucide-react";
+import { ImbrgrIconButton } from "../../components/ImbrgrIconButton";
+import { ComposerDetailMenu, type ComposerDetailTray } from "./ComposerDetailMenu";
 import { PostAiTray } from "../../components/PostAiTray";
 import { LOOK_OPTIONS, TOPIC_OPTIONS } from "./looks";
 import { saveComposerAutosave, clearComposerAutosave } from "./composerAutosave";
@@ -331,41 +333,44 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
               <button type="button" className={trayBtn} onClick={() => setTray(tray === "photo" ? null : "photo")}>
                 <ImageIcon className="h-3.5 w-3.5 inline mr-1" /> Photo
               </button>
-              <button
-                type="button"
-                title="Make or edit on imbrgr"
-                aria-label="Make or edit on imbrgr"
+              <ImbrgrIconButton
+                isDark={isDark}
                 disabled={imbrgrHandoffBusy}
                 onClick={() => onOpenImbrgr()}
-                className={`p-1.5 rounded-lg border shrink-0 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 ${
-                  isDark ? "border-zinc-700 hover:bg-zinc-800" : "border-zinc-200 hover:bg-zinc-100"
-                } ${isDark ? "ring-offset-zinc-900" : "ring-offset-white"}`}
-              >
-                <img
-                  src="/brand/imbrgr-icon.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                  className="w-5 h-5 block object-contain"
-                />
-              </button>
+              />
             </div>
-            <button type="button" className={trayBtn} onClick={() => setTray(tray === "link" ? null : "link")}>
-              <Link2 className="h-3.5 w-3.5 inline mr-1" /> Link
-            </button>
             <button type="button" className={trayBtn} onClick={() => setTray(tray === "ai" ? null : "ai")}>
               <Sparkles className="h-3.5 w-3.5 inline mr-1" /> AI
             </button>
-            <button type="button" className={trayBtn} onClick={() => setTray(tray === "location" ? null : "location")}>
-              <MapPin className="h-3.5 w-3.5 inline mr-1" /> Location
-            </button>
-            <button type="button" className={trayBtn} onClick={() => setTray(tray === "more" ? null : "more")}>
-              <MoreHorizontal className="h-3.5 w-3.5 inline mr-1" /> More
-            </button>
+            <ComposerDetailMenu
+              isDark={isDark}
+              activeTray={tray}
+              advancedPinned={advancedOpen}
+              onOpenTray={(id: ComposerDetailTray) => {
+                if (id === "advanced") {
+                  setAdvancedOpen(true);
+                  try {
+                    localStorage.setItem(ADVANCED_KEY, "1");
+                  } catch {}
+                }
+                setTray(id);
+              }}
+            />
           </div>
 
           {tray === "photo" && (
-            <div className={`rounded-xl border p-3 space-y-2 ${subCardClass}`}>
+            <div className={`rounded-xl border p-3 space-y-3 ${subCardClass}`}>
+              <p className={`text-[10px] ${subTextClass}`}>
+                Add a photo from your device, a link, or create one in imbrgr (images are not generated inside FieldPress).
+              </p>
+              <ImbrgrIconButton
+                isDark={isDark}
+                label="Create with imbrgr"
+                title="Create with imbrgr"
+                disabled={imbrgrHandoffBusy}
+                onClick={() => onOpenImbrgr()}
+                className="w-full justify-center"
+              />
               <input
                 type="file"
                 ref={imageFileInputRef as React.RefObject<HTMLInputElement>}
@@ -374,12 +379,14 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                 className="hidden"
                 onChange={onImageFileChange}
               />
-              <button type="button" onClick={onUploadClick} className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                Add photo
-              </button>
-              <button type="button" onClick={() => setShowUrlInput(!showUrlInput)} className="text-xs font-bold ml-3">
-                Paste image URL
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={onUploadClick} className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                  Upload photo
+                </button>
+                <button type="button" onClick={() => setShowUrlInput(!showUrlInput)} className="text-xs font-bold">
+                  Paste image URL
+                </button>
+              </div>
               {showUrlInput && (
                 <div className="flex gap-2 mt-2">
                   <input

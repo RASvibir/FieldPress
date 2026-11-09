@@ -1,6 +1,10 @@
 /** Single source for external product links and bureau defaults. */
 export const IMBRGR_URL = "https://imbrgr.vercel.app";
 
+/** Public site URL (compose return links, cross-product docs). */
+export const FIELDPRESS_PUBLIC_URL =
+  (import.meta.env.VITE_FIELDPRESS_PUBLIC_URL as string | undefined)?.trim() || "https://fieldpress.studio";
+
 /** FieldPress home / masthead bureau (site identity). */
 export const HOME_BUREAU = {
   label: "Danville, IL",

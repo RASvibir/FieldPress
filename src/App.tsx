@@ -8997,7 +8997,7 @@ ${shareUrl}`;
                   </div>
                   <p className={`text-xs font-mono ${subTextThemeClass}`}>Autonomous Field Editor • 3-Tier LLM Cascade</p>
                   <p className={`text-[11px] mt-0.5 truncate ${subTextThemeClass}`}>
-                    In-editor rewrites, voice switching, Pollinations prompts &amp; telemetry checks
+                    Headlines, ledes, structure, and clarity — photos live in imbrgr
                   </p>
                 </div>
               </div>
@@ -9040,7 +9040,6 @@ ${shareUrl}`;
                     { label: "✨ Rewrite", q: `Rewrite my active draft in ${newEditionStyle} voice and sharpen the headline` },
                     { label: "📐 Expand", q: "Expand my active draft with richer field reporting and corridor context" },
                     { label: "📰 3 Headlines", q: "Suggest 3 punchy alternative headlines for my active draft" },
-                    { label: "🎨 Visual Prompt", q: "Generate a Pollinations photojournalism visual prompt for my active draft" }
                   ].map((act) => (
                     <button
                       key={act.label}
@@ -9067,7 +9066,6 @@ ${shareUrl}`;
                   { emoji: "💥", label: "Comic Strip", query: "Draft a superhero Comic Strip dispatch about defeating signal jammers" },
                   { emoji: "🕹️", label: "8-Bit Arcade", query: "Draft an 8-bit arcade telemetry story about optical fiber splice rings" },
                   { emoji: "🛰️", label: "Tactical Intel", query: "Compile a tactical intelligence reconnaissance report on autonomous micro-substations" },
-                  { emoji: "🎨", label: "Visual Prompt", query: "Generate a high-detail Pollinations visual prompt for an infrastructure photojournalism still" }
                 ].map((chip) => (
                   <button
                     key={chip.label}
