@@ -1662,6 +1662,8 @@ export const FieldPressMaster: React.FC = () => {
     } catch { return null; }
   };
   const attachImbrgrImageToComposer = (url: string) => {
+    // Defense in depth: same host allowlist as compose deep links / postMessage.
+    if (!parseComposeImageParam(url)) return;
     if (!isDisplayableImageUrl(url)) return;
     setEvidenceGallery((prev) => {
       if (prev.some((p) => p.url === url)) return prev;
@@ -1690,15 +1692,20 @@ export const FieldPressMaster: React.FC = () => {
         const res = await fetch(`/api/dispatches?id=${encodeURIComponent(draftId)}`);
         if (res.ok) {
           const data = await res.json();
-          openCreatePressie(data.dispatch as Dispatch, { preferTitle: title });
-          if (imageUrl) {
-            requestAnimationFrame(() => {
-              attachImbrgrImageToComposer(imageUrl);
-              setSavedSuccessToast("Image added");
-              setTimeout(() => setSavedSuccessToast(""), 2500);
-            });
+          const draft = data.dispatch as Dispatch;
+          // GET returns any published dispatch publicly. Only resume press-roll drafts
+          // (API already owner-gates those) — never load someone else's published post into edit.
+          if (draft?.isPressRoll) {
+            openCreatePressie(draft, { preferTitle: title });
+            if (imageUrl) {
+              requestAnimationFrame(() => {
+                attachImbrgrImageToComposer(imageUrl);
+                setSavedSuccessToast("Image added");
+                setTimeout(() => setSavedSuccessToast(""), 2500);
+              });
+            }
+            return;
           }
-          return;
         }
       } catch {
         /* fall through */

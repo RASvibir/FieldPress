@@ -54,4 +54,6 @@ imbrgr should honor `embed=1` (minimal chrome + CSP `frame-ancestors` for FieldP
 |-----|----------|
 | FieldPress | `VITE_FIELDPRESS_PUBLIC_URL` (optional) |
 | FieldPress | `VITE_IMBRGR_URL` (optional; default `https://imbrgr.website`) |
+| FieldPress | `VITE_IMBRGR_TRUST_PREVIEWS=1` (optional; trust `imbrgr-*.vercel.app` origins/hosts) |
 | imbrgr | `NEXT_PUBLIC_SITE_URL` for absolute media file URLs |
+| imbrgr | `FIELDPRESS_EMBED_FRAME_ANCESTORS` (optional space-separated extra `frame-ancestors`) |
