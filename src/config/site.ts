@@ -1,9 +1,19 @@
+/** Safe env read for Vite + Node tests (import.meta.env may be undefined under node:test). */
+function viteEnv(name: string): string | undefined {
+  try {
+    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+    const v = env?.[name];
+    return typeof v === "string" ? v.trim() || undefined : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Single source for external product links and bureau defaults. */
-export const IMBRGR_URL = "https://imbrgr.vercel.app";
+export const IMBRGR_URL = viteEnv("VITE_IMBRGR_URL") || "https://imbrgr.website";
 
 /** Public site URL (compose return links, cross-product docs). */
-export const FIELDPRESS_PUBLIC_URL =
-  (import.meta.env.VITE_FIELDPRESS_PUBLIC_URL as string | undefined)?.trim() || "https://fieldpress.studio";
+export const FIELDPRESS_PUBLIC_URL = viteEnv("VITE_FIELDPRESS_PUBLIC_URL") || "https://fieldpress.studio";
 
 /** FieldPress home / masthead bureau (site identity). */
 export const HOME_BUREAU = {

@@ -90,6 +90,7 @@ import {
   parseComposeTitleParam,
   suggestImagePromptFromPost,
 } from "./lib/composeLinks";
+import { parseImbrgrComposeMessage } from "./lib/imbrgrComposeMessage";
 import { PostAiTray, type LeadItem } from "./components/PostAiTray";
 import { PostComposer } from "./features/post/PostComposer";
 import { MainNav } from "./features/shell/MainNav";
@@ -3974,6 +3975,7 @@ export const FieldPressMaster: React.FC = () => {
 
   const [imagePromptBusy, setImagePromptBusy] = useState(false);
   const [imagePromptStatus, setImagePromptStatus] = useState<string | null>(null);
+  const [imbrgrEmbedRevision, setImbrgrEmbedRevision] = useState(0);
 
   const imbrgrPromptForHandoff = () =>
     visualPrompt.trim() || suggestImagePromptFromPost(newTitle, newContent);
@@ -3983,6 +3985,31 @@ export const FieldPressMaster: React.FC = () => {
     if (!draftId) return null;
     return buildImbrgrEmbedUrl({ draftId, prompt: imbrgrPromptForHandoff() });
   };
+
+  const bumpImbrgrEmbedRevision = () => setImbrgrEmbedRevision((n) => n + 1);
+
+  // Embedded imbrgr → Share with FieldPress (postMessage)
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const parsed = parseImbrgrComposeMessage(event.origin, event.data);
+      if (!parsed) return;
+      const apply = async () => {
+        if (parsed.draftId && authAccount) {
+          await applyComposeReturn(parsed.draftId, parsed.imageUrl, parsed.title);
+        } else {
+          attachImbrgrImageToComposer(parsed.imageUrl);
+          if (parsed.title) setNewTitle((t) => t || parsed.title);
+          setShowPressieBuilderModal(true);
+          setSavedSuccessToast("Image added");
+          setTimeout(() => setSavedSuccessToast(""), 2500);
+        }
+      };
+      void apply();
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authAccount?.id]);
 
   const handleCreateImageHandoff = async (opts?: { newTab?: boolean }) => {
     setImbrgrHandoffBusy(true);
@@ -4032,7 +4059,8 @@ export const FieldPressMaster: React.FC = () => {
       }
       if (data.prompt) {
         setVisualPrompt(String(data.prompt));
-        setImagePromptStatus("Prompt ready — edit below or generate in imbrgr.");
+        setImagePromptStatus("Prompt ready — Apply to studio or generate in imbrgr.");
+        setImbrgrEmbedRevision((n) => n + 1);
       }
     } catch {
       setImagePromptStatus("Network error — try again.");
@@ -6451,6 +6479,8 @@ export const FieldPressMaster: React.FC = () => {
         imagePromptStatus={imagePromptStatus}
         resolveImbrgrEmbedUrl={resolveImbrgrEmbedUrl}
         onOpenImbrgrFullStudio={() => void handleCreateImageHandoff({ newTab: true })}
+        imbrgrEmbedRevision={imbrgrEmbedRevision}
+        onApplyPromptToImbrgrEmbed={bumpImbrgrEmbedRevision}
         imbrgrHandoffBusy={imbrgrHandoffBusy}
         onPressyoCustom={(t) => handlePressyoEditorAction("custom_edit", undefined, t)}
         onPressyoAdvanced={(action, style) =>

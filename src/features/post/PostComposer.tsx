@@ -86,6 +86,8 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
     imagePromptStatus,
     resolveImbrgrEmbedUrl,
     onOpenImbrgrFullStudio,
+    imbrgrEmbedRevision = 0,
+    onApplyPromptToImbrgrEmbed,
     imbrgrHandoffBusy,
     onPressyoAdvanced,
     onGuestSignInPrompt,
@@ -386,6 +388,16 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                   >
                     From headline
                   </button>
+                  {onApplyPromptToImbrgrEmbed && (
+                    <button
+                      type="button"
+                      disabled={imbrgrHandoffBusy}
+                      onClick={onApplyPromptToImbrgrEmbed}
+                      className="px-2 py-1 rounded-lg border text-[10px] font-semibold disabled:opacity-50"
+                    >
+                      Apply to studio
+                    </button>
+                  )}
                 </div>
                 {imagePromptStatus && <p className={`text-[10px] mt-1 ${subTextClass}`}>{imagePromptStatus}</p>}
               </div>
@@ -396,6 +408,7 @@ export const PostComposer: React.FC<PostComposerProps> = (props) => {
                 resolveEmbedUrl={resolveImbrgrEmbedUrl}
                 onOpenFullStudio={onOpenImbrgrFullStudio}
                 busy={imbrgrHandoffBusy}
+                embedRevision={imbrgrEmbedRevision}
               />
 
               <div className="border-t pt-2 border-zinc-200/60 dark:border-zinc-700/60">

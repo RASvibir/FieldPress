@@ -127,7 +127,7 @@ function buildSystemPrompt(editionStyle, editorAction, draftContext) {
 ${draftContext.content || "(empty)"}`
     : "";
 
-  const journalismRules = `You are a journalism copilot only — no image generation, no visual prompts, no Pollinations/Flux/DALL·E instructions. If the user asks for images, tell them to create art in imbrgr (https://imbrgr.vercel.app) and paste the image URL into their dispatch.`;
+  const journalismRules = `You are a journalism copilot only — no image generation, no Pollinations/Flux/DALL·E rendering. If the user asks for images, tell them to open Visual in FieldPress (imbrgr studio / https://imbrgr.website) or paste an HTTPS image URL into their dispatch. You may help write a short image prompt for imbrgr when asked.`;
 
   if (editorAction === "headlines") {
     return `${journalismRules}

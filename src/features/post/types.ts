@@ -95,6 +95,8 @@ export type PostComposerProps = {
   imagePromptStatus: string | null;
   resolveImbrgrEmbedUrl: () => Promise<string | null>;
   onOpenImbrgrFullStudio: () => void;
+  imbrgrEmbedRevision?: number;
+  onApplyPromptToImbrgrEmbed?: () => void;
   imbrgrHandoffBusy?: boolean;
   onPressyoAdvanced: (action: PressyoEditorActionId, style?: string) => void;
   onGuestSignInPrompt: () => void;

@@ -46,21 +46,27 @@ Cross-product UI spec: [docs/IMBRGR-FIELDPRESS-LINKS.md](docs/IMBRGR-FIELDPRESS-
 
 ## imbrgr ↔ FieldPress link contract
 
-Config: `IMBRGR_URL` in `src/config/site.ts` (default `https://imbrgr.vercel.app`).
+Config: `IMBRGR_URL` in `src/config/site.ts` (default `https://imbrgr.website`, override with `VITE_IMBRGR_URL`).
 
 **FieldPress → imbrgr** (simple link, no draft):
 
 ```
-https://imbrgr.vercel.app/studio?tab=generate&prompt=<url-encoded text>
+https://imbrgr.website/studio?tab=generate&prompt=<url-encoded text>
 ```
 
-**FieldPress → imbrgr** (Create image from Post — draft is saved first):
+**FieldPress → imbrgr** (Visual tray embed — draft saved first):
 
 ```
-https://imbrgr.vercel.app/studio?tab=generate&prompt=<url-encoded>&from=fieldpress&draft=<draftId>
+https://imbrgr.website/studio?tab=generate&embed=1&prompt=<url-encoded>&from=fieldpress&draft=<draftId>
 ```
 
-Built via `buildImbrgrCreateImageUrl()` / `buildImbrgrStudioUrl()` in `src/lib/composeLinks.ts`.
+**FieldPress → imbrgr** (Full studio — new tab):
+
+```
+https://imbrgr.website/studio?tab=generate&prompt=<url-encoded>&from=fieldpress&draft=<draftId>
+```
+
+Built via `buildImbrgrEmbedUrl()` / `buildImbrgrCreateImageUrl()` / `buildImbrgrStudioUrl()` in `src/lib/composeLinks.ts`.
 
 **imbrgr → FieldPress** (return to the same draft when possible):
 
@@ -75,7 +81,8 @@ https://fieldpress.studio/?compose=1&image=<url-encoded https URL>&title=<url-en
 ```
 
 - `draft` must match `^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$` and belong to the signed-in user; otherwise FieldPress opens a fresh Post with `image` / `title` only.
-- `image` must be HTTPS on allowed hosts (e.g. `imbrgr.vercel.app`, or imbrgr `/api/media/file/...` URLs).
+- `image` must be HTTPS on allowed hosts (`imbrgr.website`, `imbrgr.vercel.app`, `imbrgr-*.vercel.app` preview hosts) — typically `/api/media/file/...` URLs.
+- Embedded studio can also return via `postMessage` (`imbrgr:compose-image`).
 - FieldPress does **not** fetch the image into canvas (avoids CORS/taint). Params are stored in `sessionStorage` through sign-in when needed.
 - On success with a valid draft: reopen that draft, set cover if empty else append photo, toast “Image added”.
 

@@ -1,9 +1,24 @@
 import { FIELDPRESS_PUBLIC_URL, IMBRGR_URL } from "../config/site";
 
-const IMBRGR_HOST = new URL(IMBRGR_URL).hostname.toLowerCase();
-
 /** Allowed https image hosts for ?compose=1&image= deep links (reference by URL only). */
-const COMPOSE_IMAGE_HOSTS = new Set([IMBRGR_HOST, "imbrgr.vercel.app"]);
+export function isAllowedComposeImageHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (
+    host === "imbrgr.website" ||
+    host === "www.imbrgr.website" ||
+    host === "imbrgr.vercel.app"
+  ) {
+    return true;
+  }
+  try {
+    if (host === new URL(IMBRGR_URL).hostname.toLowerCase()) return true;
+  } catch {
+    /* ignore */
+  }
+  // Preview deployments for the imbrgr Vercel project
+  if (/^imbrgr-[a-z0-9-]+\.vercel\.app$/.test(host)) return true;
+  return false;
+}
 
 /** Dispatch / press-roll ids from API (client or server generated). */
 export const COMPOSE_DRAFT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/;
@@ -42,8 +57,7 @@ export function parseComposeImageParam(raw: string | null | undefined): string |
   }
 
   if (url.protocol !== "https:") return null;
-  const host = url.hostname.toLowerCase();
-  if (!COMPOSE_IMAGE_HOSTS.has(host)) return null;
+  if (!isAllowedComposeImageHost(url.hostname)) return null;
 
   const path = url.pathname.toLowerCase();
   if (/^\/api\/media\/[^/]+$/.test(path) && !path.includes("/file/")) {

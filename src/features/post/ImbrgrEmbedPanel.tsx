@@ -3,11 +3,13 @@ import { ExternalLink } from "lucide-react";
 
 type Props = {
   isDark: boolean;
-  /** Resolved HTTPS studio URL (embed=1). Refreshed when prompt/draft changes. */
+  /** Resolved HTTPS studio URL (embed=1). */
   resolveEmbedUrl: () => Promise<string | null>;
   onOpenFullStudio: () => void;
   busy?: boolean;
   subTextClass: string;
+  /** Bump to reload iframe after prompt edits. */
+  embedRevision?: number;
 };
 
 export const ImbrgrEmbedPanel: React.FC<Props> = ({
@@ -16,16 +18,24 @@ export const ImbrgrEmbedPanel: React.FC<Props> = ({
   onOpenFullStudio,
   busy,
   subTextClass,
+  embedRevision = 0,
 }) => {
   const [src, setSrc] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [frameBlockedHint, setFrameBlockedHint] = useState(false);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     setLoadError(false);
+    setFrameBlockedHint(false);
     try {
       const url = await resolveEmbedUrl();
+      if (!url) {
+        setSrc(null);
+        setLoadError(true);
+        return;
+      }
       setSrc(url);
     } catch {
       setSrc(null);
@@ -37,7 +47,14 @@ export const ImbrgrEmbedPanel: React.FC<Props> = ({
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, embedRevision]);
+
+  // If framing is blocked, iframe still "loads" an empty document — nudge after a delay.
+  useEffect(() => {
+    if (!src) return;
+    const t = window.setTimeout(() => setFrameBlockedHint(true), 4500);
+    return () => window.clearTimeout(t);
+  }, [src]);
 
   return (
     <div className="space-y-2">
@@ -56,7 +73,8 @@ export const ImbrgrEmbedPanel: React.FC<Props> = ({
         </button>
       </div>
       <p className={`text-[10px] ${subTextClass}`}>
-        Images are generated in imbrgr. When you share back to FieldPress, the photo attaches to this draft.
+        Generate or edit in imbrgr, then use <span className="font-semibold">Share with FieldPress</span> — the photo
+        attaches to this draft.
       </p>
       <div
         className={`relative w-full rounded-xl border overflow-hidden ${
@@ -68,11 +86,16 @@ export const ImbrgrEmbedPanel: React.FC<Props> = ({
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">Loading studio…</div>
         )}
         {loadError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
-            <p className="text-xs text-zinc-500">Could not prepare imbrgr link. Save your draft or sign in, then retry.</p>
-            <button type="button" onClick={() => void refresh()} className="text-xs font-bold text-amber-600">
-              Retry
-            </button>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center z-10">
+            <p className="text-xs text-zinc-500">Could not prepare imbrgr. Sign in, save the draft, then retry — or open full studio.</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button type="button" onClick={() => void refresh()} className="text-xs font-bold text-amber-600">
+                Retry
+              </button>
+              <button type="button" onClick={onOpenFullStudio} className="text-xs font-bold text-amber-600">
+                Open full studio
+              </button>
+            </div>
           </div>
         )}
         {src && (
@@ -80,14 +103,23 @@ export const ImbrgrEmbedPanel: React.FC<Props> = ({
             title="imbrgr image studio"
             src={src}
             className="w-full border-0"
-            style={{ height: 320 }}
+            style={{ height: 340 }}
             allow="clipboard-write"
             referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
       </div>
+      {frameBlockedHint && src && (
+        <p className={`text-[10px] ${subTextClass}`}>
+          If the studio looks blank, your browser may block the embed.{" "}
+          <button type="button" className="underline font-semibold text-amber-600" onClick={onOpenFullStudio}>
+            Open full studio
+          </button>
+          .
+        </p>
+      )}
       <button type="button" onClick={() => void refresh()} className="text-[10px] underline text-zinc-500">
-        Refresh embed after you edit the prompt
+        Refresh studio with current prompt
       </button>
     </div>
   );
