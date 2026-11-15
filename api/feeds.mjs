@@ -19,6 +19,13 @@ import wireSources from "./_lib/wireSources.mjs";
 const sql = neon(process.env.DATABASE_URL);
 const WIRE_ACCOUNT_ID = "wire-system-account";
 
+// Bound a single sync run so a large first fill cannot hit the function time
+// limit. Items already stored are skipped on later runs, so a partial run just
+// continues next time.
+const SYNC_BUDGET_MS = Number(process.env.WIRE_SYNC_BUDGET_MS) || 40000;
+const MAX_NEW_PER_RUN = Number(process.env.WIRE_MAX_NEW_PER_RUN) || 60;
+const budgetSpent = (ctx) => Date.now() > ctx.deadline || ctx.remaining <= 0;
+
 function clean(str, max) {
   if (typeof str !== "string") return null;
   const trimmed = str.trim();
@@ -26,8 +33,9 @@ function clean(str, max) {
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
-async function syncSource(source) {
+async function syncSource(source, ctx) {
   let inserted = 0;
+  if (budgetSpent(ctx)) return { source: source.name, ok: true, inserted, skipped: true };
   try {
     const res = await fetch(source.url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return { source: source.name, ok: false, error: `HTTP ${res.status}` };
@@ -35,6 +43,7 @@ async function syncSource(source) {
     const items = parseRss(xml).slice(0, 20); // cap per-sync-run per source
 
     for (const item of items) {
+      if (budgetSpent(ctx)) return { source: source.name, ok: true, inserted, partial: true };
       const existing = await sql`
         SELECT id FROM fieldpress_dispatches WHERE source_url = ${item.link} LIMIT 1
       `;
@@ -61,6 +70,7 @@ async function syncSource(source) {
            ${item.pubDate || new Date()}, now())
       `;
       inserted++;
+      ctx.remaining--;
     }
     return { source: source.name, ok: true, inserted };
   } catch (err) {
@@ -88,10 +98,12 @@ export default async function handler(req, res) {
       return;
     }
     const results = [];
+    const ctx = { deadline: Date.now() + SYNC_BUDGET_MS, remaining: MAX_NEW_PER_RUN };
     for (const source of wireSources) {
-      results.push(await syncSource(source));
+      results.push(await syncSource(source, ctx));
     }
-    res.status(200).json({ ok: true, results });
+    const partial = results.some((r) => r.partial || r.skipped);
+    res.status(200).json({ ok: true, partial, results });
     return;
   }
 
