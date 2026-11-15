@@ -124,6 +124,7 @@ export const BeatMapPanel: React.FC<Props> = ({
         });
       });
 
+      const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]);
       visibleMapDispatches.forEach((d) => {
         if (!d.coordinates) return;
         const fuzzyCoords: [number, number] = d.coordinates;
@@ -142,8 +143,8 @@ export const BeatMapPanel: React.FC<Props> = ({
             new maplibregl.Popup({ offset: 25 }).setHTML(
               `<div style="font-family: monospace; font-size: 11px; color: #09090b; padding: 6px; max-width: 240px;">
                 <div style="font-weight: 900; color: ${isDecoupled ? "#059669" : "#d97706"}; font-size: 9px; margin-bottom: 3px;">${signalBadge}</div>
-                <strong style="font-size: 12px;">${d.title}</strong><br/>
-                <span style="color:#0284c7; font-weight: bold;">📍 ${d.location}</span>
+                <strong style="font-size: 12px;">${esc(d.title)}</strong><br/>
+                <span style="color:#0284c7; font-weight: bold;">📍 ${esc(d.location)}</span>
               </div>`
             )
           )
